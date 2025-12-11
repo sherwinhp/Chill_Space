@@ -37,9 +37,22 @@ app.get("/api/bookings", bookingsController.getBookings);
 app.post("/api/bookings", bookingsController.addBooking);
 app.post("/api/bookings/availability", bookingsController.availabilityPreview);
 
-// Auth + users
+// Auth + users (non-API routes)
 app.get("/login", authController.renderLoginPage);
 app.get("/register", authController.renderRegisterPage);
+app.post("/auth/register", authController.register);
+app.post("/auth/login", authController.login);
+app.get("/auth/me", authController.me);
+app.post("/auth/logout", authController.logout);
+
+// Admin users (non-API)
+app.get("/admin/users", requireAdmin, userController.renderUsersPage);
+app.get("/users", requireAdmin, userController.getUsers);
+app.get("/users/:id", requireAdmin, userController.getUser);
+app.patch("/users/:id", requireAdmin, userController.editUser);
+app.delete("/users/:id", requireAdmin, userController.removeUser);
+
+// Legacy API aliases (kept for compatibility)
 app.post("/api/auth/register", authController.register);
 app.post("/api/auth/login", authController.login);
 app.get("/api/auth/me", authController.me);
