@@ -5,29 +5,29 @@ const {
   deleteUser,
 } = require("../models/usersModel");
 
-function getUsers(req, res) {
-  const users = listUsers().map(stripPassword);
-  res.json(users);
+async function getUsers(req, res) {
+  const users = await listUsers();
+  res.json(users.map(stripPassword));
 }
 
-function getUser(req, res) {
-  const user = findById(Number(req.params.id));
+async function getUser(req, res) {
+  const user = await findById(Number(req.params.id));
   if (!user) {
     return res.status(404).json({ error: "User not found" });
   }
   res.json(stripPassword(user));
 }
 
-function editUser(req, res) {
-  const updated = updateUser(Number(req.params.id), req.body);
+async function editUser(req, res) {
+  const updated = await updateUser(Number(req.params.id), req.body);
   if (!updated) {
     return res.status(404).json({ error: "User not found" });
   }
   res.json(stripPassword(updated));
 }
 
-function removeUser(req, res) {
-  const success = deleteUser(Number(req.params.id));
+async function removeUser(req, res) {
+  const success = await deleteUser(Number(req.params.id));
   if (!success) {
     return res.status(404).json({ error: "User not found" });
   }
@@ -44,4 +44,10 @@ module.exports = {
   getUser,
   editUser,
   removeUser,
+  renderUsersPage,
 };
+
+async function renderUsersPage(req, res) {
+  const users = (await listUsers()).map(stripPassword);
+  res.render("users", { users });
+}

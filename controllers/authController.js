@@ -1,6 +1,6 @@
 const { findByEmail, createUser, findById } = require("../models/usersModel");
 
-function register(req, res) {
+async function register(req, res) {
   const { name, email, password } = req.body;
   if (!name || !email || !password) {
     return res.status(400).json({ error: "Name, email, and password are required." });
@@ -12,7 +12,7 @@ function register(req, res) {
   }
 
   try {
-    const user = createUser({ name, email, password, role: "user" });
+    const user = await createUser({ name, email, password, role: "user" });
     if (req.setSession) {
       req.setSession(user);
     }
@@ -22,9 +22,9 @@ function register(req, res) {
   }
 }
 
-function login(req, res) {
+async function login(req, res) {
   const { email, password } = req.body;
-  const user = findByEmail(email);
+  const user = await findByEmail(email);
   if (!user || user.password !== password) {
     return res.status(401).json({ error: "Invalid email or password" });
   }
@@ -34,11 +34,11 @@ function login(req, res) {
   res.json({ user: sanitize(user) });
 }
 
-function me(req, res) {
+async function me(req, res) {
   if (!req.session || !req.session.userId) {
     return res.status(401).json({ error: "Not authenticated" });
   }
-  const user = findById(req.session.userId);
+  const user = await findById(req.session.userId);
   if (!user) {
     return res.status(401).json({ error: "Not authenticated" });
   }
@@ -67,6 +67,7 @@ function logout(req, res) {
 
 function sanitize(user) {
   const { password, ...clean } = user;
+  if (!clean.role) clean.role = "user";
   return clean;
 }
 
