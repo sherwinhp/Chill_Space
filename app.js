@@ -7,7 +7,7 @@ const userController = require("./controllers/userController");
 const menuController = require("./controllers/menuController");
 const eventsController = require("./controllers/eventsController");
 const reviewsController = require("./controllers/reviewsController");
-const { requestLogger, notFound, errorHandler } = require("./middleware");
+const { sessionMiddleware, requestLogger, requireAdmin, notFound, errorHandler } = require("./middleware");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,6 +17,7 @@ app.set("views", path.join(__dirname, "views"));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(sessionMiddleware);
 app.use(requestLogger);
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/partials", express.static(path.join(__dirname, "views", "partials")));
@@ -37,15 +38,20 @@ app.post("/api/bookings", bookingsController.addBooking);
 app.post("/api/bookings/availability", bookingsController.availabilityPreview);
 
 // Auth + users
+app.get("/login", authController.renderLoginPage);
+app.get("/register", authController.renderRegisterPage);
 app.post("/api/auth/register", authController.register);
 app.post("/api/auth/login", authController.login);
-app.get("/api/users", userController.getUsers);
-app.get("/api/users/:id", userController.getUser);
-app.patch("/api/users/:id", userController.editUser);
-app.delete("/api/users/:id", userController.removeUser);
+app.get("/api/auth/me", authController.me);
+app.post("/api/auth/logout", authController.logout);
+app.get("/api/users", requireAdmin, userController.getUsers);
+app.get("/api/users/:id", requireAdmin, userController.getUser);
+app.patch("/api/users/:id", requireAdmin, userController.editUser);
+app.delete("/api/users/:id", requireAdmin, userController.removeUser);
 
 // Menu, reviews, events
 app.get("/api/menu", menuController.getMenu);
+app.get("/api/reviews", reviewsController.getApiReviews);
 app.get("/api/events", eventsController.getEvents);
 const reviewRouter = require("./routes/reviews");
 app.use("/reviews", reviewRouter);
