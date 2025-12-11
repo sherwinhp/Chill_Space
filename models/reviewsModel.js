@@ -1,26 +1,45 @@
-const reviews = [
-  {
-    id: 1,
-    name: "Sarah Johnson",
-    rating: 5,
-    date: "2025-11-16",
-    text:
-      "Best gaming session ever! The PS5 setup was amazing and Netflix streaming was perfect for our movie break. Super affordable for students!",
-  },
-  {
-    id: 2,
-    name: "Michael Chen",
-    rating: 5,
-    date: "2025-10-28",
-    text:
-      "Had an awesome birthday party here with my friends! The neon theme looked incredible and the food was great. Will definitely come back!",
-  },
-];
+const db = require("../db");
 
-function listReviews() {
-  return reviews;
-}
+const Reviews = {
+  // Create a new review
+  create: (userId, roomId, rating, comment) => {
+    return db.query(
+      "INSERT INTO reviews (user_id, room_id, rating, comment) VALUES (?, ?, ?, ?)",
+      [userId, roomId, rating, comment]
+    );
+  },
 
-module.exports = {
-  listReviews,
+  // Get all reviews
+  getAll: () => {
+    return db.query(
+      `SELECT 
+          r.*, 
+          u.name AS user_name, 
+          rm.name AS room_name
+       FROM reviews r
+       JOIN users u ON r.user_id = u.user_id
+       JOIN rooms rm ON r.room_id = rm.room_id
+       ORDER BY r.created_at DESC`
+    );
+  },
+
+  // Get single review
+  getById: (id) => {
+    return db.query("SELECT * FROM reviews WHERE review_id = ?", [id]);
+  },
+
+  // Update review
+  update: (id, rating, comment) => {
+    return db.query(
+      "UPDATE reviews SET rating = ?, comment = ? WHERE review_id = ?",
+      [rating, comment, id]
+    );
+  },
+
+  // Delete review
+  delete: (id) => {
+    return db.query("DELETE FROM reviews WHERE review_id = ?", [id]);
+  }
 };
+
+module.exports = Reviews;

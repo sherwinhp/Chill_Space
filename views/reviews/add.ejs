@@ -1,0 +1,89 @@
+<%- include("../partials/header") %>
+
+<div class="max-w-xl mx-auto px-6 py-10">
+
+    <!-- Page Title -->
+    <h1 class="text-3xl font-semibold mb-3">Write a Review</h1>
+    <p class="text-gray-600 mb-8">
+        Share your experience and help other students choose their perfect chill room!
+    </p>
+
+    <!-- Review Form -->
+    <form action="/reviews/add" method="POST" class="space-y-6">
+
+        <!-- Room Selection (Optional: hide if booking auto-selects) -->
+        <div>
+            <label class="block text-sm font-medium mb-1">Room ID</label>
+            <input 
+                type="number" 
+                name="roomId"
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-black"
+                placeholder="Enter Room ID"
+                required
+            >
+        </div>
+
+        <!-- Star Rating -->
+        <div>
+            <label class="block text-sm font-medium mb-1">Rating</label>
+
+            <div class="flex gap-2 text-2xl text-gray-300 cursor-pointer" id="starRating">
+                <span data-value="1">★</span>
+                <span data-value="2">★</span>
+                <span data-value="3">★</span>
+                <span data-value="4">★</span>
+                <span data-value="5">★</span>
+            </div>
+
+            <!-- Hidden input to store selected rating -->
+            <input type="hidden" name="rating" id="ratingInput" required>
+        </div>
+
+        <!-- Comment Box -->
+        <div>
+            <label class="block text-sm font-medium mb-1">Your Review</label>
+            <textarea 
+                name="comment"
+                rows="5"
+                class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-black"
+                placeholder="Tell us about your experience..."
+                required
+            ></textarea>
+        </div>
+
+        <!-- Submit Button -->
+        <button 
+            type="submit" 
+            class="w-full bg-black text-white py-3 rounded-lg text-lg font-medium hover:bg-gray-800 transition">
+            Submit Review
+        </button>
+        
+    </form>
+</div>
+
+<!-- Star Rating Script -->
+<script>
+    const stars = document.querySelectorAll("#starRating span");
+    const ratingInput = document.getElementById("ratingInput");
+
+    stars.forEach(star => {
+        star.addEventListener("click", () => {
+            const rating = star.getAttribute("data-value");
+
+            ratingInput.value = rating;
+
+            // Highlight selected stars
+            stars.forEach(s => {
+                if (s.getAttribute("data-value") <= rating) {
+                    s.classList.add("text-yellow-500");
+                    s.classList.remove("text-gray-300");
+                } else {
+                    s.classList.add("text-gray-300");
+                    s.classList.remove("text-yellow-500");
+                }
+            });
+        });
+    });
+</script>
+
+<%- include("../partials/footer") %>
