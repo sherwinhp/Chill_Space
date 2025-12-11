@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>User Management</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page-shell" style="padding:32px">
+  <header class="topbar" style="margin-bottom:24px">
+    <div class="brand">
+      <strong>User Management</strong>
+      <small>Admin only</small>
+    </div>
+    <div class="top-actions">
+      <a class="btn" href="/">Home</a>
+      <a class="btn" href="/logout" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">Logout</a>
+      <form id="logout-form" action="/api/auth/logout" method="post" style="display:none"></form>
+    </div>
+  </header>
+
+  <section>
+    <table class="table">
+      <thead>
+        <tr><th>ID</th><th>Name</th><th>Email</th><th>Role</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        <% users.forEach(function(user) { %>
+          <tr data-id="<%= user.id %>">
+            <td><%= user.id %></td>
+            <td><input class="input" name="name" value="<%= user.name %>"></td>
+            <td><input class="input" name="email" value="<%= user.email %>"></td>
+            <td><input class="input" name="role" value="<%= user.role %>"></td>
+            <td>
+              <button class="btn" data-action="save">Save</button>
+              <button class="btn" data-action="delete">Delete</button>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </section>
+
+  <script>
+    const tbody = document.querySelector('tbody');
+    tbody.addEventListener('click', async (event) => {
+      const btn = event.target.closest('button[data-action]');
+      if (!btn) return;
+      const row = btn.closest('tr');
+      const id = Number(row.dataset.id);
+      if (btn.dataset.action === 'delete') {
+        await fetch(`/api/users/${id}`, { method: 'DELETE' });
+        row.remove();
+        return;
+      }
+      if (btn.dataset.action === 'save') {
+        const payload = {
+          name: row.querySelector('input[name="name"]').value.trim(),
+          email: row.querySelector('input[name="email"]').value.trim(),
+          role: row.querySelector('input[name="role"]').value.trim() || 'user',
+        };
+        await fetch(`/api/users/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
+    });
+  </script>
+</body>
+</html>
