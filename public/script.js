@@ -116,7 +116,9 @@ async function loadBookings() {
         <div class="room-body">
           <h4>${b.roomName}</h4>
           <p>${b.date} | ${b.startTime} - ${b.endTime}</p>
-          <p class="capacity">Booked by ${b.name}</p>
+          <p class="capacity">Booked by ${b.name} · ${b.pax || 1} pax</p>
+          <p class="capacity">Status: ${b.bookingStatus || "pending"} · Payment: ${b.paymentStatus || "pending"}</p>
+          ${b.totalPrice ? `<p>Total: $${b.totalPrice}</p>` : ""}
         </div>
       </div>`
     )

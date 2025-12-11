@@ -1,16 +1,41 @@
 const {
   listBookings,
+  getBookingById,
   createBooking,
   isRoomAvailable,
+  updateBooking,
+  cancelBooking,
+  approveBooking,
+  rejectBooking,
+  updatePaymentStatus,
+  BOOKING_STATUSES,
+  PAYMENT_STATUSES,
 } = require("../models/bookingsModel");
 const { findRoomById } = require("../models/roomsModel");
 
 function getBookings(req, res) {
-  res.json(listBookings());
+  try {
+    const { status, roomId, email, date } = req.query;
+    if (status && !BOOKING_STATUSES.includes(status)) {
+      return res.status(400).json({ error: "Invalid status filter." });
+    }
+    const bookings = listBookings({ status, roomId, email, date });
+    res.json(bookings);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
+function getBooking(req, res) {
+  const booking = getBookingById(req.params.id);
+  if (!booking) {
+    return res.status(404).json({ error: "Booking not found." });
+  }
+  res.json(booking);
 }
 
 function addBooking(req, res) {
-  const { name, email, phone, date, startTime, endTime, purpose, roomId } = req.body;
+  const { name, email, phone, date, startTime, endTime, purpose, roomId, pax } = req.body;
   const roomIdNumber = Number(roomId);
   const room = findRoomById(roomIdNumber);
   if (!room) {
@@ -31,6 +56,7 @@ function addBooking(req, res) {
       startTime,
       endTime,
       purpose,
+      pax,
     });
     res.status(201).json(booking);
   } catch (error) {
@@ -58,8 +84,74 @@ function availabilityPreview(req, res) {
   res.json({ available });
 }
 
+function updateExistingBooking(req, res) {
+  const { id } = req.params;
+  const { date, startTime, endTime, purpose, pax } = req.body;
+  try {
+    if (startTime && endTime && startTime >= endTime) {
+      return res.status(400).json({ error: "End time must be later than start time." });
+    }
+    const booking = updateBooking(id, { date, startTime, endTime, purpose, pax });
+    res.json(booking);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
+function cancelExistingBooking(req, res) {
+  const { id } = req.params;
+  const { reason } = req.body;
+  try {
+    const booking = cancelBooking(id, reason);
+    res.json(booking);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
+function approveExistingBooking(req, res) {
+  const { id } = req.params;
+  try {
+    const booking = approveBooking(id);
+    res.json(booking);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
+function rejectExistingBooking(req, res) {
+  const { id } = req.params;
+  const { reason } = req.body;
+  try {
+    const booking = rejectBooking(id, reason);
+    res.json(booking);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
+function updatePayment(req, res) {
+  const { id } = req.params;
+  const { paymentStatus } = req.body;
+  if (!PAYMENT_STATUSES.includes(paymentStatus)) {
+    return res.status(400).json({ error: "Invalid payment status." });
+  }
+  try {
+    const booking = updatePaymentStatus(id, paymentStatus);
+    res.json(booking);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
 module.exports = {
   getBookings,
+  getBooking,
   addBooking,
   availabilityPreview,
+  updateExistingBooking,
+  cancelExistingBooking,
+  approveExistingBooking,
+  rejectExistingBooking,
+  updatePayment,
 };
