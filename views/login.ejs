@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="page-shell" style="max-width:720px;margin:0 auto;padding:32px">
+  <header class="topbar" style="justify-content:space-between;margin-bottom:24px">
+    <div class="brand">
+      <strong>Login</strong>
+      <small>Access your account</small>
+    </div>
+    <div class="top-actions">
+      <a class="btn" href="/register">Register</a>
+      <a class="btn" href="/">Home</a>
+    </div>
+  </header>
+
+  <section>
+    <h2 class="section-title">Sign In</h2>
+    <form id="login-form" class="auth-forms" style="max-width:420px">
+      <label>Email<input type="email" name="email" required /></label>
+      <label>Password<input type="password" name="password" required /></label>
+      <button class="btn primary" type="submit">Login</button>
+      <p id="login-status"></p>
+    </form>
+  </section>
+
+  <script>
+    const statusEl = document.getElementById('login-status');
+    document.getElementById('login-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      statusEl.textContent = '';
+      const formData = new FormData(event.target);
+      const payload = Object.fromEntries(formData.entries());
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || 'Login failed');
+        statusEl.style.color = 'green';
+        statusEl.textContent = 'Logged in! Redirecting...';
+        window.location.href = '/';
+      } catch (err) {
+        statusEl.style.color = 'red';
+        statusEl.textContent = err.message;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -6,15 +6,19 @@ const menuGrid = document.getElementById("menu-grid");
 const reviewsList = document.getElementById("reviews-list");
 const eventsList = document.getElementById("events-list");
 const cartContainer = document.getElementById("cart-container");
-const profileCard = document.getElementById("profile-card");
 const adminCard = document.getElementById("admin-card");
 const usersTableBody = document.querySelector("#users-table tbody");
+const loginBtn = document.getElementById("admin-login-btn");
+const registerBtn = document.getElementById("register-btn");
+const logoutBtn = document.getElementById("logout-btn");
+const profilesBtn = document.getElementById("profiles-btn");
 
 const state = {
   cart: [],
   user: null,
   rooms: [],
   menu: [],
+  users: [],
 };
 
 function setupTabs() {
@@ -29,6 +33,17 @@ function setupTabs() {
       });
     });
   });
+}
+
+async function loadSession() {
+  try {
+    const { user } = await fetchJSON("/api/auth/me");
+    state.user = user;
+    showProfile();
+  } catch (error) {
+    state.user = null;
+    showProfile();
+  }
 }
 
 async function fetchJSON(url, options) {
@@ -310,12 +325,41 @@ async function handleLogin(event) {
     state.user = user;
     document.getElementById("login-status").textContent = "Logged in!";
     showProfile();
+    updateAuthButtons();
     if (user.role === "admin") {
       await loadUsers();
     }
   } catch (error) {
     document.getElementById("login-status").textContent = error.message;
   }
+}
+
+function updateAuthButtons() {
+  if (loginBtn) loginBtn.hidden = !!state.user;
+  if (registerBtn) registerBtn.hidden = !!state.user;
+  if (logoutBtn) logoutBtn.hidden = !state.user;
+  if (profilesBtn) profilesBtn.hidden = !(state.user && state.user.role === "admin");
+}
+
+function showProfile() {
+  if (!adminCard) return;
+  const isAdmin = state.user && state.user.role === "admin";
+  adminCard.hidden = !isAdmin;
+  if (isAdmin) {
+    loadUsers();
+  }
+  updateAuthButtons();
+}
+
+async function handleLogout() {
+  try {
+    await fetchJSON("/api/auth/logout", { method: "POST" });
+  } catch (_) {
+    // ignore logout errors
+  }
+  state.user = null;
+  showProfile();
+  switchTab("rooms-section");
 }
 
 async function handleRegister(event) {
@@ -331,28 +375,16 @@ async function handleRegister(event) {
     state.user = user;
     document.getElementById("register-status").textContent = "Registered!";
     showProfile();
+    updateAuthButtons();
   } catch (error) {
     document.getElementById("register-status").textContent = error.message;
   }
 }
 
-function showProfile() {
-  if (!state.user) {
-    profileCard.hidden = true;
-    adminCard.hidden = true;
-    return;
-  }
-  profileCard.hidden = false;
-  profileCard.innerHTML = `
-    <h3>Welcome, ${state.user.name}</h3>
-    <p>${state.user.email}</p>
-    <p>Role: ${state.user.role}</p>
-  `;
-  adminCard.hidden = state.user.role !== "admin";
-}
-
 async function loadUsers() {
+  if (!state.user || state.user.role !== "admin" || !usersTableBody) return;
   const users = await fetchJSON("/api/users");
+  state.users = users;
   usersTableBody.innerHTML = "";
   users.forEach((user) => {
     const row = document.createElement("tr");
@@ -362,25 +394,62 @@ async function loadUsers() {
       <td>${user.email}</td>
       <td>${user.role}</td>
       <td>
+        <button class="btn" data-action="edit" data-id="${user.id}">Edit</button>
         <button class="btn" data-action="delete" data-id="${user.id}">Delete</button>
       </td>
     `;
     usersTableBody.appendChild(row);
   });
+}
 
-  usersTableBody.addEventListener("click", async (event) => {
-    const btn = event.target.closest("button[data-action='delete']");
-    if (!btn) return;
-    const id = Number(btn.dataset.id);
+if (usersTableBody) {
+usersTableBody.addEventListener("click", async (event) => {
+  const btn = event.target.closest("button[data-action]");
+  if (!btn) return;
+  const id = Number(btn.dataset.id);
+  const action = btn.dataset.action;
+  const user = state.users.find((u) => u.id === id);
+  if (!user) return;
+
+  if (action === "delete") {
     await fetchJSON(`/api/users/${id}`, { method: "DELETE" });
     loadUsers();
-  });
+    return;
+  }
+
+  if (action === "edit") {
+    const name = prompt("Update name", user.name);
+    if (name === null) return;
+    const email = prompt("Update email", user.email);
+    if (email === null) return;
+    const roleInput = prompt('Role ("admin" or "user")', user.role) || user.role;
+    const payload = {
+      name: name.trim() || user.name,
+      email: email.trim() || user.email,
+      role: roleInput.trim() || user.role,
+    };
+    await fetchJSON(`/api/users/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    loadUsers();
+  }
+});
+
 }
 
 function setupTopButtons() {
-  document.getElementById("cart-btn").addEventListener("click", () => switchTab("cart-section"));
-  document.getElementById("register-btn").addEventListener("click", () => switchTab("profile-section"));
-  document.getElementById("admin-login-btn").addEventListener("click", () => switchTab("profile-section"));
+  const cartBtn = document.getElementById("cart-btn");
+  if (cartBtn) cartBtn.addEventListener("click", () => switchTab("cart-section"));
+  if (registerBtn) registerBtn.addEventListener("click", () => {
+    window.location.href = "/register";
+  });
+  if (loginBtn) loginBtn.addEventListener("click", () => {
+    window.location.href = "/login";
+  });
+  if (logoutBtn) logoutBtn.addEventListener("click", handleLogout);
+  if (profilesBtn) profilesBtn.addEventListener("click", () => switchTab("profile-section"));
 }
 
 function switchTab(id) {
@@ -395,8 +464,10 @@ function switchTab(id) {
 
 document.getElementById("booking-form").addEventListener("submit", submitBooking);
 document.getElementById("check-slot").addEventListener("click", checkSlot);
-document.getElementById("login-form").addEventListener("submit", handleLogin);
-document.getElementById("register-form").addEventListener("submit", handleRegister);
+const loginForm = document.getElementById("login-form");
+const registerForm = document.getElementById("register-form");
+if (loginForm) loginForm.addEventListener("submit", handleLogin);
+if (registerForm) registerForm.addEventListener("submit", handleRegister);
 
 setupTabs();
 setupTopButtons();
@@ -406,3 +477,5 @@ loadMenu();
 loadReviews();
 loadEvents();
 loadCartPartial();
+loadSession();
+updateAuthButtons();

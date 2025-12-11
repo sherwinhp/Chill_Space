@@ -1,4 +1,4 @@
-const { findByEmail, createUser } = require("../models/usersModel");
+const { findByEmail, createUser, findById } = require("../models/usersModel");
 
 function register(req, res) {
   const { name, email, password } = req.body;
@@ -13,6 +13,9 @@ function register(req, res) {
 
   try {
     const user = createUser({ name, email, password, role: "user" });
+    if (req.setSession) {
+      req.setSession(user);
+    }
     res.status(201).json({ user: sanitize(user) });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -24,6 +27,20 @@ function login(req, res) {
   const user = findByEmail(email);
   if (!user || user.password !== password) {
     return res.status(401).json({ error: "Invalid email or password" });
+  }
+  if (req.setSession) {
+    req.setSession(user);
+  }
+  res.json({ user: sanitize(user) });
+}
+
+function me(req, res) {
+  if (!req.session || !req.session.userId) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  const user = findById(req.session.userId);
+  if (!user) {
+    return res.status(401).json({ error: "Not authenticated" });
   }
   res.json({ user: sanitize(user) });
 }
@@ -41,6 +58,13 @@ function validatePassword(pw) {
   return { ok: true };
 }
 
+function logout(req, res) {
+  if (req.clearSession) {
+    req.clearSession();
+  }
+  res.json({ ok: true });
+}
+
 function sanitize(user) {
   const { password, ...clean } = user;
   return clean;
@@ -49,4 +73,16 @@ function sanitize(user) {
 module.exports = {
   register,
   login,
+  logout,
+  renderLoginPage,
+  renderRegisterPage,
+  me,
 };
+
+function renderLoginPage(req, res) {
+  res.render("login");
+}
+
+function renderRegisterPage(req, res) {
+  res.render("register");
+}

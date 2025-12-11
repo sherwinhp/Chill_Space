@@ -20,7 +20,9 @@
         <div class="top-actions">
           <button class="btn" id="cart-btn">🛒</button>
           <button class="btn" id="register-btn">Register</button>
-          <button class="btn primary" id="admin-login-btn">Admin Login</button>
+          <button class="btn" id="profiles-btn" hidden>Profiles</button>
+          <button class="btn" id="logout-btn" hidden>Logout</button>
+          <button class="btn primary" id="admin-login-btn">Login</button>
         </div>
       </header>
 
@@ -117,26 +119,9 @@
 
       <section id="profile-section" hidden>
         <h2 class="section-title">Profile</h2>
-        <p class="section-subtitle">Login or register to view your profile and history.</p>
-        <div class="auth-forms">
-          <form id="login-form">
-            <h3>Login</h3>
-            <label>Email<input type="email" name="email" required /></label>
-            <label>Password<input type="password" name="password" required /></label>
-            <button class="btn primary" type="submit">Login</button>
-            <p id="login-status"></p>
-          </form>
-          <form id="register-form">
-            <h3>Register</h3>
-            <label>Name<input type="text" name="name" required /></label>
-            <label>Email<input type="email" name="email" required /></label>
-            <label>Password<input type="password" name="password" required /></label>
-            <button class="btn primary" type="submit">Create account</button>
-            <p id="register-status"></p>
-          </form>
-        </div>
-        <div class="divider"></div>
-        <div class="profile-card" id="profile-card" hidden></div>
+        <p class="section-subtitle">
+          Admins can edit user information here. Need access? Use the login link in the top bar.
+        </p>
         <div class="admin-card" id="admin-card" hidden>
           <h3>Admin Dashboard</h3>
           <p>Manage users (demo CRUD).</p>
