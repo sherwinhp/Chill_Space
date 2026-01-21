@@ -1,6 +1,7 @@
 const {
   listUsers,
   findById,
+  getMainAdmin,
   updateUser,
   deleteUser,
 } = require("../models/usersModel");
@@ -19,15 +20,30 @@ async function getUser(req, res) {
 }
 
 async function editUser(req, res) {
-  const updated = await updateUser(Number(req.params.id), req.body);
-  if (!updated) {
+  const targetId = Number(req.params.id);
+  const targetUser = await findById(targetId);
+  if (!targetUser) {
     return res.status(404).json({ error: "User not found" });
   }
+  const mainAdmin = await getMainAdmin();
+  if (mainAdmin && targetUser.id === mainAdmin.id && req.session.userId !== mainAdmin.id) {
+    return res.status(403).json({ error: "Main admin cannot be edited by other admins" });
+  }
+  const updated = await updateUser(targetId, req.body);
   res.json(stripPassword(updated));
 }
 
 async function removeUser(req, res) {
-  const success = await deleteUser(Number(req.params.id));
+  const targetId = Number(req.params.id);
+  const targetUser = await findById(targetId);
+  if (!targetUser) {
+    return res.status(404).json({ error: "User not found" });
+  }
+  const mainAdmin = await getMainAdmin();
+  if (mainAdmin && targetUser.id === mainAdmin.id && req.session.userId !== mainAdmin.id) {
+    return res.status(403).json({ error: "Main admin cannot be deleted by other admins" });
+  }
+  const success = await deleteUser(targetId);
   if (!success) {
     return res.status(404).json({ error: "User not found" });
   }

@@ -24,66 +24,38 @@ async function findByEmail(email) {
   return rows.length ? toUser(rows[0]) : null;
 }
 
-async function findById(id) {
-  const rows = await db.query("SELECT * FROM users WHERE user_id = ?", [id]);
-  return rows.length ? toUser(rows[0]) : null;
+function findById(id) {
+  return users.find((u) => u.id === id);
 }
 
-async function createUser({ name, email, password, role = "user" }) {
-  try {
-    const result = await db.query(
-      "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
-      [name, email, password, role]
-    );
-    return findById(result.insertId);
-  } catch (error) {
-    // Fallback if role column does not exist in current schema
-    const result = await db.query("INSERT INTO users (name, email, password) VALUES (?, ?, ?)", [
-      name,
-      email,
-      password,
-    ]);
-    return { ...(await findById(result.insertId)), role };
+function createUser({ name, email, password, role = "user" }) {
+  if (findByEmail(email)) {
+    throw new Error("Email already registered");
   }
+  const user = { id: nextUserId++, name, email, password, role };
+  users.push(user);
+  return user;
 }
 
-async function updateUser(id, updates) {
-  const allowed = ["name", "email", "password", "role", "student_status", "student_id", "venue_id"];
-  const fields = [];
-  const values = [];
-  for (const key of allowed) {
-    if (updates[key] !== undefined) {
-      fields.push(`${key} = ?`);
-      values.push(updates[key]);
-    }
-  }
-  if (!fields.length) return findById(id);
-  values.push(id);
-  try {
-    await db.query(`UPDATE users SET ${fields.join(", ")} WHERE user_id = ?`, values);
-  } catch (error) {
-    // Retry without role if column missing
-    const filtered = fields
-      .map((f, idx) => ({ f, v: values[idx] }))
-      .filter(({ f }) => !f.startsWith("role"));
-    if (!filtered.length) throw error;
-    const retryFields = filtered.map(({ f }) => f);
-    const retryValues = filtered.map(({ v }) => v);
-    retryValues.push(id);
-    await db.query(`UPDATE users SET ${retryFields.join(", ")} WHERE user_id = ?`, retryValues);
-  }
-  return findById(id);
+function updateUser(id, updates) {
+  const user = findById(id);
+  if (!user) return null;
+  Object.assign(user, updates);
+  return user;
 }
 
-async function deleteUser(id) {
-  const result = await db.query("DELETE FROM users WHERE user_id = ?", [id]);
-  return result.affectedRows > 0;
+function deleteUser(id) {
+  const index = users.findIndex((u) => u.id === id);
+  if (index === -1) return false;
+  users.splice(index, 1);
+  return true;
 }
 
 module.exports = {
   listUsers,
   findByEmail,
   findById,
+  getMainAdmin,
   createUser,
   updateUser,
   deleteUser,
