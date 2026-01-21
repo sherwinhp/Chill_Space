@@ -1,31 +1,38 @@
-const db = require("../db");
+// Lightweight in-memory users store to keep the demo self-contained.
+const users = [
+  {
+    id: 1,
+    name: "Main Admin",
+    email: "admin@chillspace.com",
+    password: "Admin#123",
+    role: "admin",
+    isMainAdmin: true,
+  },
+  {
+    id: 2,
+    name: "Jamie Lee",
+    email: "jamie@example.com",
+    password: "Chill#123",
+    role: "user",
+  },
+];
 
-// Normalize DB rows to a consistent shape used by controllers/UI
-function toUser(row) {
-  return {
-    id: row.user_id,
-    name: row.name,
-    email: row.email,
-    password: row.password,
-    role: row.role || "user",
-    student_status: row.student_status,
-    student_id: row.student_id,
-    venue_id: row.venue_id,
-  };
+let nextUserId = users.length + 1;
+
+function listUsers() {
+  return users;
 }
 
-async function listUsers() {
-  const rows = await db.query("SELECT * FROM users");
-  return rows.map(toUser);
-}
-
-async function findByEmail(email) {
-  const rows = await db.query("SELECT * FROM users WHERE email = ?", [email]);
-  return rows.length ? toUser(rows[0]) : null;
+function findByEmail(email) {
+  return users.find((u) => u.email === email) || null;
 }
 
 function findById(id) {
-  return users.find((u) => u.id === id);
+  return users.find((u) => u.id === Number(id)) || null;
+}
+
+function getMainAdmin() {
+  return users.find((u) => u.role === "admin" && u.isMainAdmin) || null;
 }
 
 function createUser({ name, email, password, role = "user" }) {
@@ -45,7 +52,7 @@ function updateUser(id, updates) {
 }
 
 function deleteUser(id) {
-  const index = users.findIndex((u) => u.id === id);
+  const index = users.findIndex((u) => u.id === Number(id));
   if (index === -1) return false;
   users.splice(index, 1);
   return true;
