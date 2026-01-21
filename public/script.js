@@ -34,7 +34,7 @@ function setupTabs() {
 
 async function loadSession() {
   try {
-    const { user } = await fetchJSON("/api/auth/me");
+    const { user } = await fetchJSON("/auth/me");
     state.user = user;
     showProfile();
   } catch (error) {
@@ -314,7 +314,7 @@ async function handleLogin(event) {
   const formData = new FormData(event.target);
   const payload = Object.fromEntries(formData.entries());
   try {
-    const { user } = await fetchJSON("/api/auth/login", {
+    const { user } = await fetchJSON("/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -341,7 +341,7 @@ function showProfile() {
 
 async function handleLogout() {
   try {
-    await fetchJSON("/api/auth/logout", { method: "POST" });
+    await fetchJSON("/auth/logout", { method: "POST" });
   } catch (_) {
     // ignore logout errors
   }
@@ -355,7 +355,7 @@ async function handleRegister(event) {
   const formData = new FormData(event.target);
   const payload = Object.fromEntries(formData.entries());
   try {
-    const { user } = await fetchJSON("/api/auth/register", {
+    const { user } = await fetchJSON("/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
