@@ -44,4 +44,10 @@ module.exports = {
   getUser,
   editUser,
   removeUser,
+  renderUsersPage,
 };
+
+function renderUsersPage(req, res) {
+  const users = listUsers().map(stripPassword);
+  res.render("users", { users });
+}

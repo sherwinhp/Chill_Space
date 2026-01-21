@@ -6,8 +6,6 @@ const menuGrid = document.getElementById("menu-grid");
 const reviewsList = document.getElementById("reviews-list");
 const eventsList = document.getElementById("events-list");
 const cartContainer = document.getElementById("cart-container");
-const adminCard = document.getElementById("admin-card");
-const usersTableBody = document.querySelector("#users-table tbody");
 const loginBtn = document.getElementById("admin-login-btn");
 const registerBtn = document.getElementById("register-btn");
 const logoutBtn = document.getElementById("logout-btn");
@@ -18,7 +16,6 @@ const state = {
   user: null,
   rooms: [],
   menu: [],
-  users: [],
 };
 
 function setupTabs() {
@@ -326,9 +323,6 @@ async function handleLogin(event) {
     document.getElementById("login-status").textContent = "Logged in!";
     showProfile();
     updateAuthButtons();
-    if (user.role === "admin") {
-      await loadUsers();
-    }
   } catch (error) {
     document.getElementById("login-status").textContent = error.message;
   }
@@ -342,12 +336,6 @@ function updateAuthButtons() {
 }
 
 function showProfile() {
-  if (!adminCard) return;
-  const isAdmin = state.user && state.user.role === "admin";
-  adminCard.hidden = !isAdmin;
-  if (isAdmin) {
-    loadUsers();
-  }
   updateAuthButtons();
 }
 
@@ -381,64 +369,6 @@ async function handleRegister(event) {
   }
 }
 
-async function loadUsers() {
-  if (!state.user || state.user.role !== "admin" || !usersTableBody) return;
-  const users = await fetchJSON("/api/users");
-  state.users = users;
-  usersTableBody.innerHTML = "";
-  users.forEach((user) => {
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td>${user.id}</td>
-      <td>${user.name}</td>
-      <td>${user.email}</td>
-      <td>${user.role}</td>
-      <td>
-        <button class="btn" data-action="edit" data-id="${user.id}">Edit</button>
-        <button class="btn" data-action="delete" data-id="${user.id}">Delete</button>
-      </td>
-    `;
-    usersTableBody.appendChild(row);
-  });
-}
-
-if (usersTableBody) {
-usersTableBody.addEventListener("click", async (event) => {
-  const btn = event.target.closest("button[data-action]");
-  if (!btn) return;
-  const id = Number(btn.dataset.id);
-  const action = btn.dataset.action;
-  const user = state.users.find((u) => u.id === id);
-  if (!user) return;
-
-  if (action === "delete") {
-    await fetchJSON(`/api/users/${id}`, { method: "DELETE" });
-    loadUsers();
-    return;
-  }
-
-  if (action === "edit") {
-    const name = prompt("Update name", user.name);
-    if (name === null) return;
-    const email = prompt("Update email", user.email);
-    if (email === null) return;
-    const roleInput = prompt('Role ("admin" or "user")', user.role) || user.role;
-    const payload = {
-      name: name.trim() || user.name,
-      email: email.trim() || user.email,
-      role: roleInput.trim() || user.role,
-    };
-    await fetchJSON(`/api/users/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    loadUsers();
-  }
-});
-
-}
-
 function setupTopButtons() {
   const cartBtn = document.getElementById("cart-btn");
   if (cartBtn) cartBtn.addEventListener("click", () => switchTab("cart-section"));
@@ -449,7 +379,7 @@ function setupTopButtons() {
     window.location.href = "/login";
   });
   if (logoutBtn) logoutBtn.addEventListener("click", handleLogout);
-  if (profilesBtn) profilesBtn.addEventListener("click", () => switchTab("profile-section"));
+  if (profilesBtn) profilesBtn.addEventListener("click", () => { window.location.href = "/admin/users"; });
 }
 
 function switchTab(id) {
