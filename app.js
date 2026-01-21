@@ -34,8 +34,14 @@ app.get("/api/rooms/:id/availability", roomsController.checkAvailability);
 
 // Booking routes
 app.get("/api/bookings", bookingsController.getBookings);
+app.get("/api/bookings/:id", bookingsController.getBooking);
 app.post("/api/bookings", bookingsController.addBooking);
 app.post("/api/bookings/availability", bookingsController.availabilityPreview);
+app.patch("/api/bookings/:id", bookingsController.updateExistingBooking);
+app.post("/api/bookings/:id/cancel", bookingsController.cancelExistingBooking);
+app.post("/api/bookings/:id/approve", bookingsController.approveExistingBooking);
+app.post("/api/bookings/:id/reject", bookingsController.rejectExistingBooking);
+app.post("/api/bookings/:id/payment", bookingsController.updatePayment);
 
 // Auth + users (non-API routes)
 app.get("/login", authController.renderLoginPage);
