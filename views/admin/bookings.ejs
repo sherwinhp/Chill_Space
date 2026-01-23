@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Bookings</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("../partials/header", {
+        page: "admin",
+        roomsLink: "/",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile",
+        hideTabs: true
+      }) %>
+
+      <main>
+        <section class="section admin-section">
+          <div class="section-head">
+            <div>
+              <h2>Manage Bookings</h2>
+              <p>Create, update, approve, or delete bookings.</p>
+            </div>
+            <a class="btn" href="/admin">Back to Admin</a>
+          </div>
+
+          <form class="admin-form" action="/admin/bookings" method="POST">
+            <h3>Add Booking</h3>
+            <div class="admin-grid-form">
+              <input name="user_id" type="number" placeholder="User ID" required />
+              <input name="room_id" type="number" placeholder="Room ID" required />
+              <input name="start_time" type="datetime-local" required />
+              <input name="end_time" type="datetime-local" required />
+              <input name="pax" type="number" placeholder="Pax" />
+              <input name="total_price" type="number" step="0.01" placeholder="Total Price" />
+              <select name="payment_status">
+                <option value="pending">Pending</option>
+                <option value="paid">Paid</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+              <select name="admin_status">
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="declined">Declined</option>
+              </select>
+            </div>
+            <button class="btn primary" type="submit">Create Booking</button>
+          </form>
+
+          <div class="admin-table">
+            <div class="admin-table-row admin-header">
+              <span>ID</span>
+              <span>User</span>
+              <span>Room</span>
+              <span>Status</span>
+              <span>Actions</span>
+            </div>
+            <% bookings.forEach(function(booking) { %>
+              <form class="admin-table-row" action="/admin/bookings/<%= booking.id %>" method="POST">
+                <span><%= booking.id %></span>
+                <input name="user_id" type="number" value="<%= booking.userId %>" />
+                <input name="room_id" type="number" value="<%= booking.roomId %>" />
+                <div class="admin-status">
+                  <select name="admin_status">
+                    <option value="pending" <%= booking.adminStatus === 'pending' ? 'selected' : '' %>>Pending</option>
+                    <option value="approved" <%= booking.adminStatus === 'approved' ? 'selected' : '' %>>Approved</option>
+                    <option value="declined" <%= booking.adminStatus === 'declined' ? 'selected' : '' %>>Declined</option>
+                  </select>
+                  <select name="payment_status">
+                    <option value="pending" <%= booking.paymentStatus === 'pending' ? 'selected' : '' %>>Pending</option>
+                    <option value="paid" <%= booking.paymentStatus === 'paid' ? 'selected' : '' %>>Paid</option>
+                    <option value="cancelled" <%= booking.paymentStatus === 'cancelled' ? 'selected' : '' %>>Cancelled</option>
+                  </select>
+                </div>
+                <div class="admin-actions">
+                  <button class="btn" type="submit">Save</button>
+                  <button class="btn danger" type="submit" formaction="/admin/bookings/<%= booking.id %>/delete">Delete</button>
+                </div>
+                <input type="hidden" name="start_time" value="<%= booking.startTime.toISOString ? booking.startTime.toISOString().slice(0,16) : booking.startTime %>" />
+                <input type="hidden" name="end_time" value="<%= booking.endTime.toISOString ? booking.endTime.toISOString().slice(0,16) : booking.endTime %>" />
+                <input type="hidden" name="pax" value="<%= booking.pax %>" />
+                <input type="hidden" name="total_price" value="<%= booking.totalPrice %>" />
+              </form>
+            <% }) %>
+          </div>
+        </section>
+      </main>
+
+      <%- include("../partials/footer") %>
+    </div>
+  </body>
+</html>

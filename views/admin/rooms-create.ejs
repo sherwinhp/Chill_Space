@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Rooms | Create</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("../partials/header", {
+        page: "admin",
+        roomsLink: "/",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile",
+        hideTabs: true
+      }) %>
+
+      <main>
+        <section class="section admin-section">
+          <div class="section-head admin-head">
+            <div>
+              <h2>Add Room</h2>
+              <p>Create a new room listing for customers.</p>
+            </div>
+            <div class="admin-head-actions">
+              <a class="btn" href="/admin">Back to Admin</a>
+              <a class="btn ghost" href="/admin/rooms">View Rooms</a>
+            </div>
+          </div>
+
+          <form class="admin-form admin-room-form admin-room-form-stack" action="/admin/rooms" method="POST" enctype="multipart/form-data">
+            <div class="admin-grid-form">
+              <input name="name" type="text" placeholder="Name" required />
+              <input name="subtitle" type="text" placeholder="Subtitle" />
+              <input name="capacity" type="number" placeholder="Capacity" required />
+              <input name="hourly_rate" type="number" step="0.01" placeholder="$ Hourly Rate" required />
+              <div class="admin-file-field">
+                <input class="admin-file-input" name="image" type="file" accept="image/*" />
+                <small class="field-hint">PNG or JPG up to 3MB.</small>
+              </div>
+              <textarea name="description" rows="2" placeholder="Description"></textarea>
+              <textarea name="features" rows="2" placeholder="Features (comma separated)"></textarea>
+              <label class="admin-inline-check">
+                <input type="checkbox" name="is_available" value="1" checked />
+                Available
+              </label>
+            </div>
+            <button class="btn primary full" type="submit">Create Room</button>
+          </form>
+        </section>
+      </main>
+
+      <%- include("../partials/footer") %>
+    </div>
+  </body>
+</html>

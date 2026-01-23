@@ -1,61 +1,80 @@
-// Lightweight in-memory users store to keep the demo self-contained.
-const users = [
-  {
-    id: 1,
-    name: "Main Admin",
-    email: "admin@chillspace.com",
-    password: "Admin#123",
-    role: "admin",
-    isMainAdmin: true,
-  },
-  {
-    id: 2,
-    name: "Jamie Lee",
-    email: "jamie@example.com",
-    password: "Chill#123",
-    role: "user",
-  },
-];
+const db = require("../db");
 
-let nextUserId = users.length + 1;
-
-function listUsers() {
-  return users;
+function toUser(row) {
+  return {
+    id: row.user_id,
+    name: row.name,
+    email: row.email,
+    password: row.password,
+    role: row.role || "user",
+    address: row.address,
+    contact_number: row.contact_number,
+    created_at: row.created_at,
+  };
 }
 
-function findByEmail(email) {
-  return users.find((u) => u.email === email) || null;
+async function listUsers() {
+  const rows = await db.query("SELECT * FROM users ORDER BY user_id ASC");
+  return rows.map(toUser);
 }
 
-function findById(id) {
-  return users.find((u) => u.id === Number(id)) || null;
+async function findByEmail(email) {
+  const rows = await db.query("SELECT * FROM users WHERE email = ?", [email]);
+  return rows.length ? toUser(rows[0]) : null;
 }
 
-function getMainAdmin() {
-  return users.find((u) => u.role === "admin" && u.isMainAdmin) || null;
+async function findById(id) {
+  const rows = await db.query("SELECT * FROM users WHERE user_id = ?", [id]);
+  return rows.length ? toUser(rows[0]) : null;
 }
 
-function createUser({ name, email, password, role = "user" }) {
-  if (findByEmail(email)) {
+async function getMainAdmin() {
+  const rows = await db.query(
+    "SELECT * FROM users WHERE role = 'admin' ORDER BY user_id ASC LIMIT 1"
+  );
+  return rows.length ? toUser(rows[0]) : null;
+}
+
+async function createUser({ name, email, password, address, contact_number, role = "user" }) {
+  const existing = await findByEmail(email);
+  if (existing) {
     throw new Error("Email already registered");
   }
-  const user = { id: nextUserId++, name, email, password, role };
-  users.push(user);
-  return user;
+  const result = await db.query(
+    "INSERT INTO users (name, email, password, role, address, contact_number) VALUES (?, ?, ?, ?, ?, ?)",
+    [name, email, password, role, address || null, contact_number || null]
+  );
+  return findById(result.insertId);
 }
 
-function updateUser(id, updates) {
-  const user = findById(id);
-  if (!user) return null;
-  Object.assign(user, updates);
-  return user;
+async function updateUser(id, updates) {
+  const fields = [];
+  const params = [];
+  const allowed = [
+    "name",
+    "email",
+    "password",
+    "role",
+    "address",
+    "contact_number",
+  ];
+
+  allowed.forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(updates, key)) {
+      fields.push(`${key} = ?`);
+      params.push(updates[key]);
+    }
+  });
+
+  if (!fields.length) return findById(id);
+  params.push(id);
+  await db.query(`UPDATE users SET ${fields.join(", ")} WHERE user_id = ?`, params);
+  return findById(id);
 }
 
-function deleteUser(id) {
-  const index = users.findIndex((u) => u.id === Number(id));
-  if (index === -1) return false;
-  users.splice(index, 1);
-  return true;
+async function deleteUser(id) {
+  const result = await db.query("DELETE FROM users WHERE user_id = ?", [id]);
+  return result.affectedRows > 0;
 }
 
 module.exports = {

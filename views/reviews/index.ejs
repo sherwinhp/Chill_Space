@@ -1,87 +1,67 @@
-<%- include("../partials/header") %>
+<div class="page">
+  <div class="glow"></div>
+  <%- include("../partials/header", { page: "reviews" }) %>
 
-<div class="container py-5">
-
-    <!-- Title -->
-    <div class="mb-4">
-        <h1 class="fw-bold">Student Reviews</h1>
-        <p class="text-muted">See what gamers and students are saying about us!</p>
-    </div>
-
-    <!-- Write Review Button -->
-    <div class="d-flex justify-content-end mb-4">
-        <a href="/reviews/add" class="btn btn-dark px-4 py-2">
-            Write a Review
-        </a>
-    </div>
-
-    <!-- Reviews Grid -->
-    <div class="row g-4">
-
-        <% if (reviews && reviews.length > 0) { %>
-
-            <% reviews.forEach(r => { %>
-                <div class="col-md-6">
-                    <div class="card shadow-sm border-0 rounded-4">
-                        <div class="card-body">
-
-                            <!-- Top: Avatar, Name, Stars, Date -->
-                            <div class="d-flex justify-content-between align-items-start mb-3">
-
-                                <!-- Avatar + Name -->
-                                <div class="d-flex align-items-center">
-                                    <!-- Avatar Circle -->
-                                    <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3" 
-                                         style="width: 48px; height: 48px; font-weight:600; font-size:1.1rem;">
-                                        <%= r.user_name 
-                                                ? r.user_name.split(" ").map(n => n[0]).slice(0,2).join("") 
-                                                : "U" %>
-                                    </div>
-
-                                    <div>
-                                        <h6 class="mb-1 fw-semibold"><%= r.user_name %></h6>
-
-                                        <!-- Stars -->
-                                        <div class="text-warning small">
-                                            <% for (let i = 0; i < r.rating; i++) { %>
-                                                <i class="bi bi-star-fill"></i>
-                                            <% } %>
-
-                                            <% for (let i = r.rating; i < 5; i++) { %>
-                                                <i class="bi bi-star"></i>
-                                            <% } %>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Date -->
-                                <small class="text-muted">
-                                    <%= new Date(r.created_at).toLocaleDateString("en-US", {
-                                        month: "short",
-                                        day: "numeric",
-                                        year: "numeric"
-                                    }) %>
-                                </small>
-                            </div>
-
-                            <!-- Review Text -->
-                            <p class="text-secondary mb-0" style="line-height: 1.5;">
-                                <%= r.comment %>
-                            </p>
-
-                        </div>
-                    </div>
-                </div>
-            <% }) %>
-
+  <main>
+    <section class="section">
+      <div class="section-head reviews-head">
+        <div>
+          <h2>Student Reviews</h2>
+          <p>See what gamers and students are saying about us!</p>
+        </div>
+        <% if (session && session.userId) { %>
+          <a href="/reviews/add" class="btn primary reviews-cta">Write a Review</a>
         <% } else { %>
-            <div class="col-12 text-center py-5">
-                <h5 class="text-muted">No reviews yet.</h5>
-                <p class="text-muted">Be the first to share your experience!</p>
-            </div>
+          <a href="/login" class="btn primary reviews-cta">Login to Write a Review</a>
         <% } %>
+      </div>
 
-    </div>
+      <% if (reviews && reviews.length > 0) { %>
+        <div class="reviews-grid">
+          <% reviews.forEach(r => { %>
+            <article class="review-card">
+              <div class="review-top">
+                <div class="avatar">
+                  <%= r.user_name
+                    ? r.user_name.split(" ").map(n => n[0]).slice(0,2).join("")
+                    : "U" %>
+                </div>
+                <div class="review-meta">
+                  <h4><%= r.user_name %></h4>
+                  <div class="stars">
+                    <% for (let i = 0; i < r.rating; i++) { %>
+                    <span>&#9733;</span>
+                    <% } %>
+                    <% for (let i = r.rating; i < 5; i++) { %>
+                      <span class="muted">&#9733;</span>
+                    <% } %>
+                  </div>
+                </div>
+                <div class="review-date">
+                  <%= new Date(r.created_at).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric"
+                  }) %>
+                </div>
+            </div>
+            <p><%= r.comment %></p>
+            <% if (r.imageUrl) { %>
+              <div class="review-photo">
+                <img src="<%= r.imageUrl %>" alt="Review photo from <%= r.user_name %>" />
+              </div>
+            <% } %>
+          </article>
+        <% }) %>
+      </div>
+      <% } else { %>
+        <div class="empty-state">
+          <h3>No reviews yet.</h3>
+          <p>Be the first to share your experience!</p>
+        </div>
+      <% } %>
+    </section>
+  </main>
+
+  <%- include("../partials/footer") %>
 </div>
-
-<%- include("../partials/footer") %>

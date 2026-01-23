@@ -6,29 +6,63 @@
   <title>Login</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
-<body class="page-shell" style="max-width:720px;margin:0 auto;padding:32px">
-  <header class="topbar" style="justify-content:space-between;margin-bottom:24px">
-    <div class="brand">
-      <strong>Login</strong>
-      <small>Access your account</small>
-    </div>
-    <div class="top-actions">
-      <a class="btn" href="/register">Register</a>
-      <a class="btn" href="/">Home</a>
-    </div>
-  </header>
+<body>
+  <div class="page">
+    <div class="glow"></div>
+    <%- include("partials/header", {
+      page: "",
+      roomsLink: "/",
+      bookingsLink: "/bookings",
+      menuLink: "/menu",
+      reviewsLink: "/reviews",
+      eventsLink: "/events",
+      profileLink: "/profile"
+    }) %>
 
-  <section>
-    <h2 class="section-title">Sign In</h2>
-    <form id="login-form" class="auth-forms" style="max-width:420px">
-      <label>Email<input type="email" name="email" required /></label>
-      <label>Password<input type="password" name="password" required /></label>
-      <button class="btn primary" type="submit">Login</button>
-      <p id="login-status"></p>
-    </form>
-  </section>
+    <main>
+      <section class="auth-shell">
+        <div class="auth-card">
+          <div class="auth-header">
+            <h2>Welcome back</h2>
+            <p>Sign in to manage bookings and reviews.</p>
+          </div>
+          <form id="login-form" class="auth-form">
+            <label>
+              Email
+              <input type="email" name="email" placeholder="you@example.com" required />
+            </label>
+            <label>
+              Password
+              <div class="password-field">
+                <input id="login-password" type="password" name="password" placeholder="********" required />
+                <button class="password-toggle" type="button" data-target="login-password">Show</button>
+              </div>
+            </label>
+            <button class="btn primary full" type="submit">Login</button>
+            <p id="login-status" class="auth-status"></p>
+          </form>
+          <div class="auth-footer">
+            <span>New here?</span>
+            <a href="/register">Create an account</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <%- include("partials/footer") %>
+  </div>
 
   <script>
+    document.querySelectorAll('.password-toggle').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const input = document.getElementById(btn.dataset.target);
+        if (!input) return;
+        const nextType = input.type === 'password' ? 'text' : 'password';
+        input.type = nextType;
+        btn.textContent = nextType === 'password' ? 'Show' : 'Hide';
+      });
+    });
+
     const statusEl = document.getElementById('login-status');
     document.getElementById('login-form').addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -36,7 +70,7 @@
       const formData = new FormData(event.target);
       const payload = Object.fromEntries(formData.entries());
       try {
-        const res = await fetch('/api/auth/login', {
+        const res = await fetch('/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),

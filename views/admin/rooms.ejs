@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Rooms</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("../partials/header", {
+        page: "admin",
+        roomsLink: "/",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile",
+        hideTabs: true
+      }) %>
+
+      <main>
+        <section class="section admin-section">
+          <div class="section-head admin-head">
+            <div>
+              <h2>Manage Rooms</h2>
+              <p>Create, update, or remove rooms.</p>
+            </div>
+            <div class="admin-head-actions">
+              <a class="btn" href="/admin">Back to Admin</a>
+              <a class="btn primary" href="/admin/rooms/new">Create Room</a>
+            </div>
+          </div>
+
+          <div class="admin-cards">
+            <% rooms.forEach(function(room) { %>
+              <div class="admin-room-card">
+                <div class="admin-room-media">
+                  <% if (room.image) { %>
+                    <img src="<%= room.image %>" alt="<%= room.name %>" />
+                  <% } else { %>
+                    <div class="admin-room-placeholder">No Image</div>
+                  <% } %>
+                </div>
+                <div class="admin-room-body">
+                  <div class="admin-room-header">
+                    <div>
+                      <h3><%= room.name %></h3>
+                      <p><%= room.subtitle || "Gaming Room" %></p>
+                    </div>
+                    <div class="admin-room-price">
+                      <span>$<%= room.pricePerHour %></span>
+                      <small>/hour</small>
+                    </div>
+                  </div>
+                  <p class="admin-room-desc"><%= room.description || "No description yet." %></p>
+                  <div class="admin-room-meta">
+                    <span>Capacity: <strong><%= room.capacity %></strong></span>
+                    <span>Status: <strong><%= room.isAvailable ? "Available" : "Unavailable" %></strong></span>
+                  </div>
+
+                  <details class="admin-room-details">
+                    <summary>View details & edit</summary>
+                    <form class="admin-room-edit" action="/admin/rooms/<%= room.id %>" method="POST" enctype="multipart/form-data">
+                      <input name="name" value="<%= room.name %>" placeholder="Name" required />
+                      <input name="subtitle" value="<%= room.subtitle %>" placeholder="Subtitle" />
+                      <input name="capacity" type="number" value="<%= room.capacity %>" placeholder="Capacity" required />
+                      <input name="hourly_rate" type="number" step="0.01" value="<%= room.pricePerHour %>" placeholder="Hourly Rate" required />
+                      <textarea name="description" rows="2" placeholder="Description"><%= room.description %></textarea>
+                      <textarea name="features" rows="2" placeholder="Features (comma separated)"><%= room.features ? room.features.join(", ") : "" %></textarea>
+                      <label class="admin-inline-check">
+                        <input type="checkbox" name="is_available" value="1" <%= room.isAvailable ? "checked" : "" %> />
+                        Available
+                      </label>
+                      <input type="file" name="image" accept="image/*" />
+                      <input type="hidden" name="current_image_url" value="<%= room.image %>" />
+                      <div class="admin-room-actions">
+                        <button class="btn" type="submit">Save</button>
+                        <button class="btn danger" type="submit" formaction="/admin/rooms/<%= room.id %>/delete">Delete</button>
+                      </div>
+                    </form>
+                  </details>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        </section>
+      </main>
+
+      <%- include("../partials/footer") %>
+    </div>
+  </body>
+</html>

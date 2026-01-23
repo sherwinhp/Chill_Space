@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Events | Cozy Place Gaming Rooms</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("partials/header", {
+        page: "events",
+        roomsLink: "/",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile"
+      }) %>
+
+      <main>
+        <section class="section">
+          <div class="section-head">
+            <div>
+              <h2>Events &amp; Student Deals</h2>
+              <p>Check out our gaming tournaments, movie nights, and special student discounts.</p>
+            </div>
+          </div>
+
+          <div class="event-tabs">
+            <button class="event-tab active" type="button" data-target="events">Events</button>
+            <button class="event-tab" type="button" data-target="promotions">Promotions</button>
+          </div>
+
+          <div class="event-panel" data-panel="events">
+            <% if (!events || !events.length) { %>
+              <div class="empty-state">
+                <h3>No events yet.</h3>
+                <p>Check back soon for new tournaments and movie nights.</p>
+              </div>
+            <% } else { %>
+              <div class="event-list">
+                <% events.forEach(function(event) { %>
+                  <article class="event-card">
+                    <div class="event-image">
+                      <% if (event.image) { %>
+                        <img src="<%= event.image %>" alt="<%= event.title %>" />
+                      <% } %>
+                    </div>
+                    <div class="event-content">
+                      <h3><%= event.title %></h3>
+                      <p><%= event.description %></p>
+                      <div class="event-date">
+                        <span>
+                          <strong>
+                            <%= new Date(event.startDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) %>
+                          </strong>
+                        </span>
+                        <span>to</span>
+                        <span>
+                          <strong>
+                            <%= new Date(event.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) %>
+                          </strong>
+                        </span>
+                      </div>
+                    </div>
+                  </article>
+                <% }) %>
+              </div>
+            <% } %>
+          </div>
+
+          <div class="event-panel" data-panel="promotions" hidden>
+            <% if (!promotions || !promotions.length) { %>
+              <div class="empty-state">
+                <h3>No promotions available.</h3>
+                <p>Add promotions in the database to show student deals.</p>
+              </div>
+            <% } else { %>
+              <div class="promo-summary" data-cart-summary>
+                <div>
+                  <h4>Cart total</h4>
+                  <p data-cart-total>$0.00</p>
+                </div>
+                <div>
+                  <h4>Active discount</h4>
+                  <p data-cart-discount>None</p>
+                </div>
+              </div>
+              <div class="promo-grid">
+                <% promotions.forEach(function(promo) { %>
+                  <article
+                    class="promo-card"
+                    data-min-total="<%= promo.minTotal %>"
+                    data-discount="<%= promo.discountPercent %>"
+                    data-code="<%= promo.code %>"
+                  >
+                    <div class="promo-label"><%= promo.discountPercent %>% OFF</div>
+                    <h3><%= promo.title %></h3>
+                    <p><%= promo.description %></p>
+                    <div class="promo-meta">
+                      <span class="promo-code"><%= promo.code %></span>
+                      <span>Min spend $<%= promo.minTotal.toFixed(2) %></span>
+                    </div>
+                    <div class="promo-date">
+                      Valid until
+                      <%= new Date(promo.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) %>
+                    </div>
+                    <div class="promo-status" data-status>Not applied</div>
+                  </article>
+                <% }) %>
+              </div>
+            <% } %>
+          </div>
+        </section>
+      </main>
+
+      <%- include("partials/footer") %>
+    </div>
+    <script src="/events.js"></script>
+  </body>
+</html>

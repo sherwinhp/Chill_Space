@@ -6,30 +6,83 @@
   <title>Register</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
-<body class="page-shell" style="max-width:720px;margin:0 auto;padding:32px">
-  <header class="topbar" style="justify-content:space-between;margin-bottom:24px">
-    <div class="brand">
-      <strong>Register</strong>
-      <small>Create a new account</small>
-    </div>
-    <div class="top-actions">
-      <a class="btn" href="/login">Login</a>
-      <a class="btn" href="/">Home</a>
-    </div>
-  </header>
+<body>
+  <div class="page">
+    <div class="glow"></div>
+    <%- include("partials/header", {
+      page: "",
+      roomsLink: "/",
+      bookingsLink: "/bookings",
+      menuLink: "/menu",
+      reviewsLink: "/reviews",
+      eventsLink: "/events",
+      profileLink: "/profile"
+    }) %>
 
-  <section>
-    <h2 class="section-title">Create Account</h2>
-    <form id="register-form" class="auth-forms" style="max-width:420px">
-      <label>Name<input type="text" name="name" required /></label>
-      <label>Email<input type="email" name="email" required /></label>
-      <label>Password<input type="password" name="password" required /></label>
-      <button class="btn primary" type="submit">Register</button>
-      <p id="register-status"></p>
-    </form>
-  </section>
+    <main>
+      <section class="auth-shell">
+        <div class="auth-card">
+          <div class="auth-header">
+            <h2>Create your account</h2>
+            <p>Join Cozy Place and unlock booking perks.</p>
+          </div>
+          <form id="register-form" class="auth-form">
+            <label>
+              Username
+              <input type="text" name="name" placeholder="e.g. janedoe" required />
+            </label>
+            <label>
+              Email
+              <input type="email" name="email" placeholder="e.g. jane@example.com" required />
+            </label>
+            <label>
+              Password
+              <div class="password-field">
+                <input id="register-password" type="password" name="password" placeholder="Enter password" required />
+                <button class="password-toggle" type="button" data-target="register-password">Show</button>
+              </div>
+              <small class="field-hint">Use at least 8 characters with uppercase and special character.</small>
+            </label>
+            <label>
+              Confirm password
+              <div class="password-field">
+                <input id="register-confirm-password" type="password" name="confirm_password" placeholder="Re-enter password" required />
+                <button class="password-toggle" type="button" data-target="register-confirm-password">Show</button>
+              </div>
+            </label>
+            <label>
+              Address
+              <input type="text" name="address" placeholder="123 Main St, Apt 4B" required />
+            </label>
+            <label>
+              Contact number
+              <input type="text" name="contact_number" placeholder="81234567" required />
+            </label>
+            <button class="btn primary full" type="submit">Register</button>
+            <p id="register-status" class="auth-status"></p>
+          </form>
+          <div class="auth-footer">
+            <span>Already have an account?</span>
+            <a href="/login">Login</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <%- include("partials/footer") %>
+  </div>
 
   <script>
+    document.querySelectorAll('.password-toggle').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const input = document.getElementById(btn.dataset.target);
+        if (!input) return;
+        const nextType = input.type === 'password' ? 'text' : 'password';
+        input.type = nextType;
+        btn.textContent = nextType === 'password' ? 'Show' : 'Hide';
+      });
+    });
+
     const statusEl = document.getElementById('register-status');
     document.getElementById('register-form').addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -37,7 +90,7 @@
       const formData = new FormData(event.target);
       const payload = Object.fromEntries(formData.entries());
       try {
-        const res = await fetch('/api/auth/register', {
+        const res = await fetch('/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),

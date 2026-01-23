@@ -15,24 +15,26 @@ function parseCookies(req) {
   }, {});
 }
 
-function createSession(user) {
-  const sid = crypto.randomBytes(16).toString("hex");
-  sessions[sid] = { userId: user.id, role: user.role, name: user.name, email: user.email };
-  return sid;
+function createSession(user, sid) {
+  const sessionId = sid || crypto.randomBytes(16).toString("hex");
+  sessions[sessionId] = { userId: user.id, role: user.role, name: user.name, email: user.email };
+  return sessionId;
 }
 
 function sessionMiddleware(req, res, next) {
   req.session = null;
   const cookies = parseCookies(req);
   const sid = cookies.sid;
+  req.cartSid = sid || null;
   if (sid && sessions[sid]) {
     req.session = sessions[sid];
   }
 
   req.setSession = (user) => {
-    const newSid = createSession(user);
-    res.setHeader("Set-Cookie", `sid=${newSid}; HttpOnly; Path=/`);
-    req.session = sessions[newSid];
+    const sessionId = createSession(user, req.cartSid);
+    res.setHeader("Set-Cookie", `sid=${sessionId}; HttpOnly; Path=/`);
+    req.session = sessions[sessionId];
+    req.cartSid = sessionId;
   };
 
   req.clearSession = () => {
@@ -42,6 +44,12 @@ function sessionMiddleware(req, res, next) {
     }
     req.session = null;
   };
+
+  if (!req.cartSid) {
+    const guestSid = crypto.randomBytes(16).toString("hex");
+    res.setHeader("Set-Cookie", `sid=${guestSid}; HttpOnly; Path=/`);
+    req.cartSid = guestSid;
+  }
 
   next();
 }

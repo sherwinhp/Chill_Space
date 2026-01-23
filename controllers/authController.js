@@ -1,9 +1,15 @@
 const { findByEmail, createUser, findById } = require("../models/usersModel");
 
 async function register(req, res) {
-  const { name, email, password } = req.body;
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: "Name, email, and password are required." });
+  const { name, email, password, confirm_password, address, contact_number } = req.body;
+  if (!name || !email || !password || !confirm_password || !address || !contact_number) {
+    return res
+      .status(400)
+      .json({ error: "Name, email, password, address, and contact number are required." });
+  }
+
+  if (password !== confirm_password) {
+    return res.status(400).json({ error: "Passwords do not match." });
   }
 
   const passwordCheck = validatePassword(password);
@@ -12,7 +18,14 @@ async function register(req, res) {
   }
 
   try {
-    const user = await createUser({ name, email, password, role: "user" });
+    const user = await createUser({
+      name,
+      email,
+      password,
+      address,
+      contact_number,
+      role: "user",
+    });
     if (req.setSession) {
       req.setSession(user);
     }
@@ -46,14 +59,14 @@ async function me(req, res) {
 }
 
 function validatePassword(pw) {
-  if (!pw || pw.length < 6) {
-    return { ok: false, message: "Password must be at least 6 characters." };
+  if (!pw || pw.length < 8) {
+    return { ok: false, message: "Password must be at least 8 characters." };
   }
-  if (!/[0-9]/.test(pw)) {
-    return { ok: false, message: "Password must include a number." };
+  if (!/[A-Z]/.test(pw)) {
+    return { ok: false, message: "Password must include at least one uppercase letter." };
   }
   if (!/[^\w\s]/.test(pw)) {
-    return { ok: false, message: "Password must include a special character." };
+    return { ok: false, message: "Password must include at least one special character." };
   }
   return { ok: true };
 }
@@ -62,7 +75,12 @@ function logout(req, res) {
   if (req.clearSession) {
     req.clearSession();
   }
-  res.json({ ok: true });
+  const acceptsJson = req.headers.accept && req.headers.accept.includes("application/json");
+  if (acceptsJson) {
+    res.json({ ok: true });
+    return;
+  }
+  res.redirect("/");
 }
 
 function sanitize(user) {

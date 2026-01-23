@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Menu | Cozy Place Gaming Rooms</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("partials/header", {
+        page: "menu",
+        roomsLink: "/",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile"
+      }) %>
+
+      <main>
+        <section class="section">
+          <div class="section-head">
+            <div>
+              <h2>Food, Drinks &amp; Themes</h2>
+              <p>Enhance your gaming experience with snacks and themes.</p>
+            </div>
+          </div>
+
+          <div class="menu-tabs">
+            <button class="menu-tab active" data-category="Food">Food</button>
+            <button class="menu-tab" data-category="Beverages">Beverages</button>
+            <button class="menu-tab" data-category="Room Themes">Room Themes</button>
+          </div>
+
+          <% if (!menuItems || !menuItems.length) { %>
+            <div class="empty-state">
+              <h3>No menu items available.</h3>
+              <p>Add items in the database to populate this page.</p>
+            </div>
+          <% } else { %>
+            <div class="menu-grid" data-menu-grid>
+              <% menuItems.forEach(function(item) { %>
+                <article
+                  class="menu-card"
+                  data-category="<%= item.displayCategory %>"
+                  data-id="<%= item.id %>"
+                  data-name="<%= item.name %>"
+                  data-price="<%= item.price %>"
+                >
+                  <div class="menu-icon">
+                    <i class="bi bi-egg-fried"></i>
+                  </div>
+                  <div class="menu-info">
+                    <h3><%= item.name %></h3>
+                    <p><%= item.description %></p>
+                  </div>
+                  <div class="menu-meta">
+                    <span class="price">$<%= item.price.toFixed(2) %></span>
+                    <span class="availability"><%= item.isAvailable ? "Available" : "Unavailable" %></span>
+                  </div>
+                  <button class="btn primary add-to-cart" <%= item.isAvailable ? "" : "disabled" %>>
+                    Add to Cart
+                  </button>
+                </article>
+              <% }) %>
+            </div>
+          <% } %>
+        </section>
+
+      </main>
+      <%- include("partials/footer") %>
+    </div>
+    <script src="/script.js"></script>
+    <script src="/menu.js"></script>
+  </body>
+</html>

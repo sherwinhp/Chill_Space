@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Book <%= room.name %> | Cozy Place Gaming Rooms</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("partials/header", {
+        page: "rooms",
+        roomsLink: "/#rooms",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile"
+      }) %>
+
+      <main>
+        <section class="section booking-widget">
+          <div class="section-head">
+            <div>
+              <h2>Book <%= room.name %></h2>
+              <p>Choose a date and time slot (up to 3 months ahead).</p>
+            </div>
+          </div>
+
+          <div
+            class="booking-widget-card"
+            data-booking-widget
+            data-room-id="<%= room.id %>"
+            data-room-name="<%= room.name %>"
+            data-room-rate="<%= room.pricePerHour %>"
+          >
+            <div class="booking-widget-head">
+              <div>
+                <h3><%= room.name %></h3>
+                <p data-booking-status>Select a day to load available slots.</p>
+              </div>
+              <div class="booking-legend">
+                <span><i class="legend-dot available"></i>Available</span>
+                <span><i class="legend-dot booked"></i>Booked</span>
+                <span><i class="legend-dot selected"></i>Selected</span>
+              </div>
+            </div>
+            <div class="booking-calendar" data-booking-calendar></div>
+            <div class="booking-slots" data-booking-slots></div>
+            <div class="booking-actions">
+              <div class="booking-summary" data-booking-summary>
+                Select a day and time to continue.
+              </div>
+              <button class="btn primary" type="button" data-booking-add disabled>Book Slot</button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <%- include("partials/footer") %>
+    </div>
+    <script src="/booking-widget.js"></script>
+  </body>
+</html>

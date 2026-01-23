@@ -6,14 +6,15 @@ const fallbackReviews = [
   { name: "Board Games Group", rating: 5, date: "2024-03-14", text: "Plenty of space for our team matches.", room: "Room C" },
 ];
 
-function normalizeReviews(rows) {
-  if (!rows || !rows.length) return fallbackReviews;
+function normalizeReviews(rows, { allowFallback = false } = {}) {
+  if (!rows || !rows.length) return allowFallback ? fallbackReviews : [];
   return rows.map((r) => ({
     name: r.user_name || "Anonymous",
     rating: Number(r.rating) || 0,
     date: r.created_at ? new Date(r.created_at).toISOString().split("T")[0] : "",
     text: r.comment || "",
     room: r.room_name || undefined,
+    imageUrl: r.image_url || "",
   }));
 }
 
@@ -23,10 +24,10 @@ module.exports = {
   getApiReviews: async (req, res) => {
     try {
       const rows = await Reviews.getAll();
-      res.json(normalizeReviews(rows));
+      res.json(normalizeReviews(rows, { allowFallback: true }));
     } catch (err) {
       console.error(err);
-      res.json(normalizeReviews());
+      res.json(normalizeReviews([], { allowFallback: true }));
     }
   },
 
@@ -36,7 +37,7 @@ module.exports = {
       const rows = await Reviews.getAll();  // 🔥 FIXED
 
       res.render("reviews/index", {
-        reviews: normalizeReviews(rows),
+        reviews: normalizeReviews(rows, { allowFallback: false }),
         page: "reviews"
       });
     } catch (err) {
@@ -48,19 +49,27 @@ module.exports = {
 
   // Render add review form
   addForm: (req, res) => {
-  res.render("reviews/add", {
-    page: "reviews"   // <-- Add this
-  });
-},
+    if (!req.session || !req.session.userId) {
+      return res.redirect("/login");
+    }
+    res.render("reviews/add", {
+      page: "reviews"
+    });
+  },
 
 
   // Create review
   create: async (req, res) => {
     try {
+      if (!req.session || !req.session.userId) {
+        return res.status(401).json({ error: "Login required." });
+      }
+
       const { roomId, rating, comment } = req.body;
+      const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
       const userId = req.session.userId; // logged in user
 
-      await Reviews.create(userId, roomId, rating, comment);
+      await Reviews.create(userId, roomId, rating, comment, imageUrl);
       res.redirect("/reviews");
     } catch (err) {
       console.error(err);
@@ -85,9 +94,10 @@ module.exports = {
   update: async (req, res) => {
     try {
       const id = req.params.id;
-      const { rating, comment } = req.body;
+      const { rating, comment, currentImageUrl } = req.body;
+      const imageUrl = req.file ? `/uploads/${req.file.filename}` : currentImageUrl || null;
 
-      await Reviews.update(id, rating, comment);
+      await Reviews.update(id, rating, comment, imageUrl);
       res.redirect("/reviews");
     } catch (err) {
       console.error(err);

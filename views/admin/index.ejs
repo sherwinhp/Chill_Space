@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin | Cozy Place Gaming Rooms</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("../partials/header", {
+        page: "admin",
+        roomsLink: "/",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile",
+        hideTabs: true
+      }) %>
+
+      <main>
+        <section class="section">
+          <div class="section-head">
+            <div>
+              <h2>Admin Dashboard</h2>
+              <p>Manage rooms, bookings, menu items, events, promotions, reviews, and users.</p>
+            </div>
+          </div>
+
+          <nav class="admin-nav" aria-label="Admin sections">
+            <a class="admin-nav-link" href="/admin/rooms">Rooms</a>
+            <a class="admin-nav-link" href="/admin/bookings">Bookings</a>
+            <a class="admin-nav-link" href="/admin/menu">Menu</a>
+            <a class="admin-nav-link" href="/admin/events">Events</a>
+            <a class="admin-nav-link" href="/admin/promotions">Promotions</a>
+            <a class="admin-nav-link" href="/admin/reviews">Reviews</a>
+            <a class="admin-nav-link" href="/admin/users">Users</a>
+          </nav>
+        </section>
+      </main>
+
+      <%- include("../partials/footer") %>
+    </div>
+  </body>
+</html>

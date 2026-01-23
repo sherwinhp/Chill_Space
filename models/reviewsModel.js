@@ -2,10 +2,10 @@ const db = require("../db");
 
 const Reviews = {
   // Create a new review
-  create: (userId, roomId, rating, comment) => {
+  create: (userId, roomId, rating, comment, imageUrl) => {
     return db.query(
-      "INSERT INTO reviews (user_id, room_id, rating, comment) VALUES (?, ?, ?, ?)",
-      [userId, roomId, rating, comment]
+      "INSERT INTO reviews (user_id, room_id, rating, comment, image_url) VALUES (?, ?, ?, ?, ?)",
+      [userId, roomId, rating, comment, imageUrl || null]
     );
   },
 
@@ -29,10 +29,10 @@ const Reviews = {
   },
 
   // Update review
-  update: (id, rating, comment) => {
+  update: (id, rating, comment, imageUrl) => {
     return db.query(
-      "UPDATE reviews SET rating = ?, comment = ? WHERE review_id = ?",
-      [rating, comment, id]
+      "UPDATE reviews SET rating = ?, comment = ?, image_url = ? WHERE review_id = ?",
+      [rating, comment, imageUrl || null, id]
     );
   },
 

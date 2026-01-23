@@ -1,4 +1,5 @@
-// Lightweight booking store. In a real project this would be a database.
+// Lightweight booking store (in-memory) and DB-backed admin helpers.
+const db = require("../db");
 const { findRoomById } = require("./roomsModel");
 
 const BOOKING_STATUSES = ["pending", "approved", "rejected", "cancelled"];
@@ -222,4 +223,247 @@ module.exports = {
   updatePaymentStatus,
   BOOKING_STATUSES,
   PAYMENT_STATUSES,
+  listBookingsDb,
+  listBookingsByRoomRange,
+  listHoldsByRoomRange,
+  createBookingHold,
+  releaseBookingHold,
+  findBookingDbById,
+  createBookingDb,
+  updateBookingDb,
+  deleteBookingDb,
 };
+
+function toBookingDb(row) {
+  return {
+    id: row.booking_id,
+    userId: row.user_id,
+    roomId: row.room_id,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    pax: row.pax,
+    totalPrice: row.total_price,
+    paymentStatus: row.payment_status,
+    adminStatus: row.admin_status,
+    roomName: row.room_name,
+    roomImage: row.room_image,
+    userName: row.user_name,
+    userEmail: row.user_email,
+  };
+}
+
+async function listBookingsDb(filters = {}) {
+  const conditions = [];
+  const params = [];
+
+  if (filters.userId) {
+    conditions.push("u.user_id = ?");
+    params.push(filters.userId);
+  }
+
+  if (filters.email) {
+    conditions.push("u.email = ?");
+    params.push(filters.email);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const rows = await db.query(
+    `
+      SELECT
+        b.booking_id,
+        b.user_id,
+        b.room_id,
+        b.start_time,
+        b.end_time,
+        b.pax,
+        b.total_price,
+        b.payment_status,
+        b.admin_status,
+        r.name AS room_name,
+        r.image_url AS room_image,
+        u.name AS user_name,
+        u.email AS user_email
+      FROM bookings b
+      JOIN rooms r ON b.room_id = r.room_id
+      JOIN users u ON b.user_id = u.user_id
+      ${whereClause}
+      ORDER BY b.start_time DESC
+    `,
+    params
+  );
+
+  return rows.map(toBookingDb);
+}
+
+async function listBookingsByRoomRange(roomId, startDate, endDate) {
+  const rows = await db.query(
+    `
+      SELECT start_time, end_time
+      FROM bookings
+      WHERE room_id = ?
+        AND start_time < ?
+        AND end_time > ?
+        AND admin_status <> 'declined'
+        AND payment_status <> 'cancelled'
+      ORDER BY start_time ASC
+    `,
+    [roomId, endDate, startDate]
+  );
+
+  return rows.map((row) => ({
+    startTime: row.start_time,
+    endTime: row.end_time,
+  }));
+}
+
+async function listHoldsByRoomRange(roomId, startDate, endDate) {
+  const rows = await db.query(
+    `
+      SELECT hold_id, start_time, end_time
+      FROM booking_holds
+      WHERE room_id = ?
+        AND start_time < ?
+        AND end_time > ?
+      ORDER BY start_time ASC
+    `,
+    [roomId, endDate, startDate]
+  );
+
+  return rows.map((row) => ({
+    holdId: row.hold_id,
+    startTime: row.start_time,
+    endTime: row.end_time,
+  }));
+}
+
+async function createBookingHold({ room_id, start_time, end_time, user_id }) {
+  const startValue = normalizeDateTime(start_time);
+  const endValue = normalizeDateTime(end_time);
+  try {
+    const result = await db.query(
+      `
+        INSERT INTO booking_holds (room_id, user_id, start_time, end_time, expires_at)
+        VALUES (?, ?, ?, ?, ?)
+      `,
+      [room_id, user_id || null, startValue, endValue, "9999-12-31 23:59:59"]
+    );
+    return result.insertId;
+  } catch (error) {
+    if (error && error.code === "ER_BAD_FIELD_ERROR") {
+      const fallback = await db.query(
+        `
+          INSERT INTO booking_holds (room_id, user_id, start_time, end_time)
+          VALUES (?, ?, ?, ?)
+        `,
+        [room_id, user_id || null, startValue, endValue]
+      );
+      return fallback.insertId;
+    }
+    throw error;
+  }
+}
+
+async function releaseBookingHold(holdId) {
+  const result = await db.query("DELETE FROM booking_holds WHERE hold_id = ?", [holdId]);
+  return result.affectedRows > 0;
+}
+
+function normalizeDateTime(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 19).replace("T", " ");
+  }
+  if (typeof value === "string" && value.includes("T")) {
+    return value.replace("T", " ").replace("Z", "").slice(0, 19);
+  }
+  return value;
+}
+
+async function findBookingDbById(id) {
+  const rows = await db.query(
+    `
+      SELECT
+        b.booking_id,
+        b.user_id,
+        b.room_id,
+        b.start_time,
+        b.end_time,
+        b.pax,
+        b.total_price,
+        b.payment_status,
+        b.admin_status,
+        r.name AS room_name,
+        r.image_url AS room_image,
+        u.name AS user_name,
+        u.email AS user_email
+      FROM bookings b
+      JOIN rooms r ON b.room_id = r.room_id
+      JOIN users u ON b.user_id = u.user_id
+      WHERE b.booking_id = ?
+      LIMIT 1
+    `,
+    [id]
+  );
+
+  return rows.length ? toBookingDb(rows[0]) : null;
+}
+
+async function createBookingDb(payload) {
+  const {
+    user_id,
+    room_id,
+    start_time,
+    end_time,
+    pax,
+    total_price,
+    payment_status,
+    admin_status,
+  } = payload;
+
+  await db.query(
+    `INSERT INTO bookings
+      (user_id, room_id, start_time, end_time, pax, total_price, payment_status, admin_status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      user_id,
+      room_id,
+      start_time,
+      end_time,
+      pax || 1,
+      total_price || null,
+      payment_status || "pending",
+      admin_status || "pending",
+    ]
+  );
+}
+
+async function updateBookingDb(id, updates) {
+  const fields = [];
+  const params = [];
+  const allowed = [
+    "user_id",
+    "room_id",
+    "start_time",
+    "end_time",
+    "pax",
+    "total_price",
+    "payment_status",
+    "admin_status",
+  ];
+
+  allowed.forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(updates, key)) {
+      fields.push(`${key} = ?`);
+      params.push(updates[key]);
+    }
+  });
+
+  if (!fields.length) return;
+  params.push(id);
+  await db.query(`UPDATE bookings SET ${fields.join(", ")} WHERE booking_id = ?`, params);
+}
+
+async function deleteBookingDb(id) {
+  await db.query("DELETE FROM bookings WHERE booking_id = ?", [id]);
+}

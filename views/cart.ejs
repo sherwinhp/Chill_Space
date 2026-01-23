@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cart | Cozy Place Gaming Rooms</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("partials/header", {
+        page: "",
+        roomsLink: "/",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile"
+      }) %>
+
+      <main>
+        <section class="section">
+          <div class="section-head">
+            <div>
+              <h2>Your Cart</h2>
+              <p>Review your selected food and drinks before checkout.</p>
+            </div>
+          </div>
+
+          <div class="cart-page">
+            <div class="cart-items" data-cart-items>
+              <p class="empty-note">No items yet.</p>
+            </div>
+            <div class="cart-total">
+              <span>Total</span>
+              <strong data-cart-total>$0.00</strong>
+            </div>
+            <div class="cart-actions">
+              <button class="btn ghost" type="button" data-clear-cart>Clear Cart</button>
+              <button class="btn primary" type="button">Checkout</button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <%- include("partials/footer") %>
+    </div>
+    <script src="/cart.js"></script>
+  </body>
+</html>

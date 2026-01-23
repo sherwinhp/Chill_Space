@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Menu</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("../partials/header", {
+        page: "admin",
+        roomsLink: "/",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile",
+        hideTabs: true
+      }) %>
+
+      <main>
+        <section class="section admin-section">
+          <div class="section-head">
+            <div>
+              <h2>Manage Menu</h2>
+              <p>Create, update, or remove menu items.</p>
+            </div>
+            <a class="btn" href="/admin">Back to Admin</a>
+          </div>
+
+          <form class="admin-form" action="/admin/menu" method="POST" enctype="multipart/form-data">
+            <h3>Add Menu Item</h3>
+            <div class="admin-grid-form">
+              <input name="name" type="text" placeholder="Name" required />
+              <select name="category">
+                <option value="food">Food</option>
+                <option value="drink">Beverages</option>
+                <option value="addon">Room Themes</option>
+              </select>
+              <input name="price" type="number" step="0.01" placeholder="Price" required />
+              <input name="image" type="file" accept="image/*" />
+              <select name="is_available">
+                <option value="1">Available</option>
+                <option value="0">Unavailable</option>
+              </select>
+              <textarea name="description" rows="2" placeholder="Description"></textarea>
+            </div>
+            <button class="btn primary" type="submit">Create Item</button>
+          </form>
+
+          <div class="admin-table">
+            <div class="admin-table-row admin-header">
+              <span>ID</span>
+              <span>Name</span>
+              <span>Category</span>
+              <span>Price</span>
+              <span>Actions</span>
+            </div>
+            <% menuItems.forEach(function(item) { %>
+              <form class="admin-table-row" action="/admin/menu/<%= item.id %>" method="POST" enctype="multipart/form-data">
+                <span><%= item.id %></span>
+                <input name="name" value="<%= item.name %>" />
+                <select name="category">
+                  <option value="food" <%= item.category === 'food' ? 'selected' : '' %>>Food</option>
+                  <option value="drink" <%= item.category === 'drink' ? 'selected' : '' %>>Beverages</option>
+                  <option value="addon" <%= item.category === 'addon' ? 'selected' : '' %>>Room Themes</option>
+                </select>
+                <input name="price" type="number" step="0.01" value="<%= item.price %>" />
+                <div class="admin-actions">
+                  <button class="btn" type="submit">Save</button>
+                  <button class="btn danger" type="submit" formaction="/admin/menu/<%= item.id %>/delete">Delete</button>
+                </div>
+                <input type="hidden" name="description" value="<%= item.description %>" />
+                <input type="file" name="image" accept="image/*" />
+                <input type="hidden" name="current_image_url" value="<%= item.image %>" />
+                <input type="hidden" name="is_available" value="<%= item.isAvailable ? 1 : 0 %>" />
+              </form>
+            <% }) %>
+          </div>
+        </section>
+      </main>
+
+      <%- include("../partials/footer") %>
+    </div>
+  </body>
+</html>

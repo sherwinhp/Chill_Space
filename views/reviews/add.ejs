@@ -1,89 +1,77 @@
-<%- include("../partials/header") %>
+<div class="page">
+  <div class="glow"></div>
+  <%- include("../partials/header", { page: "reviews" }) %>
 
-<div class="max-w-xl mx-auto px-6 py-10">
-
-    <!-- Page Title -->
-    <h1 class="text-3xl font-semibold mb-3">Write a Review</h1>
-    <p class="text-gray-600 mb-8">
-        Share your experience and help other students choose their perfect chill room!
-    </p>
-
-    <!-- Review Form -->
-    <form action="/reviews/add" method="POST" class="space-y-6">
-
-        <!-- Room Selection (Optional: hide if booking auto-selects) -->
+  <main>
+    <section class="section review-form-section">
+      <div class="section-head">
         <div>
-            <label class="block text-sm font-medium mb-1">Room ID</label>
-            <input 
-                type="number" 
-                name="roomId"
-                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-black"
-                placeholder="Enter Room ID"
-                required
-            >
+          <h2>Write a Review</h2>
+          <p>Share your experience and help other students choose their perfect chill room.</p>
+        </div>
+      </div>
+
+      <form action="/reviews/add" method="POST" class="review-form" enctype="multipart/form-data">
+        <label class="field">
+          <span>Room ID</span>
+          <input
+            type="number"
+            name="roomId"
+            placeholder="Enter Room ID"
+            required
+          />
+        </label>
+
+        <div class="field">
+          <span>Rating</span>
+          <div class="star-rating" id="starRating" role="radiogroup" aria-label="Rating">
+            <button type="button" data-value="1" aria-label="1 star">&#9733;</button>
+            <button type="button" data-value="2" aria-label="2 stars">&#9733;</button>
+            <button type="button" data-value="3" aria-label="3 stars">&#9733;</button>
+            <button type="button" data-value="4" aria-label="4 stars">&#9733;</button>
+            <button type="button" data-value="5" aria-label="5 stars">&#9733;</button>
+          </div>
+          <input type="hidden" name="rating" id="ratingInput" required />
         </div>
 
-        <!-- Star Rating -->
-        <div>
-            <label class="block text-sm font-medium mb-1">Rating</label>
+        <label class="field">
+          <span>Your Review</span>
+          <textarea
+            name="comment"
+            rows="5"
+            placeholder="Tell us about your experience..."
+            required
+          ></textarea>
+        </label>
 
-            <div class="flex gap-2 text-2xl text-gray-300 cursor-pointer" id="starRating">
-                <span data-value="1">★</span>
-                <span data-value="2">★</span>
-                <span data-value="3">★</span>
-                <span data-value="4">★</span>
-                <span data-value="5">★</span>
-            </div>
+        <label class="field">
+          <span>Photo (optional)</span>
+          <input type="file" name="photo" accept="image/*" />
+          <small class="field-hint">PNG or JPG up to 3MB.</small>
+        </label>
 
-            <!-- Hidden input to store selected rating -->
-            <input type="hidden" name="rating" id="ratingInput" required>
+        <div class="form-actions">
+          <button type="submit" class="btn primary full">Submit Review</button>
         </div>
+      </form>
+    </section>
+  </main>
 
-        <!-- Comment Box -->
-        <div>
-            <label class="block text-sm font-medium mb-1">Your Review</label>
-            <textarea 
-                name="comment"
-                rows="5"
-                class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-black"
-                placeholder="Tell us about your experience..."
-                required
-            ></textarea>
-        </div>
-
-        <!-- Submit Button -->
-        <button 
-            type="submit" 
-            class="w-full bg-black text-white py-3 rounded-lg text-lg font-medium hover:bg-gray-800 transition">
-            Submit Review
-        </button>
-        
-    </form>
+  <%- include("../partials/footer") %>
 </div>
 
-<!-- Star Rating Script -->
 <script>
-    const stars = document.querySelectorAll("#starRating span");
-    const ratingInput = document.getElementById("ratingInput");
+  const stars = document.querySelectorAll("#starRating button");
+  const ratingInput = document.getElementById("ratingInput");
 
-    stars.forEach(star => {
-        star.addEventListener("click", () => {
-            const rating = star.getAttribute("data-value");
-
-            ratingInput.value = rating;
-
-            // Highlight selected stars
-            stars.forEach(s => {
-                if (s.getAttribute("data-value") <= rating) {
-                    s.classList.add("text-yellow-500");
-                    s.classList.remove("text-gray-300");
-                } else {
-                    s.classList.add("text-gray-300");
-                    s.classList.remove("text-yellow-500");
-                }
-            });
-        });
+  stars.forEach((star) => {
+    star.addEventListener("click", () => {
+      const rating = Number(star.getAttribute("data-value"));
+      ratingInput.value = rating;
+      stars.forEach((s) => {
+        const value = Number(s.getAttribute("data-value"));
+        s.classList.toggle("active", value <= rating);
+      });
     });
+  });
 </script>
-
-<%- include("../partials/footer") %>

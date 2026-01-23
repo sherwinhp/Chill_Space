@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Events</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("../partials/header", {
+        page: "admin",
+        roomsLink: "/",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile",
+        hideTabs: true
+      }) %>
+
+      <main>
+        <section class="section admin-section">
+          <div class="section-head">
+            <div>
+              <h2>Manage Events</h2>
+              <p>Create, update, or remove events.</p>
+            </div>
+            <a class="btn" href="/admin">Back to Admin</a>
+          </div>
+
+          <form class="admin-form" action="/admin/events" method="POST" enctype="multipart/form-data">
+            <h3>Add Event</h3>
+            <div class="admin-grid-form">
+              <input name="title" type="text" placeholder="Title" required />
+              <input name="event_date" type="date" required />
+              <input name="end_date" type="date" required />
+              <input name="image" type="file" accept="image/*" />
+              <textarea name="description" rows="2" placeholder="Description"></textarea>
+            </div>
+            <button class="btn primary" type="submit">Create Event</button>
+          </form>
+
+          <div class="admin-table">
+            <div class="admin-table-row admin-header">
+              <span>ID</span>
+              <span>Title</span>
+              <span>Start</span>
+              <span>End</span>
+              <span>Actions</span>
+            </div>
+            <% events.forEach(function(event) { %>
+              <form class="admin-table-row" action="/admin/events/<%= event.id %>" method="POST" enctype="multipart/form-data">
+                <span><%= event.id %></span>
+                <input name="title" value="<%= event.title %>" />
+                <input name="event_date" type="date" value="<%= event.startDate ? event.startDate.toISOString().slice(0,10) : '' %>" />
+                <input name="end_date" type="date" value="<%= event.endDate ? event.endDate.toISOString().slice(0,10) : '' %>" />
+                <div class="admin-actions">
+                  <button class="btn" type="submit">Save</button>
+                  <button class="btn danger" type="submit" formaction="/admin/events/<%= event.id %>/delete">Delete</button>
+                </div>
+                <input type="hidden" name="description" value="<%= event.description %>" />
+                <input type="file" name="image" accept="image/*" />
+                <input type="hidden" name="current_image_url" value="<%= event.image %>" />
+              </form>
+            <% }) %>
+          </div>
+        </section>
+      </main>
+
+      <%- include("../partials/footer") %>
+    </div>
+  </body>
+</html>

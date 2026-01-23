@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Profile | Cozy Place Gaming Rooms</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("partials/header", {
+        page: "profile",
+        roomsLink: "/",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile"
+      }) %>
+
+      <main>
+        <section class="section profile-section">
+          <div class="section-head profile-head">
+            <div>
+              <h2>Your Profile</h2>
+              <p>Update your details to keep bookings and reviews accurate.</p>
+            </div>
+          </div>
+
+          <% if (!user) { %>
+            <div class="empty-state wide centered">
+              <h3>Login required</h3>
+              <p>Please log in to view your profile.</p>
+              <a class="btn primary" href="/login">Login</a>
+            </div>
+          <% } else { %>
+            <form class="profile-form" action="/profile" method="POST">
+              <label class="field">
+                <span>Name</span>
+                <input type="text" name="name" value="<%= user.name %>" required />
+              </label>
+              <label class="field">
+                <span>Email</span>
+                <input type="email" name="email" value="<%= user.email %>" required />
+              </label>
+              <label class="field">
+                <span>Password</span>
+                <input type="password" name="password" placeholder="Leave blank to keep current" />
+              </label>
+              <% if (message) { %>
+                <p class="auth-status"><%= message %></p>
+              <% } %>
+              <button class="btn primary full" type="submit">Save changes</button>
+            </form>
+          <% } %>
+        </section>
+      </main>
+
+      <%- include("partials/footer") %>
+    </div>
+  </body>
+</html>

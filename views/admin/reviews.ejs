@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Reviews</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("../partials/header", {
+        page: "admin",
+        roomsLink: "/",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile",
+        hideTabs: true
+      }) %>
+
+      <main>
+        <section class="section admin-section">
+          <div class="section-head">
+            <div>
+              <h2>Manage Reviews</h2>
+              <p>Create, update, or delete reviews.</p>
+            </div>
+            <a class="btn" href="/admin">Back to Admin</a>
+          </div>
+
+          <form class="admin-form" action="/admin/reviews" method="POST">
+            <h3>Add Review</h3>
+            <div class="admin-grid-form">
+              <input name="user_id" type="number" placeholder="User ID" required />
+              <input name="room_id" type="number" placeholder="Room ID" required />
+              <input name="rating" type="number" min="1" max="5" placeholder="Rating" required />
+              <input name="image_url" type="text" placeholder="Image URL" />
+              <textarea name="comment" rows="2" placeholder="Comment"></textarea>
+            </div>
+            <button class="btn primary" type="submit">Create Review</button>
+          </form>
+
+          <div class="admin-table">
+            <div class="admin-table-row admin-header">
+              <span>ID</span>
+              <span>User</span>
+              <span>Room</span>
+              <span>Rating</span>
+              <span>Actions</span>
+            </div>
+            <% reviews.forEach(function(review) { %>
+              <form class="admin-table-row" action="/admin/reviews/<%= review.review_id %>" method="POST">
+                <span><%= review.review_id %></span>
+                <input name="user_id" value="<%= review.user_id %>" readonly />
+                <input name="room_id" value="<%= review.room_id %>" readonly />
+                <input name="rating" type="number" min="1" max="5" value="<%= review.rating %>" />
+                <div class="admin-actions">
+                  <button class="btn" type="submit">Save</button>
+                  <button class="btn danger" type="submit" formaction="/admin/reviews/<%= review.review_id %>/delete">Delete</button>
+                </div>
+                <input type="hidden" name="comment" value="<%= review.comment %>" />
+                <input type="hidden" name="image_url" value="<%= review.image_url %>" />
+              </form>
+            <% }) %>
+          </div>
+        </section>
+      </main>
+
+      <%- include("../partials/footer") %>
+    </div>
+  </body>
+</html>

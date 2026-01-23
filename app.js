@@ -1,83 +1,57 @@
 const express = require("express");
 const path = require("path");
-const roomsController = require("./controllers/roomController");
-const bookingsController = require("./controllers/bookingController");
-const authController = require("./controllers/authController");
-const userController = require("./controllers/userController");
+const homeController = require("./controllers/homeController");
+const bookingsPageController = require("./controllers/bookingsPageController");
 const menuController = require("./controllers/menuController");
-const eventsController = require("./controllers/eventsController");
-const reviewsController = require("./controllers/reviewsController");
-const { sessionMiddleware, requestLogger, requireAdmin, notFound, errorHandler } = require("./middleware");
+const eventsPageController = require("./controllers/eventsPageController");
+const roomController = require("./controllers/roomController");
+const cartController = require("./controllers/cartController");
+const authController = require("./controllers/authController");
+const reviewsRouter = require("./routes/reviews");
+const { sessionMiddleware, requireAdmin } = require("./middleware");
+const profileController = require("./controllers/profileController");
+const adminRouter = require("./routes/admin");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.set("view engine", "ejs");          // <-- ADD THIS
+app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(sessionMiddleware);
-app.use(requestLogger);
-app.use(express.static(path.join(__dirname, "public")));
-app.use("/partials", express.static(path.join(__dirname, "views", "partials")));
-
-// Serve the landing page
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+app.use((req, res, next) => {
+  res.locals.session = req.session;
+  next();
 });
+app.use(express.static(path.join(__dirname, "public")));
 
-// Room routes
-app.get("/api/rooms", roomsController.listRooms);
-app.get("/api/rooms/:id", roomsController.getRoom);
-app.get("/api/rooms/:id/availability", roomsController.checkAvailability);
-
-// Booking routes
-app.get("/api/bookings", bookingsController.getBookings);
-app.get("/api/bookings/:id", bookingsController.getBooking);
-app.post("/api/bookings", bookingsController.addBooking);
-app.post("/api/bookings/availability", bookingsController.availabilityPreview);
-app.patch("/api/bookings/:id", bookingsController.updateExistingBooking);
-app.post("/api/bookings/:id/cancel", bookingsController.cancelExistingBooking);
-app.post("/api/bookings/:id/approve", bookingsController.approveExistingBooking);
-app.post("/api/bookings/:id/reject", bookingsController.rejectExistingBooking);
-app.post("/api/bookings/:id/payment", bookingsController.updatePayment);
-
-// Auth + users (non-API routes)
+app.get("/", homeController.renderHome);
+app.get("/bookings", bookingsPageController.renderBookings);
+app.post("/bookings", bookingsPageController.createBooking);
+app.post("/bookings/:id/cancel", bookingsPageController.cancelBooking);
+app.get("/rooms/:id/book", roomController.renderRoomBooking);
+app.get("/rooms/:id/availability", roomController.listAvailability);
+app.post("/rooms/:id/hold", express.json(), roomController.createHold);
+app.post("/holds/:id/release", roomController.releaseHold);
+app.get("/cart/items", cartController.listItems);
+app.post("/cart/items", express.json(), cartController.addItem);
+app.patch("/cart/items/:id", express.json(), cartController.updateItemQty);
+app.delete("/cart/items/:id", cartController.removeItem);
+app.delete("/cart/clear", cartController.clear);
+app.get("/menu", menuController.renderMenu);
+app.get("/events", eventsPageController.renderEvents);
+app.get("/cart", (req, res) => res.render("cart"));
+app.get("/profile", profileController.renderProfile);
+app.post("/profile", profileController.updateProfile);
 app.get("/login", authController.renderLoginPage);
 app.get("/register", authController.renderRegisterPage);
-app.post("/auth/register", authController.register);
 app.post("/auth/login", authController.login);
-app.get("/auth/me", authController.me);
+app.post("/auth/register", authController.register);
 app.post("/auth/logout", authController.logout);
+app.use("/reviews", reviewsRouter);
 
-// Admin users (non-API)
-app.get("/admin/users", requireAdmin, userController.renderUsersPage);
-app.get("/users", requireAdmin, userController.getUsers);
-app.get("/users/:id", requireAdmin, userController.getUser);
-app.patch("/users/:id", requireAdmin, userController.editUser);
-app.delete("/users/:id", requireAdmin, userController.removeUser);
-
-// Legacy API aliases (kept for compatibility)
-app.post("/api/auth/register", authController.register);
-app.post("/api/auth/login", authController.login);
-app.get("/api/auth/me", authController.me);
-app.post("/api/auth/logout", authController.logout);
-app.get("/api/users", requireAdmin, userController.getUsers);
-app.get("/api/users/:id", requireAdmin, userController.getUser);
-app.patch("/api/users/:id", requireAdmin, userController.editUser);
-app.delete("/api/users/:id", requireAdmin, userController.removeUser);
-
-// Menu, reviews, events
-app.get("/api/menu", menuController.getMenu);
-app.get("/api/reviews", reviewsController.getApiReviews);
-app.get("/api/events", eventsController.getEvents);
-const reviewRouter = require("./routes/reviews");
-app.use("/reviews", reviewRouter);
-
-
-app.use(notFound);
-app.use(errorHandler);
+app.use("/admin", requireAdmin, adminRouter);
 
 app.listen(PORT, () => {
   console.log(`Chill Space running on http://localhost:${PORT}`);
