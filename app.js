@@ -7,6 +7,7 @@ const eventsPageController = require("./controllers/eventsPageController");
 const roomController = require("./controllers/roomController");
 const cartController = require("./controllers/cartController");
 const authController = require("./controllers/authController");
+const paymentsController = require("./controllers/paymentsController");
 const reviewsRouter = require("./routes/reviews");
 const { sessionMiddleware, requireAdmin } = require("./middleware");
 const profileController = require("./controllers/profileController");
@@ -39,13 +40,21 @@ app.post("/cart/items", express.json(), cartController.addItem);
 app.patch("/cart/items/:id", express.json(), cartController.updateItemQty);
 app.delete("/cart/items/:id", cartController.removeItem);
 app.delete("/cart/clear", cartController.clear);
+app.post("/payments/paypal/create", express.json(), paymentsController.createPaypalOrder);
 app.get("/menu", menuController.renderMenu);
 app.get("/events", eventsPageController.renderEvents);
 app.get("/cart", (req, res) => res.render("cart"));
+app.get("/checkout", (req, res) => {
+  if (!req.session || !req.session.userId) {
+    return res.redirect("/login?redirect=/checkout&reason=checkout");
+  }
+  return res.render("checkout");
+});
 app.get("/profile", profileController.renderProfile);
 app.post("/profile", profileController.updateProfile);
 app.get("/login", authController.renderLoginPage);
 app.get("/register", authController.renderRegisterPage);
+app.get("/auth/me", authController.me);
 app.post("/auth/login", authController.login);
 app.post("/auth/register", authController.register);
 app.post("/auth/logout", authController.logout);

@@ -1,10 +1,10 @@
 CREATE DATABASE  IF NOT EXISTS `chill_space` /*!40100 DEFAULT CHARACTER SET latin1 */ /*!80016 DEFAULT ENCRYPTION='N' */;
 USE `chill_space`;
--- MySQL dump 10.13  Distrib 8.0.44, for Win64 (x86_64)
+-- MySQL dump 10.13  Distrib 8.0.42, for Win64 (x86_64)
 --
 -- Host: 127.0.0.1    Database: chill_space
 -- ------------------------------------------------------
--- Server version	8.4.7
+-- Server version	8.4.5
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -16,6 +16,40 @@ USE `chill_space`;
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `booking_holds`
+--
+
+DROP TABLE IF EXISTS `booking_holds`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `booking_holds` (
+  `hold_id` int NOT NULL AUTO_INCREMENT,
+  `room_id` int NOT NULL,
+  `user_id` int DEFAULT NULL,
+  `start_time` datetime NOT NULL,
+  `end_time` datetime NOT NULL,
+  `expires_at` datetime NOT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`hold_id`),
+  KEY `room_id` (`room_id`),
+  KEY `user_id` (`user_id`),
+  KEY `expires_at` (`expires_at`),
+  CONSTRAINT `booking_holds_ibfk_1` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`) ON DELETE CASCADE,
+  CONSTRAINT `booking_holds_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `booking_holds`
+--
+
+LOCK TABLES `booking_holds` WRITE;
+/*!40000 ALTER TABLE `booking_holds` DISABLE KEYS */;
+INSERT INTO `booking_holds` VALUES (2,1,NULL,'2026-01-22 12:00:00','2026-01-22 14:00:00','9999-12-31 23:59:59','2026-01-22 15:31:46');
+/*!40000 ALTER TABLE `booking_holds` ENABLE KEYS */;
+UNLOCK TABLES;
 
 --
 -- Table structure for table `booking_menu_items`
@@ -82,6 +116,50 @@ LOCK TABLES `bookings` WRITE;
 UNLOCK TABLES;
 
 --
+-- Table structure for table `cart_items`
+--
+
+DROP TABLE IF EXISTS `cart_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `cart_items` (
+  `cart_item_id` int NOT NULL AUTO_INCREMENT,
+  `session_id` varchar(64) DEFAULT NULL,
+  `user_id` int DEFAULT NULL,
+  `item_type` enum('menu','room_booking') NOT NULL,
+  `item_id` int DEFAULT NULL,
+  `item_name` varchar(180) NOT NULL,
+  `price` decimal(10,2) NOT NULL,
+  `qty` int NOT NULL DEFAULT '1',
+  `details` varchar(255) DEFAULT NULL,
+  `room_id` int DEFAULT NULL,
+  `start_time` datetime DEFAULT NULL,
+  `end_time` datetime DEFAULT NULL,
+  `hold_id` int DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`cart_item_id`),
+  KEY `session_id` (`session_id`),
+  KEY `user_id` (`user_id`),
+  KEY `item_id` (`item_id`),
+  KEY `room_id` (`room_id`),
+  KEY `cart_items_ibfk_3` (`hold_id`),
+  CONSTRAINT `cart_items_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `cart_items_ibfk_2` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`) ON DELETE SET NULL,
+  CONSTRAINT `cart_items_ibfk_3` FOREIGN KEY (`hold_id`) REFERENCES `booking_holds` (`hold_id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `cart_items`
+--
+
+LOCK TABLES `cart_items` WRITE;
+/*!40000 ALTER TABLE `cart_items` DISABLE KEYS */;
+INSERT INTO `cart_items` VALUES (2,'3e9bd3c4c9e964859a946b202af442c4',NULL,'room_booking',NULL,'Gamer Room 1 booking',24.00,1,'Thu, 22 Jan 08:00 pm-10:00 pm',1,'2026-01-22 12:00:00','2026-01-22 14:00:00',2,'2026-01-22 15:31:46');
+/*!40000 ALTER TABLE `cart_items` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `events`
 --
 
@@ -97,76 +175,6 @@ CREATE TABLE `events` (
   `image_url` varchar(255) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`event_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
-
---
--- Table structure for table `booking_holds`
---
-
-DROP TABLE IF EXISTS `booking_holds`;
-CREATE TABLE `booking_holds` (
-  `hold_id` INT NOT NULL AUTO_INCREMENT,
-  `room_id` INT NOT NULL,
-  `user_id` INT DEFAULT NULL,
-  `start_time` DATETIME NOT NULL,
-  `end_time` DATETIME NOT NULL,
-  `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`hold_id`),
-  KEY `room_id` (`room_id`),
-  KEY `user_id` (`user_id`),
-  CONSTRAINT `booking_holds_ibfk_1` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`) ON DELETE CASCADE,
-  CONSTRAINT `booking_holds_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
-
---
--- Table structure for table `cart_items`
---
-
-DROP TABLE IF EXISTS `cart_items`;
-CREATE TABLE `cart_items` (
-  `cart_item_id` INT NOT NULL AUTO_INCREMENT,
-  `session_id` VARCHAR(64) DEFAULT NULL,
-  `user_id` INT DEFAULT NULL,
-  `item_type` ENUM('menu','room_booking') NOT NULL,
-  `item_id` INT DEFAULT NULL,
-  `item_name` VARCHAR(180) NOT NULL,
-  `price` DECIMAL(10,2) NOT NULL,
-  `qty` INT NOT NULL DEFAULT 1,
-  `details` VARCHAR(255) DEFAULT NULL,
-  `room_id` INT DEFAULT NULL,
-  `start_time` DATETIME DEFAULT NULL,
-  `end_time` DATETIME DEFAULT NULL,
-  `hold_id` INT DEFAULT NULL,
-  `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`cart_item_id`),
-  KEY `session_id` (`session_id`),
-  KEY `user_id` (`user_id`),
-  KEY `item_id` (`item_id`),
-  KEY `room_id` (`room_id`),
-  CONSTRAINT `cart_items_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
-  CONSTRAINT `cart_items_ibfk_2` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`) ON DELETE SET NULL,
-  CONSTRAINT `cart_items_ibfk_3` FOREIGN KEY (`hold_id`) REFERENCES `booking_holds` (`hold_id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
-
---
--- Table structure for table `booking_holds`
---
-
-DROP TABLE IF EXISTS `booking_holds`;
-CREATE TABLE `booking_holds` (
-  `hold_id` INT NOT NULL AUTO_INCREMENT,
-  `room_id` INT NOT NULL,
-  `user_id` INT DEFAULT NULL,
-  `start_time` DATETIME NOT NULL,
-  `end_time` DATETIME NOT NULL,
-  `expires_at` DATETIME NOT NULL,
-  `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`hold_id`),
-  KEY `room_id` (`room_id`),
-  KEY `user_id` (`user_id`),
-  KEY `expires_at` (`expires_at`),
-  CONSTRAINT `booking_holds_ibfk_1` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`) ON DELETE CASCADE,
-  CONSTRAINT `booking_holds_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -293,7 +301,7 @@ CREATE TABLE `rooms` (
   `is_available` tinyint(1) DEFAULT '1',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`room_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -302,6 +310,7 @@ CREATE TABLE `rooms` (
 
 LOCK TABLES `rooms` WRITE;
 /*!40000 ALTER TABLE `rooms` DISABLE KEYS */;
+INSERT INTO `rooms` VALUES (1,'Gamer Room 1','','Good Gaming Room',1,12.00,'/uploads/1769092826605-694259129.jpg','',1,'2026-01-22 14:40:26');
 /*!40000 ALTER TABLE `rooms` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -310,26 +319,54 @@ UNLOCK TABLES;
 --
 
 DROP TABLE IF EXISTS `users`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `users` (
-  `user_id` INT NOT NULL AUTO_INCREMENT,
-  `name` VARCHAR(120) NOT NULL,
-  `email` VARCHAR(120) NOT NULL,
-  `password` VARCHAR(255) NOT NULL,
-  `role` ENUM('admin','user') NOT NULL DEFAULT 'user',
-  `address` VARCHAR(255) DEFAULT NULL,
-  `contact_number` VARCHAR(40) DEFAULT NULL,
-  `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+  `user_id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(120) NOT NULL,
+  `email` varchar(120) NOT NULL,
+  `password` varchar(255) NOT NULL,
+  `role` enum('admin','user') NOT NULL DEFAULT 'user',
+  `address` varchar(255) DEFAULT NULL,
+  `contact_number` varchar(40) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`user_id`),
   UNIQUE KEY `email` (`email`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
--- Seed admin (plain-text password shown for clarity; hash in production)
-
-
+--
+-- Dumping data for table `users`
+--
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
+INSERT INTO `users` VALUES (1,'peter','peter@peter.com','P@$$w0rd','user','bukit batok, blk 234, #02-134','81234567','2026-01-22 14:25:51'),(2,'admin','admin@admin.com','P@$$w0rd','admin','Republic Poly ','82317232','2026-01-22 14:27:13');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `venues`
+--
+
+DROP TABLE IF EXISTS `venues`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `venues` (
+  `venue_id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(120) NOT NULL,
+  `location` varchar(255) NOT NULL,
+  PRIMARY KEY (`venue_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `venues`
+--
+
+LOCK TABLES `venues` WRITE;
+/*!40000 ALTER TABLE `venues` DISABLE KEYS */;
+/*!40000 ALTER TABLE `venues` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -341,4 +378,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-12-11 23:47:44
+-- Dump completed on 2026-01-23 12:26:40

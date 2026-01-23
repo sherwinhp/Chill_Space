@@ -64,6 +64,12 @@
     });
 
     const statusEl = document.getElementById('login-status');
+    const params = new URLSearchParams(window.location.search);
+    const redirectTo = params.get('redirect') || '/';
+    if (params.get('reason') === 'checkout') {
+      statusEl.style.color = '#22242c';
+      statusEl.textContent = 'Please log in to continue checkout.';
+    }
     document.getElementById('login-form').addEventListener('submit', async (event) => {
       event.preventDefault();
       statusEl.textContent = '';
@@ -79,7 +85,7 @@
         if (!res.ok) throw new Error(body.error || 'Login failed');
         statusEl.style.color = 'green';
         statusEl.textContent = 'Logged in! Redirecting...';
-        window.location.href = '/';
+        window.location.href = redirectTo;
       } catch (err) {
         statusEl.style.color = 'red';
         statusEl.textContent = err.message;

@@ -1,6 +1,7 @@
 const cartItems = document.querySelector("[data-cart-items]");
 const cartTotal = document.querySelector("[data-cart-total]");
 const clearButton = document.querySelector("[data-clear-cart]");
+const checkoutButton = document.querySelector("[data-checkout]");
 
 let cachedItems = [];
 
@@ -152,6 +153,23 @@ function clearCart() {
 
 if (clearButton) {
   clearButton.addEventListener("click", clearCart);
+}
+
+if (checkoutButton) {
+  checkoutButton.addEventListener("click", async () => {
+    try {
+      const res = await fetch("/auth/me");
+      if (!res.ok) {
+        const redirect = encodeURIComponent("/checkout");
+        window.location.href = `/login?redirect=${redirect}&reason=checkout`;
+        return;
+      }
+      window.location.href = "/checkout";
+    } catch (err) {
+      const redirect = encodeURIComponent("/checkout");
+      window.location.href = `/login?redirect=${redirect}&reason=checkout`;
+    }
+  });
 }
 
 if (cartItems) {

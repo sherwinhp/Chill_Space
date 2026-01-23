@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Checkout | Cozy Place Gaming Rooms</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("partials/header", {
+        page: "",
+        roomsLink: "/",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile"
+      }) %>
+
+      <main>
+        <section class="section">
+          <div class="section-head">
+            <div>
+              <h2>Checkout</h2>
+              <p>Review your selections before placing the order.</p>
+            </div>
+          </div>
+
+          <div class="cart-page">
+            <div class="cart-items" data-checkout-items>
+              <p class="empty-note">No items yet.</p>
+            </div>
+            <div class="cart-total">
+              <span>Total</span>
+              <strong data-checkout-total>$0.00</strong>
+            </div>
+            <div class="cart-actions">
+              <a class="btn ghost" href="/cart">Back to cart</a>
+              <button class="btn primary" type="button" data-place-order>Place order</button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <div class="modal" data-payment-modal aria-hidden="true">
+        <div class="modal-backdrop" data-modal-close></div>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="payment-title">
+          <div class="modal-header">
+            <h3 id="payment-title">Choose a payment type</h3>
+            <button class="modal-close" type="button" data-modal-close aria-label="Close">
+              ✕
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="payment-options">
+              <label class="payment-option">
+                <input type="radio" name="paymentType" value="card" checked />
+                <span>Credit/Debit Card</span>
+              </label>
+              <label class="payment-option">
+                <input type="radio" name="paymentType" value="paypal" />
+                <span>PayPal</span>
+              </label>
+              <label class="payment-option">
+                <input type="radio" name="paymentType" value="paynow" />
+                <span>PayNow</span>
+              </label>
+              <label class="payment-option">
+                <input type="radio" name="paymentType" value="cash" />
+                <span>Pay at Counter</span>
+              </label>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn ghost" type="button" data-modal-close>Cancel</button>
+            <button class="btn primary" type="button" data-confirm-payment>Confirm</button>
+          </div>
+        </div>
+      </div>
+
+      <%- include("partials/footer") %>
+    </div>
+    <script src="/checkout.js"></script>
+  </body>
+</html>
