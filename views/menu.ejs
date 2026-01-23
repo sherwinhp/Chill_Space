@@ -49,20 +49,30 @@
                   data-name="<%= item.name %>"
                   data-price="<%= item.price %>"
                 >
-                  <div class="menu-icon">
-                    <i class="bi bi-egg-fried"></i>
+                  <div class="menu-head">
+                    <% if (item.imageUrl) { %>
+                      <div class="menu-media">
+                        <img src="<%= item.imageUrl %>" alt="<%= item.name %>" loading="lazy" />
+                      </div>
+                    <% } else { %>
+                      <div class="menu-icon">
+                        <i class="bi bi-egg-fried"></i>
+                      </div>
+                    <% } %>
+                    <div class="menu-info">
+                      <h3><%= item.name %></h3>
+                      <p><%= item.description %></p>
+                    </div>
                   </div>
-                  <div class="menu-info">
-                    <h3><%= item.name %></h3>
-                    <p><%= item.description %></p>
+                  <div class="menu-actions">
+                    <div class="menu-meta">
+                      <span class="price">$<%= item.price.toFixed(2) %></span>
+                      <span class="availability"><%= item.isAvailable ? "Available" : "Unavailable" %></span>
+                    </div>
+                    <button class="btn primary add-to-cart" <%= item.isAvailable ? "" : "disabled" %>>
+                      Add to Cart
+                    </button>
                   </div>
-                  <div class="menu-meta">
-                    <span class="price">$<%= item.price.toFixed(2) %></span>
-                    <span class="availability"><%= item.isAvailable ? "Available" : "Unavailable" %></span>
-                  </div>
-                  <button class="btn primary add-to-cart" <%= item.isAvailable ? "" : "disabled" %>>
-                    Add to Cart
-                  </button>
                 </article>
               <% }) %>
             </div>
