@@ -35,7 +35,21 @@
               <a class="btn primary" href="/login">Login</a>
             </div>
           <% } else { %>
-            <form class="profile-form" action="/profile" method="POST">
+            <form class="profile-form" action="/profile" method="POST" enctype="multipart/form-data">
+              <div class="profile-avatar-row">
+                <div class="profile-avatar">
+                  <% if (user.avatar_url) { %>
+                    <img src="<%= user.avatar_url %>" alt="<%= user.name %>" />
+                  <% } else { %>
+                    <span><%= user.name ? user.name.charAt(0).toUpperCase() : "U" %></span>
+                  <% } %>
+                </div>
+                <label class="field">
+                  <span>Profile Picture</span>
+                  <input type="file" name="avatar" accept="image/*" />
+                </label>
+              </div>
+              <input type="hidden" name="current_avatar_url" value="<%= user.avatar_url || '' %>" />
               <label class="field">
                 <span>Name</span>
                 <input type="text" name="name" value="<%= user.name %>" required />
@@ -47,6 +61,14 @@
               <label class="field">
                 <span>Password</span>
                 <input type="password" name="password" placeholder="Leave blank to keep current" />
+              </label>
+              <label class="field">
+                <span>Address</span>
+                <input type="text" name="address" value="<%= user.address || '' %>" />
+              </label>
+              <label class="field">
+                <span>Contact Number</span>
+                <input type="text" name="contact_number" value="<%= user.contact_number || '' %>" />
               </label>
               <% if (message) { %>
                 <p class="auth-status"><%= message %></p>

@@ -40,6 +40,10 @@
                 <option value="user">User</option>
                 <option value="admin">Admin</option>
               </select>
+              <select name="is_active">
+                <option value="1">Active</option>
+                <option value="0">Deactivate</option>
+              </select>
             </div>
             <button class="btn primary" type="submit">Create User</button>
           </form>
@@ -50,6 +54,7 @@
               <span>Name</span>
               <span>Email</span>
               <span>Role</span>
+              <span>Status</span>
               <span>Actions</span>
             </div>
             <% users.forEach(function(user) { %>
@@ -60,6 +65,10 @@
                 <select name="role">
                   <option value="user" <%= user.role === 'user' ? 'selected' : '' %>>User</option>
                   <option value="admin" <%= user.role === 'admin' ? 'selected' : '' %>>Admin</option>
+                </select>
+                <select name="is_active">
+                  <option value="1" <%= user.is_active ? 'selected' : '' %>>Active</option>
+                  <option value="0" <%= user.is_active ? '' : 'selected' %>>Deactivate</option>
                 </select>
                 <div class="admin-actions">
                   <button class="btn" type="submit">Save</button>

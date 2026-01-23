@@ -41,6 +41,9 @@ async function login(req, res) {
   if (!user || user.password !== password) {
     return res.status(401).json({ error: "Invalid email or password" });
   }
+  if (!user.is_active) {
+    return res.status(403).json({ error: "Account is deactivated." });
+  }
   if (req.setSession) {
     req.setSession(user);
   }

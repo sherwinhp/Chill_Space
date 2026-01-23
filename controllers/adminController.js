@@ -266,6 +266,7 @@ async function addUser(req, res) {
     email: req.body.email,
     password: req.body.password,
     role: req.body.role || "user",
+    is_active: req.body.is_active !== "0",
   });
   res.redirect("/admin/users");
 }
@@ -276,6 +277,7 @@ async function editUser(req, res) {
     email: req.body.email,
     password: req.body.password || undefined,
     role: req.body.role,
+    is_active: req.body.is_active !== "0",
   });
   res.redirect("/admin/users");
 }

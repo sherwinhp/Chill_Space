@@ -1,5 +1,6 @@
 const express = require("express");
 const path = require("path");
+const multer = require("multer");
 const homeController = require("./controllers/homeController");
 const bookingsPageController = require("./controllers/bookingsPageController");
 const menuController = require("./controllers/menuController");
@@ -15,6 +16,27 @@ const adminRouter = require("./routes/admin");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+const uploadStorage = multer.diskStorage({
+  destination: path.join(__dirname, "public", "uploads"),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const safeName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    cb(null, safeName);
+  },
+});
+
+const uploadImage = multer({
+  storage: uploadStorage,
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype && file.mimetype.startsWith("image/")) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error("Only image uploads are allowed."));
+  },
+  limits: { fileSize: 3 * 1024 * 1024 },
+});
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
@@ -51,7 +73,7 @@ app.get("/checkout", (req, res) => {
   return res.render("checkout");
 });
 app.get("/profile", profileController.renderProfile);
-app.post("/profile", profileController.updateProfile);
+app.post("/profile", uploadImage.single("avatar"), profileController.updateProfile);
 app.get("/login", authController.renderLoginPage);
 app.get("/register", authController.renderRegisterPage);
 app.get("/auth/me", authController.me);

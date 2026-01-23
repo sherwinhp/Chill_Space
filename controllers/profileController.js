@@ -16,10 +16,14 @@ async function updateProfile(req, res) {
     return res.status(401).render("profile", { user: null, message: "Login required." });
   }
 
-  const { name, email, password } = req.body;
+  const { name, email, password, address, contact_number, current_avatar_url } = req.body;
+  const avatarUrl = req.file ? `/uploads/${req.file.filename}` : current_avatar_url || "";
   const updates = {
     name: name ? String(name).trim() : "",
     email: email ? String(email).trim() : "",
+    address: address ? String(address).trim() : "",
+    contact_number: contact_number ? String(contact_number).trim() : "",
+    avatar_url: avatarUrl,
   };
   if (password) updates.password = password;
 

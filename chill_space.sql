@@ -329,6 +329,8 @@ CREATE TABLE `users` (
   `role` enum('admin','user') NOT NULL DEFAULT 'user',
   `address` varchar(255) DEFAULT NULL,
   `contact_number` varchar(40) DEFAULT NULL,
+  `avatar_url` varchar(255) DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT '1',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`user_id`),
   UNIQUE KEY `email` (`email`)
@@ -341,7 +343,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,'peter','peter@peter.com','P@$$w0rd','user','bukit batok, blk 234, #02-134','81234567','2026-01-22 14:25:51'),(2,'admin','admin@admin.com','P@$$w0rd','admin','Republic Poly ','82317232','2026-01-22 14:27:13');
+INSERT INTO `users` VALUES (1,'peter','peter@peter.com','P@$$w0rd','user','bukit batok, blk 234, #02-134','81234567',NULL,1,'2026-01-22 14:25:51'),(2,'admin','admin@admin.com','P@$$w0rd','admin','Republic Poly ','82317232',NULL,1,'2026-01-22 14:27:13');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 

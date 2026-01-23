@@ -9,6 +9,8 @@ function toUser(row) {
     role: row.role || "user",
     address: row.address,
     contact_number: row.contact_number,
+    avatar_url: row.avatar_url,
+    is_active: row.is_active !== undefined ? Boolean(row.is_active) : true,
     created_at: row.created_at,
   };
 }
@@ -35,14 +37,22 @@ async function getMainAdmin() {
   return rows.length ? toUser(rows[0]) : null;
 }
 
-async function createUser({ name, email, password, address, contact_number, role = "user" }) {
+async function createUser({
+  name,
+  email,
+  password,
+  address,
+  contact_number,
+  role = "user",
+  is_active = true,
+}) {
   const existing = await findByEmail(email);
   if (existing) {
     throw new Error("Email already registered");
   }
   const result = await db.query(
-    "INSERT INTO users (name, email, password, role, address, contact_number) VALUES (?, ?, ?, ?, ?, ?)",
-    [name, email, password, role, address || null, contact_number || null]
+    "INSERT INTO users (name, email, password, role, address, contact_number, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    [name, email, password, role, address || null, contact_number || null, is_active ? 1 : 0]
   );
   return findById(result.insertId);
 }
@@ -57,6 +67,8 @@ async function updateUser(id, updates) {
     "role",
     "address",
     "contact_number",
+    "avatar_url",
+    "is_active",
   ];
 
   allowed.forEach((key) => {
