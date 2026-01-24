@@ -35,89 +35,152 @@
               <a class="btn primary" href="/login">Login</a>
             </div>
           <% } else { %>
-            <form class="booking-form" action="/bookings" method="POST">
-              <div class="booking-form-head">
-                <div>
-                  <h3>Book a room</h3>
-                  <p>Help a caller lock in a time slot quickly.</p>
-                </div>
-              </div>
-              <div class="booking-form-grid">
-                <select name="room_id" required>
-                  <option value="" disabled selected>Select a room</option>
-                  <% rooms.forEach(function(room) { %>
-                    <option value="<%= room.id %>"><%= room.name %> ($<%= room.pricePerHour %>/hr)</option>
-                  <% }) %>
-                </select>
-                <input name="start_time" type="datetime-local" required />
-                <input name="end_time" type="datetime-local" required />
-                <input name="pax" type="number" min="1" placeholder="Pax" />
-              </div>
-              <button class="btn primary" type="submit">Create Booking</button>
-            </form>
+            <div class="event-tabs booking-tabs">
+              <button class="event-tab active" type="button" data-booking-tab="upcoming">
+                Coming Soon
+              </button>
+              <button class="event-tab" type="button" data-booking-tab="history">
+                History
+              </button>
+            </div>
 
-            <% if (!bookings || !bookings.length) { %>
-              <div class="empty-state">
-                <h3>No bookings yet.</h3>
-                <p>Once you make a booking, it will appear here.</p>
-              </div>
-            <% } else { %>
-              <div class="booking-grid">
-                <% bookings.forEach(function(booking) { %>
-                  <article class="booking-card">
-                    <div class="booking-media">
-                      <% if (booking.roomImage) { %>
-                        <img src="<%= booking.roomImage %>" alt="<%= booking.roomName %>" />
-                      <% } %>
-                    </div>
-                    <div class="booking-body">
-                      <div class="booking-title">
-                        <div>
-                          <h3><%= booking.roomName %></h3>
-                          <p><%= booking.userName %> - <%= booking.userEmail %></p>
+            <div data-booking-panel="upcoming">
+              <% if (!bookings || !bookings.length) { %>
+                <div class="empty-state">
+                  <h3>No upcoming bookings.</h3>
+                  <p>Your next bookings will show up here.</p>
+                </div>
+              <% } else { %>
+                <div class="booking-grid">
+                  <% bookings.forEach(function(booking) { %>
+                    <article class="booking-card">
+                      <div class="booking-media">
+                        <% if (booking.roomImage) { %>
+                          <img src="<%= booking.roomImage %>" alt="<%= booking.roomName %>" />
+                        <% } %>
+                      </div>
+                      <div class="booking-body">
+                        <div class="booking-title">
+                          <div>
+                            <h3><%= booking.roomName %></h3>
+                            <p><%= booking.userName %> - <%= booking.userEmail %></p>
+                          </div>
+                          <div class="price">
+                            <% if (booking.totalPrice) { %>
+                              <strong>$<%= Number(booking.totalPrice).toFixed(2) %></strong>
+                              <span>Total</span>
+                            <% } else { %>
+                              <strong>-</strong>
+                              <span>Total</span>
+                            <% } %>
+                          </div>
                         </div>
-                        <div class="price">
-                          <% if (booking.totalPrice) { %>
-                            <strong>$<%= Number(booking.totalPrice).toFixed(2) %></strong>
-                            <span>Total</span>
-                          <% } else { %>
-                            <strong>-</strong>
-                            <span>Total</span>
-                          <% } %>
+                        <div class="meta">
+                          <span>
+                            <strong>Start:</strong>
+                            <%= new Date(booking.startTime).toLocaleString() %>
+                          </span>
+                          <span>
+                            <strong>End:</strong>
+                            <%= new Date(booking.endTime).toLocaleString() %>
+                          </span>
+                          <span>
+                            <strong>Pax:</strong>
+                            <%= booking.pax || 1 %>
+                          </span>
+                        </div>
+                        <div class="status-row">
+                          <span class="status-pill">Request: <%= booking.adminStatus %></span>
+                          <span class="status-pill secondary">Payment: <%= booking.paymentStatus %></span>
+                        </div>
+                        <% if (booking.paymentStatus !== "cancelled") { %>
+                          <form class="booking-cancel" action="/bookings/<%= booking.id %>/cancel" method="POST">
+                            <button class="btn danger" type="submit">Cancel Booking</button>
+                          </form>
+                        <% } %>
+                      </div>
+                    </article>
+                  <% }) %>
+                </div>
+              <% } %>
+            </div>
+
+            <div data-booking-panel="history" class="is-hidden">
+              <% if (!pastBookings || !pastBookings.length) { %>
+                <div class="empty-state">
+                  <h3>No booking history.</h3>
+                  <p>Past bookings will appear here once they are completed.</p>
+                </div>
+              <% } else { %>
+                <div class="booking-grid">
+                  <% pastBookings.forEach(function(booking) { %>
+                    <article class="booking-card">
+                      <div class="booking-media">
+                        <% if (booking.roomImage) { %>
+                          <img src="<%= booking.roomImage %>" alt="<%= booking.roomName %>" />
+                        <% } %>
+                      </div>
+                      <div class="booking-body">
+                        <div class="booking-title">
+                          <div>
+                            <h3><%= booking.roomName %></h3>
+                            <p><%= booking.userName %> - <%= booking.userEmail %></p>
+                          </div>
+                          <div class="price">
+                            <% if (booking.totalPrice) { %>
+                              <strong>$<%= Number(booking.totalPrice).toFixed(2) %></strong>
+                              <span>Total</span>
+                            <% } else { %>
+                              <strong>-</strong>
+                              <span>Total</span>
+                            <% } %>
+                          </div>
+                        </div>
+                        <div class="meta">
+                          <span>
+                            <strong>Start:</strong>
+                            <%= new Date(booking.startTime).toLocaleString() %>
+                          </span>
+                          <span>
+                            <strong>End:</strong>
+                            <%= new Date(booking.endTime).toLocaleString() %>
+                          </span>
+                          <span>
+                            <strong>Pax:</strong>
+                            <%= booking.pax || 1 %>
+                          </span>
+                        </div>
+                        <div class="status-row">
+                          <span class="status-pill">Request: <%= booking.adminStatus %></span>
+                          <span class="status-pill secondary">Payment: <%= booking.paymentStatus %></span>
                         </div>
                       </div>
-                      <div class="meta">
-                        <span>
-                          <strong>Start:</strong>
-                          <%= new Date(booking.startTime).toLocaleString() %>
-                        </span>
-                        <span>
-                          <strong>End:</strong>
-                          <%= new Date(booking.endTime).toLocaleString() %>
-                        </span>
-                        <span>
-                          <strong>Pax:</strong>
-                          <%= booking.pax || 1 %>
-                        </span>
-                      </div>
-                      <div class="status-row">
-                        <span class="status-pill">Request: <%= booking.adminStatus %></span>
-                        <span class="status-pill secondary">Payment: <%= booking.paymentStatus %></span>
-                      </div>
-                      <% if (booking.paymentStatus !== "cancelled") { %>
-                        <form class="booking-cancel" action="/bookings/<%= booking.id %>/cancel" method="POST">
-                          <button class="btn danger" type="submit">Cancel Booking</button>
-                        </form>
-                      <% } %>
-                    </div>
-                  </article>
-                <% }) %>
-              </div>
-            <% } %>
+                    </article>
+                  <% }) %>
+                </div>
+              <% } %>
+            </div>
           <% } %>
         </section>
       </main>
       <%- include("partials/footer") %>
     </div>
+    <script>
+      const bookingTabs = document.querySelectorAll("[data-booking-tab]");
+      const bookingPanels = document.querySelectorAll("[data-booking-panel]");
+      if (bookingTabs.length && bookingPanels.length) {
+        bookingTabs.forEach((tab) => {
+          tab.addEventListener("click", () => {
+            bookingTabs.forEach((btn) => btn.classList.remove("active"));
+            tab.classList.add("active");
+            const target = tab.dataset.bookingTab;
+            bookingPanels.forEach((panel) => {
+              const isTarget = panel.dataset.bookingPanel === target;
+              panel.classList.toggle("is-hidden", !isTarget);
+            });
+          });
+        });
+      }
+    </script>
   </body>
 </html>

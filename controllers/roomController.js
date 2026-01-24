@@ -1,4 +1,5 @@
 const { listRooms: listRoomsData, findRoomById } = require("../models/roomsModel");
+const Reviews = require("../models/reviewsModel");
 const {
   isRoomAvailable,
   listBookingsByRoomRange,
@@ -27,7 +28,18 @@ async function renderRoomBooking(req, res) {
   if (!room) {
     return res.status(404).send("Room not found");
   }
-  res.render("room-book", { room });
+  const [stats] = await Reviews.getRoomStats(roomId);
+  const reviews = await Reviews.getVisibleByRoomId(roomId);
+  const avgRating = stats ? Number(stats.avg_rating || 0) : 0;
+  const reviewCount = stats ? Number(stats.review_count || 0) : 0;
+  res.render("room-book", {
+    room,
+    rating: {
+      average: avgRating,
+      count: reviewCount,
+    },
+    reviews,
+  });
 }
 
 async function checkAvailability(req, res) {
@@ -84,11 +96,17 @@ async function createHold(req, res) {
     return res.status(404).json({ error: "Room not found" });
   }
 
-  const start = new Date(start_time);
-  const end = new Date(end_time);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+  const start = parseLocalDateTime(start_time);
+  const end = parseLocalDateTime(end_time);
+  if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
     return res.status(400).json({ error: "Invalid booking time." });
   }
+  if (start <= new Date()) {
+    return res.status(400).json({ error: "Booking time must be in the future." });
+  }
+
+  const normalizedStart = formatLocalDateTime(start);
+  const normalizedEnd = formatLocalDateTime(end);
 
   const [bookings, holds] = await Promise.all([
     listBookingsByRoomRange(roomId, start, end),
@@ -101,10 +119,41 @@ async function createHold(req, res) {
   const holdId = await createBookingHold({
     room_id: roomId,
     user_id: req.session ? req.session.userId : null,
-    start_time,
-    end_time,
+    start_time: normalizedStart,
+    end_time: normalizedEnd,
   });
   res.status(201).json({ holdId });
+}
+
+function parseLocalDateTime(value) {
+  if (!value || typeof value !== "string") return null;
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/
+  );
+  if (!match) {
+    const fallback = new Date(value);
+    return Number.isNaN(fallback.getTime()) ? null : fallback;
+  }
+  const [, year, month, day, hour, minute, second] = match;
+  return new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second || 0)
+  );
+}
+
+function formatLocalDateTime(value) {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) return null;
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  const hour = String(value.getHours()).padStart(2, "0");
+  const minute = String(value.getMinutes()).padStart(2, "0");
+  const second = String(value.getSeconds()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
 }
 
 async function releaseHold(req, res) {

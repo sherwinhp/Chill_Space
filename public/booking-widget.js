@@ -36,6 +36,16 @@ function formatTime(value) {
   return value.toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" });
 }
 
+function formatLocalDateTime(value) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  const hour = String(value.getHours()).padStart(2, "0");
+  const minute = String(value.getMinutes()).padStart(2, "0");
+  const second = String(value.getSeconds()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+}
+
 function addMonths(date, months) {
   const next = new Date(date);
   next.setMonth(next.getMonth() + months);
@@ -74,6 +84,8 @@ function overlaps(aStart, aEnd, bStart, bEnd) {
 }
 
 function isSlotAvailable(slot) {
+  const now = new Date();
+  if (slot.start <= now) return false;
   return !state.bookings.some((booking) => {
     const start = new Date(booking.startTime);
     const end = new Date(booking.endTime);
@@ -153,6 +165,9 @@ function selectDay(day) {
   state.selectedRange = null;
   renderSlots(day);
   updateSummary();
+  if (slotsEl) {
+    slotsEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 function selectSlotRange(index, slots) {
@@ -225,8 +240,8 @@ function bookSlot() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      start_time: startTime.toISOString(),
-      end_time: endTime.toISOString(),
+      start_time: formatLocalDateTime(startTime),
+      end_time: formatLocalDateTime(endTime),
     }),
   })
     .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
@@ -241,8 +256,8 @@ function bookSlot() {
           price: total,
           qty: 1,
           room_id: state.roomId,
-          start_time: startTime.toISOString(),
-          end_time: endTime.toISOString(),
+          start_time: formatLocalDateTime(startTime),
+          end_time: formatLocalDateTime(endTime),
           hold_id: body.holdId,
           details: `${formatDate(state.selectedDate)} ${formatTime(startTime)}-${formatTime(endTime)}`,
         }),
@@ -252,13 +267,16 @@ function bookSlot() {
     .then(({ ok, body }) => {
       if (!ok) throw new Error(body.error || "Unable to add to cart.");
       state.bookings.push({
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString(),
+        startTime: formatLocalDateTime(startTime),
+        endTime: formatLocalDateTime(endTime),
       });
       renderCalendar(toDateOnly(new Date()), addMonths(toDateOnly(new Date()), MONTHS_AHEAD));
       if (state.selectedDate) renderSlots(state.selectedDate);
       dispatchCartUpdate();
       statusEl.textContent = "Added to cart.";
+      if (window.showToast) {
+        window.showToast("Booking added to cart.", "success");
+      }
     })
     .catch((err) => {
       statusEl.textContent = err.message;

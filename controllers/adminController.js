@@ -25,9 +25,34 @@ const {
   updateUser,
   deleteUser,
 } = require("../models/usersModel");
+const {
+  listAllTransactionsWithItems,
+  getSalesSummary,
+} = require("../models/transactionsModel");
 
-function renderDashboard(req, res) {
-  res.render("admin/index");
+async function renderDashboard(req, res) {
+  const [bookings, events, salesSummary] = await Promise.all([
+    listBookingsDb(),
+    listEvents(),
+    getSalesSummary(),
+  ]);
+  const now = new Date();
+  const upcomingBookings = bookings
+    .filter((booking) => new Date(booking.endTime) > now)
+    .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+    .slice(0, 6);
+  const upcomingEvents = events
+    .filter((event) => {
+      const endDate = event.endDate ? new Date(event.endDate) : new Date(event.startDate);
+      return endDate >= now;
+    })
+    .slice(0, 4);
+
+  res.render("admin/index", {
+    upcomingBookings,
+    upcomingEvents,
+    salesSummary,
+  });
 }
 
 async function renderRooms(req, res) {
@@ -119,6 +144,10 @@ async function renderMenu(req, res) {
   res.render("admin/menu", { menuItems });
 }
 
+async function renderMenuCreate(req, res) {
+  res.render("admin/menu-create");
+}
+
 async function addMenuItem(req, res) {
   const imageUrl = req.file ? `/uploads/${req.file.filename}` : req.body.image_url;
   await createMenuItem({
@@ -155,6 +184,10 @@ async function renderEvents(req, res) {
   res.render("admin/events", { events });
 }
 
+async function renderEventsCreate(req, res) {
+  res.render("admin/events-create");
+}
+
 async function addEvent(req, res) {
   const imageUrl = req.file ? `/uploads/${req.file.filename}` : req.body.image_url;
   await createEvent({
@@ -187,6 +220,10 @@ async function removeEvent(req, res) {
 async function renderPromotions(req, res) {
   const promotions = await listPromotions();
   res.render("admin/promotions", { promotions });
+}
+
+async function renderPromotionsCreate(req, res) {
+  res.render("admin/promotions-create");
 }
 
 async function addPromotion(req, res) {
@@ -229,14 +266,27 @@ async function renderReviews(req, res) {
   res.render("admin/reviews", { reviews });
 }
 
+async function renderReviewsCreate(req, res) {
+  res.render("admin/reviews-create");
+}
+
 async function addReview(req, res) {
-  await Reviews.create(
+  const result = await Reviews.create(
     Number(req.body.user_id),
     Number(req.body.room_id),
     Number(req.body.rating),
+    Number(req.body.rating_food || req.body.rating),
+    Number(req.body.rating_service || req.body.rating),
     req.body.comment,
-    req.body.image_url || null
+    req.body.image_url || null,
+    "room"
   );
+  if (typeof req.body.is_visible !== "undefined") {
+    const reviewId = result && result.insertId ? result.insertId : null;
+    if (reviewId) {
+      await Reviews.setVisibility(reviewId, req.body.is_visible === "1");
+    }
+  }
   res.redirect("/admin/reviews");
 }
 
@@ -244,9 +294,14 @@ async function editReview(req, res) {
   await Reviews.update(
     req.params.id,
     Number(req.body.rating),
+    Number(req.body.rating_food || req.body.rating),
+    Number(req.body.rating_service || req.body.rating),
     req.body.comment,
     req.body.image_url || null
   );
+  if (typeof req.body.is_visible !== "undefined") {
+    await Reviews.setVisibility(req.params.id, req.body.is_visible === "1");
+  }
   res.redirect("/admin/reviews");
 }
 
@@ -258,6 +313,10 @@ async function removeReview(req, res) {
 async function renderUsers(req, res) {
   const users = await listUsers();
   res.render("admin/users", { users });
+}
+
+async function renderUsersCreate(req, res) {
+  res.render("admin/users-create");
 }
 
 async function addUser(req, res) {
@@ -287,6 +346,11 @@ async function removeUser(req, res) {
   res.redirect("/admin/users");
 }
 
+async function renderPurchases(req, res) {
+  const { transactions, itemsByTransaction } = await listAllTransactionsWithItems(100);
+  res.render("admin/purchases", { transactions, itemsByTransaction });
+}
+
 module.exports = {
   renderDashboard,
   renderRooms,
@@ -299,23 +363,29 @@ module.exports = {
   editBooking,
   removeBooking,
   renderMenu,
+  renderMenuCreate,
   addMenuItem,
   editMenuItem,
   removeMenuItem,
   renderEvents,
+  renderEventsCreate,
   addEvent,
   editEvent,
   removeEvent,
   renderPromotions,
+  renderPromotionsCreate,
   addPromotion,
   editPromotion,
   removePromotion,
   renderReviews,
+  renderReviewsCreate,
   addReview,
   editReview,
   removeReview,
   renderUsers,
+  renderUsersCreate,
   addUser,
   editUser,
   removeUser,
+  renderPurchases,
 };

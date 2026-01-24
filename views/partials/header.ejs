@@ -5,6 +5,7 @@
   rel="stylesheet"
 />
 <link rel="stylesheet" href="/styles.css" />
+<script src="/notify.js" defer></script>
 <% const roomsHref = typeof roomsLink !== "undefined" ? roomsLink : "/"; %>
 <% const bookingsHref = typeof bookingsLink !== "undefined" ? bookingsLink : "/bookings"; %>
 <% const menuHref = typeof menuLink !== "undefined" ? menuLink : "/menu"; %>
@@ -53,6 +54,9 @@
     <nav class="tabs" aria-label="Primary">
       <a class="tab <%= page === 'rooms' ? 'active' : '' %>" href="<%= roomsHref %>">Rooms</a>
       <a class="tab <%= page === 'bookings' ? 'active' : '' %>" href="<%= bookingsHref %>">Bookings</a>
+      <% if (session && session.name) { %>
+        <a class="tab <%= page === 'purchases' ? 'active' : '' %>" href="/purchases">Purchase History</a>
+      <% } %>
       <a class="tab <%= page === 'menu' ? 'active' : '' %>" href="<%= menuHref %>">Menu</a>
       <a class="tab <%= page === 'reviews' ? 'active' : '' %>" href="<%= reviewsHref %>">Reviews</a>
       <a class="tab <%= page === 'events' ? 'active' : '' %>" href="<%= eventsHref %>">Events</a>

@@ -1,9 +1,36 @@
 const Reviews = require("../models/reviewsModel");
 
 const fallbackReviews = [
-  { name: "Student Gamer", rating: 5, date: "2024-05-12", text: "Comfortable chairs and solid Wi-Fi.", room: "Room A" },
-  { name: "Movie Night Crew", rating: 4, date: "2024-04-28", text: "Projector was great, sound could be louder.", room: "Room B" },
-  { name: "Board Games Group", rating: 5, date: "2024-03-14", text: "Plenty of space for our team matches.", room: "Room C" },
+  {
+    name: "Student Gamer",
+    rating: 5,
+    ratingFood: 5,
+    ratingService: 5,
+    date: "2024-05-12",
+    text: "Comfortable chairs and solid Wi-Fi.",
+    room: "Room A",
+    category: "room",
+  },
+  {
+    name: "Movie Night Crew",
+    rating: 4,
+    ratingFood: 4,
+    ratingService: 4,
+    date: "2024-04-28",
+    text: "Projector was great, sound could be louder.",
+    room: "Room B",
+    category: "room",
+  },
+  {
+    name: "Board Games Group",
+    rating: 5,
+    ratingFood: 5,
+    ratingService: 5,
+    date: "2024-03-14",
+    text: "Plenty of space for our team matches.",
+    room: "Room C",
+    category: "room",
+  },
 ];
 
 function normalizeReviews(rows, { allowFallback = false } = {}) {
@@ -11,10 +38,13 @@ function normalizeReviews(rows, { allowFallback = false } = {}) {
   return rows.map((r) => ({
     name: r.user_name || "Anonymous",
     rating: Number(r.rating) || 0,
+    ratingFood: Number(r.rating_food) || Number(r.rating) || 0,
+    ratingService: Number(r.rating_service) || Number(r.rating) || 0,
     date: r.created_at ? new Date(r.created_at).toISOString().split("T")[0] : "",
     text: r.comment || "",
     room: r.room_name || undefined,
     imageUrl: r.image_url || "",
+    category: r.category || "room",
   }));
 }
 
@@ -23,7 +53,7 @@ module.exports = {
   // API: return reviews as JSON
   getApiReviews: async (req, res) => {
     try {
-      const rows = await Reviews.getAll();
+      const rows = await Reviews.getVisible();
       res.json(normalizeReviews(rows, { allowFallback: true }));
     } catch (err) {
       console.error(err);
@@ -34,7 +64,7 @@ module.exports = {
   // Show all reviews
   index: async (req, res) => {
     try {
-      const rows = await Reviews.getAll();  // 🔥 FIXED
+      const rows = await Reviews.getVisible();  // 🔥 FIXED
 
       res.render("reviews/index", {
         reviews: normalizeReviews(rows, { allowFallback: false }),
@@ -48,12 +78,15 @@ module.exports = {
 
 
   // Render add review form
-  addForm: (req, res) => {
+  addForm: async (req, res) => {
     if (!req.session || !req.session.userId) {
       return res.redirect("/login");
     }
+    const { listRooms } = require("../models/roomsModel");
+    const rooms = await listRooms();
     res.render("reviews/add", {
-      page: "reviews"
+      page: "reviews",
+      rooms,
     });
   },
 
@@ -65,11 +98,24 @@ module.exports = {
         return res.status(401).json({ error: "Login required." });
       }
 
-      const { roomId, rating, comment } = req.body;
+      const { roomId, ratingRoom, ratingFood, ratingService, comment } = req.body;
       const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
       const userId = req.session.userId; // logged in user
 
-      await Reviews.create(userId, roomId, rating, comment, imageUrl);
+      if (!roomId) {
+        return res.status(400).send("Room is required for reviews.");
+      }
+
+      await Reviews.create(
+        userId,
+        Number(roomId),
+        Number(ratingRoom),
+        Number(ratingFood),
+        Number(ratingService),
+        comment,
+        imageUrl,
+        "room"
+      );
       res.redirect("/reviews");
     } catch (err) {
       console.error(err);
@@ -97,7 +143,14 @@ module.exports = {
       const { rating, comment, currentImageUrl } = req.body;
       const imageUrl = req.file ? `/uploads/${req.file.filename}` : currentImageUrl || null;
 
-      await Reviews.update(id, rating, comment, imageUrl);
+      await Reviews.update(
+        id,
+        Number(rating),
+        Number(rating),
+        Number(rating),
+        comment,
+        imageUrl
+      );
       res.redirect("/reviews");
     } catch (err) {
       console.error(err);
@@ -117,3 +170,4 @@ module.exports = {
     }
   }
 };
+

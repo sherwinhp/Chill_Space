@@ -28,6 +28,45 @@
             </div>
           </div>
 
+          <div class="room-details">
+            <div class="room-details-card">
+              <% if (room.image) { %>
+                <img src="<%= room.image %>" alt="<%= room.name %>" />
+              <% } %>
+              <div class="room-details-body">
+                <div class="room-details-head">
+                  <div>
+                    <h3><%= room.name %></h3>
+                    <% if (room.subtitle) { %>
+                      <p><%= room.subtitle %></p>
+                    <% } %>
+                  </div>
+                  <div class="room-rating">
+                    <div class="rating-score">
+                      <strong><%= rating && rating.average ? rating.average.toFixed(1) : "0.0" %></strong>
+                      <span>Rating</span>
+                    </div>
+                    <div class="rating-count">
+                      <span><%= rating && rating.count ? rating.count : 0 %> reviews</span>
+                    </div>
+                  </div>
+                </div>
+                <p class="room-description"><%= room.description || "No description yet." %></p>
+                <div class="room-meta">
+                  <span>Capacity: <strong><%= room.capacity %> pax</strong></span>
+                  <span>Rate: <strong>$<%= room.pricePerHour.toFixed(2) %>/hr</strong></span>
+                </div>
+                <% if (room.features && room.features.length) { %>
+                  <div class="room-features">
+                    <% room.features.forEach(function(feature) { %>
+                      <span><%= feature %></span>
+                    <% }) %>
+                  </div>
+                <% } %>
+              </div>
+            </div>
+          </div>
+
           <div
             class="booking-widget-card"
             data-booking-widget
@@ -54,6 +93,54 @@
               </div>
               <button class="btn primary" type="button" data-booking-add disabled>Book Slot</button>
             </div>
+          </div>
+
+          <div class="room-reviews">
+            <div class="section-head split">
+              <div>
+                <h3>Reviews for <%= room.name %></h3>
+                <p>Read what other guests shared about this room.</p>
+              </div>
+              <a class="btn ghost" href="/reviews/add?roomId=<%= room.id %>">Write a review</a>
+            </div>
+
+            <% if (!reviews || !reviews.length) { %>
+              <div class="empty-state">
+                <h3>No reviews yet.</h3>
+                <p>Be the first to share your experience.</p>
+              </div>
+            <% } else { %>
+              <div class="room-review-grid">
+                <% reviews.forEach(function(review) { %>
+                  <article class="room-review-card">
+                    <div class="room-review-head">
+                      <div>
+                        <strong><%= review.user_name %></strong>
+                        <span><%= new Date(review.created_at).toLocaleDateString("en-SG") %></span>
+                      </div>
+                      <div class="room-review-rating">
+                        <div class="review-stars" aria-label="<%= review.rating %> star rating">
+                          <% for (let i = 1; i <= 5; i++) { %>
+                            <span class="<%= i <= review.rating ? 'filled' : '' %>">&#9733;</span>
+                          <% } %>
+                        </div>
+                        <span>Room <%= Number(review.rating).toFixed(1) %> / 5</span>
+                      </div>
+                    </div>
+                    <div class="room-review-breakdown">
+                      <span>Food: <strong><%= Number(review.rating_food || 0).toFixed(1) %></strong></span>
+                      <span>Service: <strong><%= Number(review.rating_service || 0).toFixed(1) %></strong></span>
+                    </div>
+                    <p><%= review.comment %></p>
+                    <% if (review.image_url) { %>
+                      <div class="room-review-photo">
+                        <img src="<%= review.image_url %>" alt="Review photo" />
+                      </div>
+                    <% } %>
+                  </article>
+                <% }) %>
+              </div>
+            <% } %>
           </div>
         </section>
       </main>

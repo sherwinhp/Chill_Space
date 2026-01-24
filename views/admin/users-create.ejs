@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Create User</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("../partials/admin-header", { page: "admin-users" }) %>
+
+      <main>
+        <section class="section admin-section">
+          <div class="section-head split">
+            <div>
+              <h2>Create User</h2>
+              <p>Add a new user or admin account.</p>
+            </div>
+            <div class="section-actions">
+              <a class="btn ghost" href="/admin/users">Back to users</a>
+              <a class="btn" href="/admin">Back to dashboard</a>
+            </div>
+          </div>
+
+          <form class="admin-form" action="/admin/users" method="POST">
+            <h3>User Details</h3>
+            <div class="admin-grid-form">
+              <input name="name" type="text" placeholder="Name" required />
+              <input name="email" type="email" placeholder="Email" required />
+              <input name="password" type="text" placeholder="Password" required />
+              <select name="role">
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+              </select>
+              <select name="is_active">
+                <option value="1">Active</option>
+                <option value="0">Deactivate</option>
+              </select>
+            </div>
+            <button class="btn primary admin-cta" type="submit">Create User</button>
+          </form>
+        </section>
+      </main>
+
+      <%- include("../partials/footer") %>
+    </div>
+  </body>
+</html>

@@ -9,16 +9,7 @@
   <body>
     <div class="page">
       <div class="glow"></div>
-      <%- include("../partials/header", {
-        page: "admin",
-        roomsLink: "/",
-        bookingsLink: "/bookings",
-        menuLink: "/menu",
-        reviewsLink: "/reviews",
-        eventsLink: "/events",
-        profileLink: "/profile",
-        hideTabs: true
-      }) %>
+      <%- include("../partials/admin-header", { page: "admin" }) %>
 
       <main>
         <section class="section">
@@ -26,6 +17,89 @@
             <div>
               <h2>Admin Dashboard</h2>
               <p>Manage rooms, bookings, menu items, events, promotions, reviews, and users.</p>
+            </div>
+          </div>
+
+          <div class="admin-metrics">
+            <div class="admin-metric-card">
+              <span>Total Revenue</span>
+              <strong>$<%= Number(salesSummary.total_revenue || 0).toFixed(2) %></strong>
+            </div>
+            <div class="admin-metric-card">
+              <span>Orders</span>
+              <strong><%= salesSummary.total_orders || 0 %></strong>
+            </div>
+            <div class="admin-metric-card">
+              <span>Today</span>
+              <strong>$<%= Number(salesSummary.revenue_today || 0).toFixed(2) %></strong>
+            </div>
+            <div class="admin-metric-card">
+              <span>Last 7 Days</span>
+              <strong>$<%= Number(salesSummary.revenue_7d || 0).toFixed(2) %></strong>
+            </div>
+          </div>
+
+          <div class="admin-dashboard-grid">
+            <div class="admin-dashboard-card">
+              <div class="section-head compact split">
+                <div>
+                  <h3>Upcoming Bookings</h3>
+                  <p>Next confirmed slots on the calendar.</p>
+                </div>
+                <a class="btn ghost" href="/admin/bookings">View all</a>
+              </div>
+              <% if (!upcomingBookings || !upcomingBookings.length) { %>
+                <div class="empty-state">
+                  <h3>No upcoming bookings.</h3>
+                  <p>Bookings will appear here when created.</p>
+                </div>
+              <% } else { %>
+                <div class="admin-list">
+                  <% upcomingBookings.forEach(function(booking) { %>
+                    <div class="admin-list-row">
+                      <div>
+                        <strong><%= booking.roomName %></strong>
+                        <span><%= booking.userName %> · <%= booking.userEmail %></span>
+                      </div>
+                      <div class="admin-list-meta">
+                        <span><%= new Date(booking.startTime).toLocaleString() %></span>
+                        <span class="admin-status">Payment: <%= booking.paymentStatus %></span>
+                      </div>
+                    </div>
+                  <% }) %>
+                </div>
+              <% } %>
+            </div>
+
+            <div class="admin-dashboard-card">
+              <div class="section-head compact split">
+                <div>
+                  <h3>Upcoming Events</h3>
+                  <p>Major events you should prepare for.</p>
+                </div>
+                <a class="btn ghost" href="/admin/events">Manage</a>
+              </div>
+              <% if (!upcomingEvents || !upcomingEvents.length) { %>
+                <div class="empty-state">
+                  <h3>No upcoming events.</h3>
+                  <p>Create events to keep the calendar full.</p>
+                </div>
+              <% } else { %>
+                <div class="admin-list">
+                  <% upcomingEvents.forEach(function(event) { %>
+                    <div class="admin-list-row">
+                      <div>
+                        <strong><%= event.title %></strong>
+                        <span><%= event.description || "No description" %></span>
+                      </div>
+                      <div class="admin-list-meta">
+                        <span><%= new Date(event.startDate).toLocaleDateString() %></span>
+                        <span><%= new Date(event.endDate).toLocaleDateString() %></span>
+                      </div>
+                    </div>
+                  <% }) %>
+                </div>
+              <% } %>
             </div>
           </div>
 
@@ -37,6 +111,7 @@
             <a class="admin-nav-link" href="/admin/promotions">Promotions</a>
             <a class="admin-nav-link" href="/admin/reviews">Reviews</a>
             <a class="admin-nav-link" href="/admin/users">Users</a>
+            <a class="admin-nav-link" href="/admin/purchases">Purchases</a>
           </nav>
         </section>
       </main>

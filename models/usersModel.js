@@ -85,6 +85,10 @@ async function updateUser(id, updates) {
 }
 
 async function deleteUser(id) {
+  const user = await findById(id);
+  if (user && user.role === "admin") {
+    return false;
+  }
   const result = await db.query("DELETE FROM users WHERE user_id = ?", [id]);
   return result.affectedRows > 0;
 }

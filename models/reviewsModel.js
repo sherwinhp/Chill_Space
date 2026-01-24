@@ -2,10 +2,28 @@ const db = require("../db");
 
 const Reviews = {
   // Create a new review
-  create: (userId, roomId, rating, comment, imageUrl) => {
+  create: (
+    userId,
+    roomId,
+    ratingRoom,
+    ratingFood,
+    ratingService,
+    comment,
+    imageUrl,
+    category = "room"
+  ) => {
     return db.query(
-      "INSERT INTO reviews (user_id, room_id, rating, comment, image_url) VALUES (?, ?, ?, ?, ?)",
-      [userId, roomId, rating, comment, imageUrl || null]
+      "INSERT INTO reviews (user_id, room_id, rating, rating_food, rating_service, comment, image_url, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        userId,
+        roomId || null,
+        ratingRoom,
+        ratingFood,
+        ratingService,
+        comment,
+        imageUrl || null,
+        category,
+      ]
     );
   },
 
@@ -18,7 +36,21 @@ const Reviews = {
           rm.name AS room_name
        FROM reviews r
        JOIN users u ON r.user_id = u.user_id
-       JOIN rooms rm ON r.room_id = rm.room_id
+       LEFT JOIN rooms rm ON r.room_id = rm.room_id
+       ORDER BY r.created_at DESC`
+    );
+  },
+
+  getVisible: () => {
+    return db.query(
+      `SELECT
+          r.*,
+          u.name AS user_name,
+          rm.name AS room_name
+       FROM reviews r
+       JOIN users u ON r.user_id = u.user_id
+       LEFT JOIN rooms rm ON r.room_id = rm.room_id
+       WHERE r.is_visible = 1
        ORDER BY r.created_at DESC`
     );
   },
@@ -29,10 +61,62 @@ const Reviews = {
   },
 
   // Update review
-  update: (id, rating, comment, imageUrl) => {
+  update: (id, ratingRoom, ratingFood, ratingService, comment, imageUrl) => {
     return db.query(
-      "UPDATE reviews SET rating = ?, comment = ?, image_url = ? WHERE review_id = ?",
-      [rating, comment, imageUrl || null, id]
+      "UPDATE reviews SET rating = ?, rating_food = ?, rating_service = ?, comment = ?, image_url = ? WHERE review_id = ?",
+      [ratingRoom, ratingFood, ratingService, comment, imageUrl || null, id]
+    );
+  },
+
+  setVisibility: (id, isVisible) => {
+    return db.query("UPDATE reviews SET is_visible = ? WHERE review_id = ?", [
+      isVisible ? 1 : 0,
+      id,
+    ]);
+  },
+
+  getRoomStats: (roomId) => {
+    return db.query(
+      "SELECT AVG(rating) AS avg_rating, COUNT(*) AS review_count FROM reviews WHERE room_id = ? AND is_visible = 1",
+      [roomId]
+    );
+  },
+
+  getByRoomId: (roomId) => {
+    return db.query(
+      `SELECT
+          r.review_id,
+          r.rating,
+          r.rating_food,
+          r.rating_service,
+          r.comment,
+          r.image_url,
+          r.created_at,
+          u.name AS user_name
+       FROM reviews r
+       JOIN users u ON r.user_id = u.user_id
+       WHERE r.room_id = ?
+       ORDER BY r.created_at DESC`,
+      [roomId]
+    );
+  },
+
+  getVisibleByRoomId: (roomId) => {
+    return db.query(
+      `SELECT
+          r.review_id,
+          r.rating,
+          r.rating_food,
+          r.rating_service,
+          r.comment,
+          r.image_url,
+          r.created_at,
+          u.name AS user_name
+       FROM reviews r
+       JOIN users u ON r.user_id = u.user_id
+       WHERE r.room_id = ? AND r.is_visible = 1
+       ORDER BY r.created_at DESC`,
+      [roomId]
     );
   },
 

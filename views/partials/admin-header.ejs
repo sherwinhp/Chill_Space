@@ -1,0 +1,44 @@
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
+  rel="stylesheet"
+/>
+<link rel="stylesheet" href="/styles.css" />
+<script src="/notify.js" defer></script>
+
+<header class="topbar admin-topbar">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" role="img">
+        <rect x="3" y="9" width="4" height="12" rx="1.5"></rect>
+        <rect x="10" y="3" width="4" height="18" rx="1.5"></rect>
+        <rect x="17" y="6" width="4" height="15" rx="1.5"></rect>
+      </svg>
+    </div>
+    <div>
+      <h1>Cozy Place Admin</h1>
+      <p>Operations dashboard</p>
+    </div>
+  </div>
+  <div class="top-actions">
+    <% if (session && session.name) { %>
+      <span class="welcome-text">Admin: <%= session.name %></span>
+      <form action="/auth/logout" method="post">
+        <button class="btn primary" type="submit">Logout</button>
+      </form>
+    <% } %>
+  </div>
+</header>
+
+<nav class="tabs admin-tabs" aria-label="Admin Navigation">
+  <a class="tab <%= page === 'admin' ? 'active' : '' %>" href="/admin">Dashboard</a>
+  <a class="tab <%= page === 'admin-rooms' ? 'active' : '' %>" href="/admin/rooms">Rooms</a>
+  <a class="tab <%= page === 'admin-bookings' ? 'active' : '' %>" href="/admin/bookings">Bookings</a>
+  <a class="tab <%= page === 'admin-menu' ? 'active' : '' %>" href="/admin/menu">Menu</a>
+  <a class="tab <%= page === 'admin-events' ? 'active' : '' %>" href="/admin/events">Events</a>
+  <a class="tab <%= page === 'admin-promotions' ? 'active' : '' %>" href="/admin/promotions">Promotions</a>
+  <a class="tab <%= page === 'admin-reviews' ? 'active' : '' %>" href="/admin/reviews">Reviews</a>
+  <a class="tab <%= page === 'admin-users' ? 'active' : '' %>" href="/admin/users">Users</a>
+  <a class="tab <%= page === 'admin-purchases' ? 'active' : '' %>" href="/admin/purchases">Purchases</a>
+</nav>

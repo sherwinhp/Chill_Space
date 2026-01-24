@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Create Menu Item</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("../partials/admin-header", { page: "admin-menu" }) %>
+
+      <main>
+        <section class="section admin-section">
+          <div class="section-head split">
+            <div>
+              <h2>Create Menu Item</h2>
+              <p>Add a new menu item for food, beverages, or room themes.</p>
+            </div>
+            <div class="section-actions">
+              <a class="btn ghost" href="/admin/menu">Back to menu</a>
+              <a class="btn" href="/admin">Back to dashboard</a>
+            </div>
+          </div>
+
+          <form class="admin-form" action="/admin/menu" method="POST" enctype="multipart/form-data">
+            <h3>Menu Details</h3>
+            <div class="admin-grid-form">
+              <input name="name" type="text" placeholder="Name" required />
+              <select name="category">
+                <option value="food">Food</option>
+                <option value="drink">Beverages</option>
+                <option value="addon">Room Themes</option>
+              </select>
+              <input name="price" type="number" step="0.01" placeholder="Price" required />
+              <input name="image" type="file" accept="image/*" />
+              <select name="is_available">
+                <option value="1">Available</option>
+                <option value="0">Unavailable</option>
+              </select>
+              <textarea name="description" rows="2" placeholder="Description"></textarea>
+            </div>
+            <button class="btn primary" type="submit">Create Item</button>
+          </form>
+        </section>
+      </main>
+
+      <%- include("../partials/footer") %>
+    </div>
+  </body>
+</html>

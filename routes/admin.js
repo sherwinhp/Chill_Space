@@ -40,28 +40,35 @@ router.post("/bookings/:id", adminController.editBooking);
 router.post("/bookings/:id/delete", adminController.removeBooking);
 
 router.get("/menu", adminController.renderMenu);
+router.get("/menu/new", adminController.renderMenuCreate);
 router.post("/menu", upload.single("image"), adminController.addMenuItem);
 router.post("/menu/:id", upload.single("image"), adminController.editMenuItem);
 router.post("/menu/:id/delete", adminController.removeMenuItem);
 
 router.get("/events", adminController.renderEvents);
+router.get("/events/new", adminController.renderEventsCreate);
 router.post("/events", upload.single("image"), adminController.addEvent);
 router.post("/events/:id", upload.single("image"), adminController.editEvent);
 router.post("/events/:id/delete", adminController.removeEvent);
 
 router.get("/promotions", adminController.renderPromotions);
+router.get("/promotions/new", adminController.renderPromotionsCreate);
 router.post("/promotions", upload.single("image"), adminController.addPromotion);
 router.post("/promotions/:id", upload.single("image"), adminController.editPromotion);
 router.post("/promotions/:id/delete", adminController.removePromotion);
 
 router.get("/reviews", adminController.renderReviews);
+router.get("/reviews/new", adminController.renderReviewsCreate);
 router.post("/reviews", adminController.addReview);
 router.post("/reviews/:id", adminController.editReview);
 router.post("/reviews/:id/delete", adminController.removeReview);
 
 router.get("/users", adminController.renderUsers);
+router.get("/users/new", adminController.renderUsersCreate);
 router.post("/users", adminController.addUser);
 router.post("/users/:id", adminController.editUser);
 router.post("/users/:id/delete", adminController.removeUser);
+
+router.get("/purchases", adminController.renderPurchases);
 
 module.exports = router;

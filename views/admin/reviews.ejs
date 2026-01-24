@@ -9,66 +9,131 @@
   <body>
     <div class="page">
       <div class="glow"></div>
-      <%- include("../partials/header", {
-        page: "admin",
-        roomsLink: "/",
-        bookingsLink: "/bookings",
-        menuLink: "/menu",
-        reviewsLink: "/reviews",
-        eventsLink: "/events",
-        profileLink: "/profile",
-        hideTabs: true
-      }) %>
+      <%- include("../partials/admin-header", { page: "admin-reviews" }) %>
 
       <main>
         <section class="section admin-section">
-          <div class="section-head">
+          <div class="section-head split">
             <div>
               <h2>Manage Reviews</h2>
               <p>Create, update, or delete reviews.</p>
             </div>
-            <a class="btn" href="/admin">Back to Admin</a>
+            <div class="section-actions">
+              <a class="btn ghost" href="/admin">Back to dashboard</a>
+              <a class="btn primary admin-cta" href="/admin/reviews/new">Create review</a>
+            </div>
           </div>
 
-          <form class="admin-form" action="/admin/reviews" method="POST">
-            <h3>Add Review</h3>
-            <div class="admin-grid-form">
-              <input name="user_id" type="number" placeholder="User ID" required />
-              <input name="room_id" type="number" placeholder="Room ID" required />
-              <input name="rating" type="number" min="1" max="5" placeholder="Rating" required />
-              <input name="image_url" type="text" placeholder="Image URL" />
-              <textarea name="comment" rows="2" placeholder="Comment"></textarea>
-            </div>
-            <button class="btn primary" type="submit">Create Review</button>
-          </form>
+          <div class="event-tabs admin-menu-tabs">
+            <button class="event-tab active" type="button" data-admin-tab="visible">Visible</button>
+            <button class="event-tab" type="button" data-admin-tab="hidden">Hidden</button>
+          </div>
 
-          <div class="admin-table">
-            <div class="admin-table-row admin-header">
-              <span>ID</span>
-              <span>User</span>
-              <span>Room</span>
-              <span>Rating</span>
-              <span>Actions</span>
+          <div class="admin-menu-grid">
+            <% if (!reviews || !reviews.length) { %>
+              <div class="empty-state">
+                <h3>No reviews yet.</h3>
+                <p>Customer feedback will appear here.</p>
+              </div>
+            <% } else { %>
+              <% reviews.forEach(function(review) { %>
+                <article class="admin-menu-card" data-admin-category="<%= review.is_visible ? 'visible' : 'hidden' %>">
+                  <div class="admin-menu-media">
+                    <% if (review.image_url) { %>
+                      <img src="<%= review.image_url %>" alt="Review image" />
+                    <% } else { %>
+                      <div class="admin-room-placeholder">No Image</div>
+                    <% } %>
+                  </div>
+                  <div class="admin-menu-body">
+                    <div class="admin-menu-title">
+                      <div>
+                        <h3><%= review.user_name || ("User " + review.user_id) %></h3>
+                        <p><%= review.room_name || ("Room " + review.room_id) %></p>
+                      </div>
+                      <div class="admin-menu-price">
+                        <span><%= review.rating %> / 5</span>
+                      </div>
+                    </div>
+                    <% if (review.comment) { %>
+                      <p class="admin-menu-desc"><%= review.comment %></p>
+                    <% } %>
+                    <div class="admin-menu-meta">
+                      <span class="admin-menu-pill">Room <%= review.rating %></span>
+                      <span class="admin-menu-pill">Food <%= review.rating_food || review.rating %></span>
+                      <span class="admin-menu-pill">Service <%= review.rating_service || review.rating %></span>
+                      <span class="admin-menu-pill <%= review.is_visible ? "available" : "unavailable" %>">
+                        <%= review.is_visible ? "Visible" : "Hidden" %>
+                      </span>
+                    </div>
+                    <details class="admin-menu-edit">
+                      <summary class="btn">Edit review</summary>
+                      <form action="/admin/reviews/<%= review.review_id %>" method="POST">
+                        <div class="admin-menu-edit-grid">
+                          <input name="rating" type="number" min="1" max="5" value="<%= review.rating %>" />
+                          <input name="rating_food" type="number" min="1" max="5" value="<%= review.rating_food || review.rating %>" />
+                          <input name="rating_service" type="number" min="1" max="5" value="<%= review.rating_service || review.rating %>" />
+                          <select name="is_visible">
+                            <option value="1" <%= review.is_visible ? "selected" : "" %>>Visible</option>
+                            <option value="0" <%= !review.is_visible ? "selected" : "" %>>Hidden</option>
+                          </select>
+                          <input name="image_url" type="text" value="<%= review.image_url || "" %>" placeholder="Image URL" />
+                          <textarea name="comment" rows="2" placeholder="Comment"><%= review.comment || "" %></textarea>
+                        </div>
+                        <div class="admin-menu-edit-actions">
+                          <button class="btn" type="submit">Save</button>
+                          <button class="btn danger" type="submit" formaction="/admin/reviews/<%= review.review_id %>/delete">Delete</button>
+                        </div>
+                      </form>
+                    </details>
+                  </div>
+                </article>
+              <% }) %>
+            <% } %>
+            <div class="empty-state admin-menu-empty is-hidden">
+              <h3>No reviews in this view.</h3>
+              <p>Switch tabs to see more reviews.</p>
             </div>
-            <% reviews.forEach(function(review) { %>
-              <form class="admin-table-row" action="/admin/reviews/<%= review.review_id %>" method="POST">
-                <span><%= review.review_id %></span>
-                <input name="user_id" value="<%= review.user_id %>" readonly />
-                <input name="room_id" value="<%= review.room_id %>" readonly />
-                <input name="rating" type="number" min="1" max="5" value="<%= review.rating %>" />
-                <div class="admin-actions">
-                  <button class="btn" type="submit">Save</button>
-                  <button class="btn danger" type="submit" formaction="/admin/reviews/<%= review.review_id %>/delete">Delete</button>
-                </div>
-                <input type="hidden" name="comment" value="<%= review.comment %>" />
-                <input type="hidden" name="image_url" value="<%= review.image_url %>" />
-              </form>
-            <% }) %>
           </div>
         </section>
       </main>
 
       <%- include("../partials/footer") %>
     </div>
+    <script>
+      const adminTabs = document.querySelectorAll("[data-admin-tab]");
+      const adminCards = document.querySelectorAll("[data-admin-category]");
+      const emptyState = document.querySelector(".admin-menu-empty");
+
+      function normalize(value) {
+        return (value || "").toString().toLowerCase();
+      }
+
+      function updateAdminFilter(category) {
+        const target = normalize(category);
+        let visibleCount = 0;
+        adminCards.forEach((card) => {
+          const cardCategory = normalize(card.dataset.adminCategory);
+          const isMatch = cardCategory === target;
+          card.classList.toggle("is-hidden", !isMatch);
+          if (isMatch) visibleCount += 1;
+        });
+        if (emptyState) {
+          emptyState.classList.toggle("is-hidden", visibleCount > 0);
+        }
+      }
+
+      if (adminTabs.length && adminCards.length) {
+        adminTabs.forEach((tab) => {
+          tab.addEventListener("click", () => {
+            adminTabs.forEach((btn) => btn.classList.remove("active"));
+            tab.classList.add("active");
+            updateAdminFilter(tab.dataset.adminTab);
+          });
+        });
+        updateAdminFilter(adminTabs[0].dataset.adminTab);
+      }
+    </script>
   </body>
 </html>
+

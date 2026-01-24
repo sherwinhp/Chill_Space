@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Checkout | Cozy Place Gaming Rooms</title>
     <link rel="stylesheet" href="/styles.css" />
+    <script src="https://www.paypal.com/sdk/js?client-id=<%= process.env.PAYPAL_CLIENT_ID %>&currency=SGD"></script>
   </head>
   <body>
     <div class="page">
@@ -20,65 +21,71 @@
       }) %>
 
       <main>
-        <section class="section">
-          <div class="section-head">
+        <section class="section payment-page">
+          <div class="payment-hero">
             <div>
-              <h2>Checkout</h2>
-              <p>Review your selections before placing the order.</p>
+              <h2>Choose your payment method</h2>
+              <p>Complete payment to finalize your order.</p>
             </div>
+            <a class="btn ghost" href="/cart">Back to cart</a>
           </div>
 
-          <div class="cart-page">
-            <div class="cart-items" data-checkout-items>
-              <p class="empty-note">No items yet.</p>
+          <div class="payment-layout">
+            <div class="payment-column">
+              <div class="payment-card">
+                <div class="payment-block">
+                  <h3>Payment options</h3>
+                  <label class="payment-pill nets">
+                    <input type="radio" name="paymentType" value="nets" checked />
+                    <span class="pill-text">NETS QR</span>
+                    <span class="pill-indicator"></span>
+                  </label>
+                  <label class="payment-pill paynow is-disabled">
+                    <input type="radio" name="paymentType" value="paynow" disabled />
+                    <span class="pill-text">PayNow (coming soon)</span>
+                    <span class="pill-indicator"></span>
+                  </label>
+                </div>
+
+                <div class="payment-block">
+                  <h4>PayPal</h4>
+                  <div id="paypal-button-container" class="paypal-button-container"></div>
+                </div>
+
+                <button class="btn primary payment-confirm" type="button" data-confirm-payment>
+                  Confirm payment
+                </button>
+              </div>
             </div>
-            <div class="cart-total">
-              <span>Total</span>
-              <strong data-checkout-total>$0.00</strong>
-            </div>
-            <div class="cart-actions">
-              <a class="btn ghost" href="/cart">Back to cart</a>
-              <button class="btn primary" type="button" data-place-order>Place order</button>
+
+            <div class="payment-column">
+              <div class="summary-card">
+                <h3>Order summary</h3>
+                <div class="summary-row">
+                  <span>Items</span>
+                  <strong data-checkout-count>0</strong>
+                </div>
+                <div class="summary-row total">
+                  <span>Total</span>
+                  <strong data-checkout-total>$0.00</strong>
+                </div>
+              </div>
+
+              <div class="order-table">
+                <div class="order-row order-head">
+                  <span>Product</span>
+                  <span>Qty</span>
+                  <span>Price</span>
+                  <span>Subtotal</span>
+                </div>
+                <div class="order-rows" data-checkout-items>
+                  <p class="empty-note">No items yet.</p>
+                </div>
+              </div>
             </div>
           </div>
         </section>
       </main>
-
-      <div class="modal" data-payment-modal aria-hidden="true">
-        <div class="modal-backdrop" data-modal-close></div>
-        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="payment-title">
-          <div class="modal-header">
-            <h3 id="payment-title">Choose a payment type</h3>
-            <button class="modal-close" type="button" data-modal-close aria-label="Close">
-              ✕
-            </button>
-          </div>
-          <div class="modal-body">
-            <div class="payment-options">
-              <label class="payment-option">
-                <input type="radio" name="paymentType" value="card" checked />
-                <span>Credit/Debit Card</span>
-              </label>
-              <label class="payment-option">
-                <input type="radio" name="paymentType" value="paypal" />
-                <span>PayPal</span>
-              </label>
-              <label class="payment-option">
-                <input type="radio" name="paymentType" value="paynow" />
-                <span>PayNow</span>
-              </label>
-              <label class="payment-option">
-                <input type="radio" name="paymentType" value="cash" />
-                <span>Pay at Counter</span>
-              </label>
-            </div>
-          </div>
-          <div class="modal-actions">
-            <button class="btn ghost" type="button" data-modal-close>Cancel</button>
-            <button class="btn primary" type="button" data-confirm-payment>Confirm</button>
-          </div>
-        </div>
-      </div>
 
       <%- include("partials/footer") %>
     </div>

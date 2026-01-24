@@ -9,6 +9,7 @@ const roomController = require("./controllers/roomController");
 const cartController = require("./controllers/cartController");
 const authController = require("./controllers/authController");
 const paymentsController = require("./controllers/paymentsController");
+const purchasesController = require("./controllers/purchasesController");
 const reviewsRouter = require("./routes/reviews");
 const { sessionMiddleware, requireAdmin } = require("./middleware");
 const profileController = require("./controllers/profileController");
@@ -49,6 +50,16 @@ app.use((req, res, next) => {
 });
 app.use(express.static(path.join(__dirname, "public")));
 
+app.use((req, res, next) => {
+  if (req.session && req.session.role === "admin") {
+    const acceptsHtml = req.headers.accept && req.headers.accept.includes("text/html");
+    if (acceptsHtml && req.method === "GET" && !req.path.startsWith("/admin")) {
+      return res.redirect("/admin");
+    }
+  }
+  next();
+});
+
 app.get("/", homeController.renderHome);
 app.get("/bookings", bookingsPageController.renderBookings);
 app.post("/bookings", bookingsPageController.createBooking);
@@ -63,6 +74,8 @@ app.patch("/cart/items/:id", express.json(), cartController.updateItemQty);
 app.delete("/cart/items/:id", cartController.removeItem);
 app.delete("/cart/clear", cartController.clear);
 app.post("/payments/paypal/create", express.json(), paymentsController.createPaypalOrder);
+app.post("/api/paypal/create-order", express.json(), paymentsController.createPaypalButtonOrder);
+app.post("/api/paypal/capture-order", express.json(), paymentsController.capturePaypalButtonOrder);
 app.get("/menu", menuController.renderMenu);
 app.get("/events", eventsPageController.renderEvents);
 app.get("/cart", (req, res) => res.render("cart"));
@@ -72,6 +85,8 @@ app.get("/checkout", (req, res) => {
   }
   return res.render("checkout");
 });
+app.get("/invoice/:id", purchasesController.renderInvoice);
+app.get("/purchases", purchasesController.renderPurchases);
 app.get("/profile", profileController.renderProfile);
 app.post("/profile", uploadImage.single("avatar"), profileController.updateProfile);
 app.get("/login", authController.renderLoginPage);

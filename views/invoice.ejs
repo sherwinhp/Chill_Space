@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Invoice | Cozy Place Gaming Rooms</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("partials/header", {
+        page: "",
+        roomsLink: "/",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile"
+      }) %>
+
+      <main>
+        <section class="section invoice-page">
+          <div class="section-head">
+            <div>
+              <h2>Invoice</h2>
+              <p>Thank you for your payment. Keep this receipt for your records.</p>
+            </div>
+            <a class="btn ghost" href="/purchases">Purchase history</a>
+          </div>
+
+          <div class="invoice-card">
+            <div class="invoice-meta">
+              <div>
+                <span>Invoice</span>
+                <strong>#<%= invoice.transaction_id %></strong>
+              </div>
+              <div>
+                <span>Date</span>
+                <strong><%= new Date(invoice.created_at).toLocaleString() %></strong>
+              </div>
+              <div>
+                <span>Status</span>
+                <strong class="status-pill"><%= invoice.status %></strong>
+              </div>
+              <div>
+                <span>Payment</span>
+                <strong><%= invoice.provider %></strong>
+              </div>
+            </div>
+
+            <div class="invoice-customer">
+              <div>
+                <span>Billed to</span>
+                <strong><%= invoice.user_name %></strong>
+                <small><%= invoice.user_email %></small>
+              </div>
+              <div class="invoice-total">
+                <span>Total paid</span>
+                <strong>$<%= Number(invoice.total_amount).toFixed(2) %></strong>
+              </div>
+            </div>
+
+            <div class="order-table">
+              <div class="order-row order-head">
+                <span>Product</span>
+                <span>Qty</span>
+                <span>Price</span>
+                <span>Subtotal</span>
+              </div>
+              <div class="order-rows">
+                <% invoice.items.forEach(function(item) { %>
+                  <div class="order-row">
+                    <div class="order-product">
+                      <strong><%= item.item_name %></strong>
+                      <% if (item.details || item.start_time) { %>
+                        <div class="order-meta">
+                          <% if (item.details) { %>
+                            <span><%= item.details %></span>
+                          <% } %>
+                          <% if (item.start_time && item.end_time) { %>
+                            <span>
+                              <%= new Date(item.start_time).toLocaleString() %> -
+                              <%= new Date(item.end_time).toLocaleString() %>
+                            </span>
+                          <% } %>
+                        </div>
+                      <% } %>
+                    </div>
+                    <span class="order-qty"><%= item.qty %></span>
+                    <span class="order-price">$<%= Number(item.price).toFixed(2) %></span>
+                    <span class="order-subtotal">$<%= Number(item.subtotal).toFixed(2) %></span>
+                  </div>
+                <% }) %>
+              </div>
+            </div>
+
+            <div class="invoice-actions">
+              <% const reviewRoom = (invoice.items || []).find((item) => item.room_id); %>
+              <% if (reviewRoom) { %>
+                <a class="btn ghost" href="/reviews/add?roomId=<%= reviewRoom.room_id %>">Write a review</a>
+              <% } %>
+              <button class="btn ghost" type="button" onclick="window.print()">Print invoice</button>
+              <a class="btn ghost" href="/bookings">View bookings</a>
+              <a class="btn primary" href="/menu">Continue browsing</a>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <%- include("partials/footer") %>
+    </div>
+  </body>
+</html>

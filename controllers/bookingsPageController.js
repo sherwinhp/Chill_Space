@@ -18,9 +18,25 @@ async function renderBookings(req, res) {
       userId: userId ? Number(userId) : req.session.userId,
       email: email ? String(email) : undefined,
     });
+    const now = new Date();
+    const upcomingBookings = [];
+    const pastBookings = [];
+    bookings.forEach((booking) => {
+      const endTime = new Date(booking.endTime);
+      if (!Number.isNaN(endTime.getTime()) && endTime > now) {
+        upcomingBookings.push(booking);
+      } else {
+        pastBookings.push(booking);
+      }
+    });
     const rooms = await listRooms();
 
-    res.render("bookings", { bookings, rooms, isLoggedIn: true });
+    res.render("bookings", {
+      bookings: upcomingBookings,
+      pastBookings,
+      rooms,
+      isLoggedIn: true,
+    });
   } catch (error) {
     console.error(error);
     res.status(500).send("Unable to load bookings.");

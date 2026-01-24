@@ -5,6 +5,23 @@ const checkoutButton = document.querySelector("[data-checkout]");
 
 let cachedItems = [];
 
+function parseLocalDateTime(value) {
+  if (!value || typeof value !== "string") return null;
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/
+  );
+  if (!match) return null;
+  const [, year, month, day, hour, minute, second] = match;
+  return new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second || 0)
+  );
+}
+
 function fetchCart() {
   return fetch("/cart/items")
     .then((res) => res.json())
@@ -28,27 +45,31 @@ function renderCart() {
     row.className = "cart-item";
     const detailsParts = [];
     if (item.type === "room_booking" && item.startTime && item.endTime) {
-      const start = new Date(item.startTime);
-      const end = new Date(item.endTime);
-      if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
-        const dateLabel = start.toLocaleDateString("en-SG", {
-          weekday: "short",
-          day: "numeric",
-          month: "short",
-        });
-        const startLabel = start.toLocaleTimeString("en-SG", {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-        const endLabel = end.toLocaleTimeString("en-SG", {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-        const hours = (end - start) / 3600000;
-        detailsParts.push(`${dateLabel}`);
-        detailsParts.push(`${startLabel} - ${endLabel}`);
-        if (Number.isFinite(hours)) {
-          detailsParts.push(`${hours} hour${hours === 1 ? "" : "s"}`);
+      if (item.details) {
+        detailsParts.push(item.details);
+      } else {
+        const start = parseLocalDateTime(item.startTime);
+        const end = parseLocalDateTime(item.endTime);
+        if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+          const dateLabel = start.toLocaleDateString("en-SG", {
+            weekday: "short",
+            day: "numeric",
+            month: "short",
+          });
+          const startLabel = start.toLocaleTimeString("en-SG", {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          const endLabel = end.toLocaleTimeString("en-SG", {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          const hours = (end - start) / 3600000;
+          detailsParts.push(`${dateLabel}`);
+          detailsParts.push(`${startLabel} - ${endLabel}`);
+          if (Number.isFinite(hours)) {
+            detailsParts.push(`${hours} hour${hours === 1 ? "" : "s"}`);
+          }
         }
       }
     } else if (item.details) {

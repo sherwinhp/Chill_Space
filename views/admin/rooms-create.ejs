@@ -9,16 +9,7 @@
   <body>
     <div class="page">
       <div class="glow"></div>
-      <%- include("../partials/header", {
-        page: "admin",
-        roomsLink: "/",
-        bookingsLink: "/bookings",
-        menuLink: "/menu",
-        reviewsLink: "/reviews",
-        eventsLink: "/events",
-        profileLink: "/profile",
-        hideTabs: true
-      }) %>
+      <%- include("../partials/admin-header", { page: "admin-rooms" }) %>
 
       <main>
         <section class="section admin-section">
@@ -28,7 +19,7 @@
               <p>Create a new room listing for customers.</p>
             </div>
             <div class="admin-head-actions">
-              <a class="btn" href="/admin">Back to Admin</a>
+            <a class="btn" href="/admin">Back to dashboard</a>
               <a class="btn ghost" href="/admin/rooms">View Rooms</a>
             </div>
           </div>
@@ -59,3 +50,4 @@
     </div>
   </body>
 </html>
+

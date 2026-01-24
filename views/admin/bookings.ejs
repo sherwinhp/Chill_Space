@@ -9,86 +9,97 @@
   <body>
     <div class="page">
       <div class="glow"></div>
-      <%- include("../partials/header", {
-        page: "admin",
-        roomsLink: "/",
-        bookingsLink: "/bookings",
-        menuLink: "/menu",
-        reviewsLink: "/reviews",
-        eventsLink: "/events",
-        profileLink: "/profile",
-        hideTabs: true
-      }) %>
+      <%- include("../partials/admin-header", { page: "admin-bookings" }) %>
 
       <main>
         <section class="section admin-section">
-          <div class="section-head">
+          <div class="section-head split">
             <div>
               <h2>Manage Bookings</h2>
               <p>Create, update, approve, or delete bookings.</p>
             </div>
-            <a class="btn" href="/admin">Back to Admin</a>
+            <a class="btn" href="/admin">Back to dashboard</a>
           </div>
 
-          <form class="admin-form" action="/admin/bookings" method="POST">
-            <h3>Add Booking</h3>
-            <div class="admin-grid-form">
-              <input name="user_id" type="number" placeholder="User ID" required />
-              <input name="room_id" type="number" placeholder="Room ID" required />
-              <input name="start_time" type="datetime-local" required />
-              <input name="end_time" type="datetime-local" required />
-              <input name="pax" type="number" placeholder="Pax" />
-              <input name="total_price" type="number" step="0.01" placeholder="Total Price" />
-              <select name="payment_status">
-                <option value="pending">Pending</option>
-                <option value="paid">Paid</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-              <select name="admin_status">
-                <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="declined">Declined</option>
-              </select>
+          <% if (!bookings || !bookings.length) { %>
+            <div class="empty-state">
+              <h3>No bookings found.</h3>
+              <p>Bookings will appear here as users place orders.</p>
             </div>
-            <button class="btn primary" type="submit">Create Booking</button>
-          </form>
-
-          <div class="admin-table">
-            <div class="admin-table-row admin-header">
-              <span>ID</span>
-              <span>User</span>
-              <span>Room</span>
-              <span>Status</span>
-              <span>Actions</span>
+          <% } else { %>
+            <div class="admin-booking-grid">
+              <% bookings.forEach(function(booking) { %>
+                <form class="admin-booking-card" action="/admin/bookings/<%= booking.id %>" method="POST">
+                  <div class="admin-booking-media">
+                    <% if (booking.roomImage) { %>
+                      <img src="<%= booking.roomImage %>" alt="<%= booking.roomName %>" />
+                    <% } else { %>
+                      <div class="admin-room-placeholder">No Image</div>
+                    <% } %>
+                  </div>
+                  <div class="admin-booking-body">
+                    <div class="admin-booking-title">
+                      <div>
+                        <h3><%= booking.roomName %></h3>
+                        <p><%= booking.userName %> · <%= booking.userEmail %></p>
+                      </div>
+                      <div class="admin-booking-price">
+                        <% if (booking.totalPrice) { %>
+                          <strong>$<%= Number(booking.totalPrice).toFixed(2) %></strong>
+                          <span>Total</span>
+                        <% } else { %>
+                          <strong>-</strong>
+                          <span>Total</span>
+                        <% } %>
+                      </div>
+                    </div>
+                    <div class="admin-booking-meta">
+                      <span>
+                        <strong>Start:</strong>
+                        <%= new Date(booking.startTime).toLocaleString() %>
+                      </span>
+                      <span>
+                        <strong>End:</strong>
+                        <%= new Date(booking.endTime).toLocaleString() %>
+                      </span>
+                      <span>
+                        <strong>Duration:</strong>
+                        <%= ((new Date(booking.endTime) - new Date(booking.startTime)) / 3600000).toFixed(1) %> hrs
+                      </span>
+                    </div>
+                    <div class="admin-booking-status">
+                      <label>
+                        <span>Approval</span>
+                        <select name="admin_status">
+                          <option value="pending" <%= booking.adminStatus === 'pending' ? 'selected' : '' %>>Pending</option>
+                          <option value="approved" <%= booking.adminStatus === 'approved' ? 'selected' : '' %>>Approved</option>
+                          <option value="declined" <%= booking.adminStatus === 'declined' ? 'selected' : '' %>>Declined</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Payment</span>
+                        <select name="payment_status">
+                          <option value="pending" <%= booking.paymentStatus === 'pending' ? 'selected' : '' %>>Pending</option>
+                          <option value="paid" <%= booking.paymentStatus === 'paid' ? 'selected' : '' %>>Paid</option>
+                          <option value="cancelled" <%= booking.paymentStatus === 'cancelled' ? 'selected' : '' %>>Cancelled</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div class="admin-actions">
+                      <button class="btn" type="submit">Save</button>
+                      <button class="btn danger" type="submit" formaction="/admin/bookings/<%= booking.id %>/delete">Delete</button>
+                    </div>
+                    <input type="hidden" name="user_id" value="<%= booking.userId %>" />
+                    <input type="hidden" name="room_id" value="<%= booking.roomId %>" />
+                    <input type="hidden" name="start_time" value="<%= booking.startTime.toISOString ? booking.startTime.toISOString().slice(0,16) : booking.startTime %>" />
+                    <input type="hidden" name="end_time" value="<%= booking.endTime.toISOString ? booking.endTime.toISOString().slice(0,16) : booking.endTime %>" />
+                    <input type="hidden" name="pax" value="<%= booking.pax %>" />
+                    <input type="hidden" name="total_price" value="<%= booking.totalPrice %>" />
+                  </div>
+                </form>
+              <% }) %>
             </div>
-            <% bookings.forEach(function(booking) { %>
-              <form class="admin-table-row" action="/admin/bookings/<%= booking.id %>" method="POST">
-                <span><%= booking.id %></span>
-                <input name="user_id" type="number" value="<%= booking.userId %>" />
-                <input name="room_id" type="number" value="<%= booking.roomId %>" />
-                <div class="admin-status">
-                  <select name="admin_status">
-                    <option value="pending" <%= booking.adminStatus === 'pending' ? 'selected' : '' %>>Pending</option>
-                    <option value="approved" <%= booking.adminStatus === 'approved' ? 'selected' : '' %>>Approved</option>
-                    <option value="declined" <%= booking.adminStatus === 'declined' ? 'selected' : '' %>>Declined</option>
-                  </select>
-                  <select name="payment_status">
-                    <option value="pending" <%= booking.paymentStatus === 'pending' ? 'selected' : '' %>>Pending</option>
-                    <option value="paid" <%= booking.paymentStatus === 'paid' ? 'selected' : '' %>>Paid</option>
-                    <option value="cancelled" <%= booking.paymentStatus === 'cancelled' ? 'selected' : '' %>>Cancelled</option>
-                  </select>
-                </div>
-                <div class="admin-actions">
-                  <button class="btn" type="submit">Save</button>
-                  <button class="btn danger" type="submit" formaction="/admin/bookings/<%= booking.id %>/delete">Delete</button>
-                </div>
-                <input type="hidden" name="start_time" value="<%= booking.startTime.toISOString ? booking.startTime.toISOString().slice(0,16) : booking.startTime %>" />
-                <input type="hidden" name="end_time" value="<%= booking.endTime.toISOString ? booking.endTime.toISOString().slice(0,16) : booking.endTime %>" />
-                <input type="hidden" name="pax" value="<%= booking.pax %>" />
-                <input type="hidden" name="total_price" value="<%= booking.totalPrice %>" />
-              </form>
-            <% }) %>
-          </div>
+          <% } %>
         </section>
       </main>
 
@@ -96,3 +107,4 @@
     </div>
   </body>
 </html>
+

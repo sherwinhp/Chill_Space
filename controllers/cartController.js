@@ -1,12 +1,13 @@
 const {
   listCartItems,
   migrateSessionCartToUser,
-  findBookingDuplicate,
+  findBookingOverlap,
   addCartItem,
   incrementMenuItem,
   updateCartItemQty,
   deleteCartItem,
   clearCart,
+  removeExpiredRoomBookings,
 } = require("../models/cartModel");
 const { releaseBookingHold } = require("../models/bookingsModel");
 
@@ -21,6 +22,12 @@ async function listItems(req, res) {
   if (userId && sessionId) {
     await migrateSessionCartToUser(sessionId, userId);
   }
+  const expiredHolds = await removeExpiredRoomBookings({
+    userId,
+    sessionId,
+    now: new Date(),
+  });
+  await Promise.all(expiredHolds.map((holdId) => releaseBookingHold(holdId)));
   const items = await listCartItems({ userId, sessionId });
   res.json({ items });
 }
@@ -71,12 +78,18 @@ async function addItem(req, res) {
     if (!room_id || !start_time || !end_time) {
       return res.status(400).json({ error: "Missing booking details." });
     }
-    const duplicate = await findBookingDuplicate({
+    const startValue = parseLocalDateTime(start_time);
+    if (!startValue || Number.isNaN(startValue.getTime()) || startValue <= new Date()) {
+      return res.status(400).json({ error: "Booking time must be in the future." });
+    }
+    const normalizedStart = formatLocalDateTime(startValue);
+    const normalizedEnd = formatLocalDateTime(parseLocalDateTime(end_time));
+    const duplicate = await findBookingOverlap({
       userId,
       sessionId,
       roomId: Number(room_id),
-      startTime: start_time,
-      endTime: end_time,
+      startTime: normalizedStart,
+      endTime: normalizedEnd,
     });
     if (duplicate) {
       return res.status(409).json({ error: "Booking already in cart." });
@@ -90,8 +103,8 @@ async function addItem(req, res) {
       qty: 1,
       details,
       roomId: Number(room_id),
-      startTime: start_time,
-      endTime: end_time,
+      startTime: normalizedStart,
+      endTime: normalizedEnd,
       holdId: hold_id || null,
     });
     const items = await listCartItems({ userId, sessionId });
@@ -99,6 +112,37 @@ async function addItem(req, res) {
   }
 
   return res.status(400).json({ error: "Unsupported item type." });
+}
+
+function parseLocalDateTime(value) {
+  if (!value || typeof value !== "string") return null;
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/
+  );
+  if (!match) {
+    const fallback = new Date(value);
+    return Number.isNaN(fallback.getTime()) ? null : fallback;
+  }
+  const [, year, month, day, hour, minute, second] = match;
+  return new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second || 0)
+  );
+}
+
+function formatLocalDateTime(value) {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) return null;
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  const hour = String(value.getHours()).padStart(2, "0");
+  const minute = String(value.getMinutes()).padStart(2, "0");
+  const second = String(value.getSeconds()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
 }
 
 async function updateItemQty(req, res) {

@@ -159,6 +159,7 @@ INSERT INTO `cart_items` VALUES (2,'3e9bd3c4c9e964859a946b202af442c4',NULL,'room
 /*!40000 ALTER TABLE `cart_items` ENABLE KEYS */;
 UNLOCK TABLES;
 
+
 --
 -- Table structure for table `events`
 --
@@ -258,9 +259,13 @@ DROP TABLE IF EXISTS `reviews`;
 CREATE TABLE `reviews` (
   `review_id` int NOT NULL AUTO_INCREMENT,
   `user_id` int NOT NULL,
-  `room_id` int NOT NULL,
+  `room_id` int DEFAULT NULL,
   `rating` int NOT NULL,
+  `rating_food` int NOT NULL DEFAULT '0',
+  `rating_service` int NOT NULL DEFAULT '0',
   `comment` text NOT NULL,
+  `category` enum('room','food','service') NOT NULL DEFAULT 'room',
+  `is_visible` tinyint(1) NOT NULL DEFAULT '1',
   `image_url` varchar(500) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -345,6 +350,77 @@ LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
 INSERT INTO `users` VALUES (1,'peter','peter@peter.com','P@$$w0rd','user','bukit batok, blk 234, #02-134','81234567',NULL,1,'2026-01-22 14:25:51'),(2,'admin','admin@admin.com','P@$$w0rd','admin','Republic Poly ','82317232',NULL,1,'2026-01-22 14:27:13');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `transactions`
+--
+
+DROP TABLE IF EXISTS `transactions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `transactions` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `orderId` varchar(64) NOT NULL,
+  `payerId` varchar(64) NOT NULL,
+  `payerEmail` varchar(255) NOT NULL,
+  `amount` decimal(10,2) NOT NULL,
+  `currency` varchar(8) NOT NULL,
+  `status` varchar(32) NOT NULL,
+  `time` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `transactions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `transactions`
+--
+
+LOCK TABLES `transactions` WRITE;
+/*!40000 ALTER TABLE `transactions` DISABLE KEYS */;
+/*!40000 ALTER TABLE `transactions` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `transaction_items`
+--
+
+DROP TABLE IF EXISTS `transaction_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `transaction_items` (
+  `transaction_item_id` int NOT NULL AUTO_INCREMENT,
+  `transaction_id` int NOT NULL,
+  `item_type` enum('menu','room_booking') NOT NULL,
+  `item_id` int DEFAULT NULL,
+  `item_name` varchar(180) NOT NULL,
+  `price` decimal(10,2) NOT NULL,
+  `qty` int NOT NULL DEFAULT '1',
+  `subtotal` decimal(10,2) NOT NULL,
+  `details` varchar(255) DEFAULT NULL,
+  `room_id` int DEFAULT NULL,
+  `start_time` datetime DEFAULT NULL,
+  `end_time` datetime DEFAULT NULL,
+  PRIMARY KEY (`transaction_item_id`),
+  KEY `transaction_id` (`transaction_id`),
+  KEY `item_id` (`item_id`),
+  KEY `room_id` (`room_id`),
+  CONSTRAINT `transaction_items_ibfk_1` FOREIGN KEY (`transaction_id`) REFERENCES `transactions` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `transaction_items_ibfk_2` FOREIGN KEY (`item_id`) REFERENCES `menu_items` (`item_id`) ON DELETE SET NULL,
+  CONSTRAINT `transaction_items_ibfk_3` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`room_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `transaction_items`
+--
+
+LOCK TABLES `transaction_items` WRITE;
+/*!40000 ALTER TABLE `transaction_items` DISABLE KEYS */;
+/*!40000 ALTER TABLE `transaction_items` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --

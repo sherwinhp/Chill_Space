@@ -13,25 +13,51 @@
 
       <form action="/reviews/add" method="POST" class="review-form" enctype="multipart/form-data">
         <label class="field">
-          <span>Room ID</span>
-          <input
-            type="number"
-            name="roomId"
-            placeholder="Enter Room ID"
-            required
-          />
+          <span>Room</span>
+          <select name="roomId" id="roomSelect" required>
+            <option value="" disabled selected>Select a room</option>
+            <% (rooms || []).forEach(function(room) { %>
+              <option value="<%= room.id %>"><%= room.name %></option>
+            <% }) %>
+          </select>
         </label>
 
-        <div class="field">
-          <span>Rating</span>
-          <div class="star-rating" id="starRating" role="radiogroup" aria-label="Rating">
-            <button type="button" data-value="1" aria-label="1 star">&#9733;</button>
-            <button type="button" data-value="2" aria-label="2 stars">&#9733;</button>
-            <button type="button" data-value="3" aria-label="3 stars">&#9733;</button>
-            <button type="button" data-value="4" aria-label="4 stars">&#9733;</button>
-            <button type="button" data-value="5" aria-label="5 stars">&#9733;</button>
+        <div class="field-group">
+          <div class="field">
+            <span>Room Experience</span>
+            <div class="star-rating" data-rating-group>
+              <button type="button" data-value="1" aria-label="1 star">&#9733;</button>
+              <button type="button" data-value="2" aria-label="2 stars">&#9733;</button>
+              <button type="button" data-value="3" aria-label="3 stars">&#9733;</button>
+              <button type="button" data-value="4" aria-label="4 stars">&#9733;</button>
+              <button type="button" data-value="5" aria-label="5 stars">&#9733;</button>
+            </div>
+            <input type="hidden" name="ratingRoom" data-rating-input required />
           </div>
-          <input type="hidden" name="rating" id="ratingInput" required />
+
+          <div class="field">
+            <span>Food</span>
+            <div class="star-rating" data-rating-group>
+              <button type="button" data-value="1" aria-label="1 star">&#9733;</button>
+              <button type="button" data-value="2" aria-label="2 stars">&#9733;</button>
+              <button type="button" data-value="3" aria-label="3 stars">&#9733;</button>
+              <button type="button" data-value="4" aria-label="4 stars">&#9733;</button>
+              <button type="button" data-value="5" aria-label="5 stars">&#9733;</button>
+            </div>
+            <input type="hidden" name="ratingFood" data-rating-input required />
+          </div>
+
+          <div class="field">
+            <span>Service</span>
+            <div class="star-rating" data-rating-group>
+              <button type="button" data-value="1" aria-label="1 star">&#9733;</button>
+              <button type="button" data-value="2" aria-label="2 stars">&#9733;</button>
+              <button type="button" data-value="3" aria-label="3 stars">&#9733;</button>
+              <button type="button" data-value="4" aria-label="4 stars">&#9733;</button>
+              <button type="button" data-value="5" aria-label="5 stars">&#9733;</button>
+            </div>
+            <input type="hidden" name="ratingService" data-rating-input required />
+          </div>
         </div>
 
         <label class="field">
@@ -61,16 +87,26 @@
 </div>
 
 <script>
-  const stars = document.querySelectorAll("#starRating button");
-  const ratingInput = document.getElementById("ratingInput");
+  const ratingGroups = document.querySelectorAll("[data-rating-group]");
+  const roomSelect = document.getElementById("roomSelect");
+  const params = new URLSearchParams(window.location.search);
+  const prefillRoomId = params.get("roomId");
 
-  stars.forEach((star) => {
-    star.addEventListener("click", () => {
-      const rating = Number(star.getAttribute("data-value"));
-      ratingInput.value = rating;
-      stars.forEach((s) => {
-        const value = Number(s.getAttribute("data-value"));
-        s.classList.toggle("active", value <= rating);
+  if (roomSelect && prefillRoomId) {
+    roomSelect.value = prefillRoomId;
+  }
+
+  ratingGroups.forEach((group) => {
+    const stars = group.querySelectorAll("button");
+    const input = group.parentElement.querySelector("[data-rating-input]");
+    stars.forEach((star) => {
+      star.addEventListener("click", () => {
+        const rating = Number(star.getAttribute("data-value"));
+        input.value = rating;
+        stars.forEach((s) => {
+          const value = Number(s.getAttribute("data-value"));
+          s.classList.toggle("active", value <= rating);
+        });
       });
     });
   });

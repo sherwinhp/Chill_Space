@@ -9,73 +9,139 @@
   <body>
     <div class="page">
       <div class="glow"></div>
-      <%- include("../partials/header", {
-        page: "admin",
-        roomsLink: "/",
-        bookingsLink: "/bookings",
-        menuLink: "/menu",
-        reviewsLink: "/reviews",
-        eventsLink: "/events",
-        profileLink: "/profile",
-        hideTabs: true
-      }) %>
+      <%- include("../partials/admin-header", { page: "admin-promotions" }) %>
 
       <main>
         <section class="section admin-section">
-          <div class="section-head">
+          <div class="section-head split">
             <div>
               <h2>Manage Promotions</h2>
               <p>Create, update, or remove promotions.</p>
             </div>
-            <a class="btn" href="/admin">Back to Admin</a>
+            <div class="section-actions">
+              <a class="btn ghost" href="/admin">Back to dashboard</a>
+              <a class="btn primary admin-cta" href="/admin/promotions/new">Create promotion</a>
+            </div>
           </div>
 
-          <form class="admin-form" action="/admin/promotions" method="POST" enctype="multipart/form-data">
-            <h3>Add Promotion</h3>
-            <div class="admin-grid-form">
-              <input name="title" type="text" placeholder="Title" required />
-              <input name="code" type="text" placeholder="Code" />
-              <input name="discount_percent" type="number" placeholder="Discount %" required />
-              <input name="min_total" type="number" step="0.01" placeholder="Min Total" />
-              <input name="start_date" type="date" required />
-              <input name="end_date" type="date" required />
-              <input name="image" type="file" accept="image/*" />
-              <textarea name="description" rows="2" placeholder="Description"></textarea>
-            </div>
-            <button class="btn primary" type="submit">Create Promotion</button>
-          </form>
+          <div class="event-tabs admin-menu-tabs">
+            <button class="event-tab active" type="button" data-admin-tab="active">Active</button>
+            <button class="event-tab" type="button" data-admin-tab="scheduled">Scheduled</button>
+            <button class="event-tab" type="button" data-admin-tab="expired">Expired</button>
+          </div>
 
-          <div class="admin-table">
-            <div class="admin-table-row admin-header">
-              <span>ID</span>
-              <span>Title</span>
-              <span>Discount</span>
-              <span>Code</span>
-              <span>Actions</span>
+          <div class="admin-menu-grid">
+            <% if (!promotions || !promotions.length) { %>
+              <div class="empty-state">
+                <h3>No promotions yet.</h3>
+                <p>Create your first promotion to boost sales.</p>
+              </div>
+            <% } else { %>
+              <% const now = new Date(); %>
+              <% promotions.forEach(function(promo) { %>
+                <% const start = promo.startDate ? new Date(promo.startDate) : null; %>
+                <% const end = promo.endDate ? new Date(promo.endDate) : start; %>
+                <% const hasStart = start && !isNaN(start.getTime()); %>
+                <% const hasEnd = end && !isNaN(end.getTime()); %>
+                <% let status = "active"; %>
+                <% if (hasStart && now < start) { status = "scheduled"; } %>
+                <% if (hasEnd && now > end) { status = "expired"; } %>
+                <article class="admin-menu-card" data-admin-category="<%= status %>">
+                  <div class="admin-menu-media">
+                    <% if (promo.image) { %>
+                      <img src="<%= promo.image %>" alt="<%= promo.title %>" />
+                    <% } else { %>
+                      <div class="admin-room-placeholder">No Image</div>
+                    <% } %>
+                  </div>
+                  <div class="admin-menu-body">
+                    <div class="admin-menu-title">
+                      <div>
+                        <h3><%= promo.title %></h3>
+                        <p>ID: <%= promo.id %></p>
+                      </div>
+                      <div class="admin-menu-price">
+                        <span><%= promo.discountPercent %>%</span>
+                      </div>
+                    </div>
+                    <% if (promo.description) { %>
+                      <p class="admin-menu-desc"><%= promo.description %></p>
+                    <% } %>
+                    <div class="admin-menu-meta">
+                      <span class="admin-menu-pill"><%= promo.code || "No code" %></span>
+                      <span class="admin-menu-pill">Min $<%= Number(promo.minTotal || 0).toFixed(2) %></span>
+                      <span class="admin-menu-pill <%= status === "expired" ? "unavailable" : "available" %>">
+                        <%= status %>
+                      </span>
+                    </div>
+                    <details class="admin-menu-edit">
+                      <summary class="btn">Edit promotion</summary>
+                      <form action="/admin/promotions/<%= promo.id %>" method="POST" enctype="multipart/form-data">
+                        <div class="admin-menu-edit-grid">
+                          <input name="title" value="<%= promo.title %>" />
+                          <input name="code" value="<%= promo.code %>" />
+                          <input name="discount_percent" type="number" value="<%= promo.discountPercent %>" />
+                          <input name="min_total" type="number" step="0.01" value="<%= promo.minTotal %>" />
+                          <input name="start_date" type="date" value="<%= promo.startDate ? new Date(promo.startDate).toISOString().slice(0,10) : '' %>" />
+                          <input name="end_date" type="date" value="<%= promo.endDate ? new Date(promo.endDate).toISOString().slice(0,10) : '' %>" />
+                          <input type="file" name="image" accept="image/*" />
+                          <textarea name="description" rows="2" placeholder="Description"><%= promo.description || "" %></textarea>
+                        </div>
+                        <div class="admin-menu-edit-actions">
+                          <button class="btn" type="submit">Save</button>
+                          <button class="btn danger" type="submit" formaction="/admin/promotions/<%= promo.id %>/delete">Delete</button>
+                        </div>
+                        <input type="hidden" name="current_image_url" value="<%= promo.image %>" />
+                      </form>
+                    </details>
+                  </div>
+                </article>
+              <% }) %>
+            <% } %>
+            <div class="empty-state admin-menu-empty is-hidden">
+              <h3>No promotions in this view.</h3>
+              <p>Switch tabs or create a new promotion.</p>
             </div>
-            <% promotions.forEach(function(promo) { %>
-              <form class="admin-table-row" action="/admin/promotions/<%= promo.id %>" method="POST" enctype="multipart/form-data">
-                <span><%= promo.id %></span>
-                <input name="title" value="<%= promo.title %>" />
-                <input name="discount_percent" type="number" value="<%= promo.discountPercent %>" />
-                <input name="code" value="<%= promo.code %>" />
-                <div class="admin-actions">
-                  <button class="btn" type="submit">Save</button>
-                  <button class="btn danger" type="submit" formaction="/admin/promotions/<%= promo.id %>/delete">Delete</button>
-                </div>
-                <input type="hidden" name="min_total" value="<%= promo.minTotal %>" />
-                <input type="hidden" name="start_date" value="<%= promo.startDate ? promo.startDate.toISOString().slice(0,10) : '' %>" />
-                <input type="hidden" name="end_date" value="<%= promo.endDate ? promo.endDate.toISOString().slice(0,10) : '' %>" />
-                <input type="file" name="image" accept="image/*" />
-                <input type="hidden" name="current_image_url" value="<%= promo.image %>" />
-                <input type="hidden" name="description" value="<%= promo.description %>" />
-              </form>
-            <% }) %>
           </div>
         </section>
       </main>
 
       <%- include("../partials/footer") %>
     </div>
+    <script>
+      const adminTabs = document.querySelectorAll("[data-admin-tab]");
+      const adminCards = document.querySelectorAll("[data-admin-category]");
+      const emptyState = document.querySelector(".admin-menu-empty");
+
+      function normalize(value) {
+        return (value || "").toString().toLowerCase();
+      }
+
+      function updateAdminFilter(category) {
+        const target = normalize(category);
+        let visibleCount = 0;
+        adminCards.forEach((card) => {
+          const cardCategory = normalize(card.dataset.adminCategory);
+          const isMatch = cardCategory === target;
+          card.classList.toggle("is-hidden", !isMatch);
+          if (isMatch) visibleCount += 1;
+        });
+        if (emptyState) {
+          emptyState.classList.toggle("is-hidden", visibleCount > 0);
+        }
+      }
+
+      if (adminTabs.length && adminCards.length) {
+        adminTabs.forEach((tab) => {
+          tab.addEventListener("click", () => {
+            adminTabs.forEach((btn) => btn.classList.remove("active"));
+            tab.classList.add("active");
+            updateAdminFilter(tab.dataset.adminTab);
+          });
+        });
+        updateAdminFilter(adminTabs[0].dataset.adminTab);
+      }
+    </script>
   </body>
 </html>
+

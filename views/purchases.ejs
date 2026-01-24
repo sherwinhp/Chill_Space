@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Purchase History | Cozy Place Gaming Rooms</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("partials/header", {
+        page: "",
+        roomsLink: "/",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile"
+      }) %>
+
+      <main>
+        <section class="section purchase-page">
+          <div class="section-head split">
+            <div>
+              <h2>Purchase history</h2>
+              <p>Your completed payments and itemized receipts.</p>
+            </div>
+            <a class="btn ghost" href="/bookings">Back to bookings</a>
+          </div>
+
+          <% if (!transactions.length) { %>
+            <div class="empty-state wide centered">
+              <h3>No purchases yet.</h3>
+              <p>Payments you complete will appear here with full item details.</p>
+              <a class="btn primary" href="/menu">Browse menu</a>
+            </div>
+          <% } else { %>
+            <div class="purchase-grid">
+              <% transactions.forEach(function(transaction) { %>
+                <div class="purchase-card">
+                  <div class="purchase-head">
+                    <div>
+                      <h3>Invoice #<%= transaction.transaction_id %></h3>
+                      <p><%= new Date(transaction.created_at).toLocaleString() %></p>
+                    </div>
+                    <div class="purchase-total">
+                      <span>Total</span>
+                      <strong>$<%= Number(transaction.total_amount).toFixed(2) %></strong>
+                    </div>
+                  </div>
+
+                  <div class="purchase-meta">
+                    <span class="status-pill">Status: <%= transaction.status %></span>
+                    <span class="status-pill secondary">Paid by: <%= transaction.provider %></span>
+                  </div>
+
+                  <div class="purchase-items">
+                    <% (itemsByTransaction[transaction.transaction_id] || []).forEach(function(item) { %>
+                      <div class="purchase-item">
+                        <div>
+                          <strong><%= item.item_name %></strong>
+                          <% if (item.details || item.start_time) { %>
+                            <div class="order-meta">
+                              <% if (item.details) { %>
+                                <span><%= item.details %></span>
+                              <% } %>
+                              <% if (item.start_time && item.end_time) { %>
+                                <span>
+                                  <%= new Date(item.start_time).toLocaleString() %> -
+                                  <%= new Date(item.end_time).toLocaleString() %>
+                                </span>
+                              <% } %>
+                            </div>
+                          <% } %>
+                        </div>
+                        <div class="purchase-item-meta">
+                          <span>x<%= item.qty %></span>
+                          <span>$<%= Number(item.subtotal).toFixed(2) %></span>
+                        </div>
+                      </div>
+                    <% }) %>
+                  </div>
+
+                  <div class="purchase-actions">
+                    <a class="btn ghost" href="/invoice/<%= transaction.transaction_id %>">View invoice</a>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </section>
+      </main>
+
+      <%- include("partials/footer") %>
+    </div>
+  </body>
+</html>

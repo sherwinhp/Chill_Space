@@ -15,6 +15,9 @@ function addToCart(payload) {
     .then((res) => res.json())
     .then(() => {
       window.dispatchEvent(new Event("cart:updated"));
+      if (window.showToast) {
+        window.showToast("Added to cart.", "success");
+      }
     })
     .catch(() => {});
 }

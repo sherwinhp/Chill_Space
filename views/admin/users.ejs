@@ -9,79 +9,132 @@
   <body>
     <div class="page">
       <div class="glow"></div>
-      <%- include("../partials/header", {
-        page: "admin",
-        roomsLink: "/",
-        bookingsLink: "/bookings",
-        menuLink: "/menu",
-        reviewsLink: "/reviews",
-        eventsLink: "/events",
-        profileLink: "/profile",
-        hideTabs: true
-      }) %>
+      <%- include("../partials/admin-header", { page: "admin-users" }) %>
 
       <main>
         <section class="section admin-section">
-          <div class="section-head">
+          <div class="section-head split">
             <div>
               <h2>Manage Users</h2>
               <p>Create, update, or delete users.</p>
             </div>
-            <a class="btn" href="/admin">Back to Admin</a>
+            <div class="section-actions">
+              <a class="btn ghost" href="/admin">Back to dashboard</a>
+              <a class="btn primary admin-cta" href="/admin/users/new">Create user</a>
+            </div>
           </div>
 
-          <form class="admin-form" action="/admin/users" method="POST">
-            <h3>Add User</h3>
-            <div class="admin-grid-form">
-              <input name="name" type="text" placeholder="Name" required />
-              <input name="email" type="email" placeholder="Email" required />
-              <input name="password" type="text" placeholder="Password" required />
-              <select name="role">
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-              </select>
-              <select name="is_active">
-                <option value="1">Active</option>
-                <option value="0">Deactivate</option>
-              </select>
-            </div>
-            <button class="btn primary" type="submit">Create User</button>
-          </form>
+          <div class="event-tabs admin-menu-tabs">
+            <button class="event-tab active" type="button" data-admin-tab="user">Users</button>
+            <button class="event-tab" type="button" data-admin-tab="admin">Admins</button>
+            <button class="event-tab" type="button" data-admin-tab="inactive">Inactive</button>
+          </div>
 
-          <div class="admin-table">
-            <div class="admin-table-row admin-header">
-              <span>ID</span>
-              <span>Name</span>
-              <span>Email</span>
-              <span>Role</span>
-              <span>Status</span>
-              <span>Actions</span>
+          <div class="admin-menu-grid">
+            <% if (!users || !users.length) { %>
+              <div class="empty-state">
+                <h3>No users yet.</h3>
+                <p>Create your first user account.</p>
+              </div>
+            <% } else { %>
+              <% users.forEach(function(user) { %>
+                <% const status = user.is_active ? user.role : "inactive"; %>
+                <article class="admin-menu-card" data-admin-category="<%= status %>">
+                  <div class="admin-menu-media">
+                    <% if (user.avatar_url) { %>
+                      <img src="<%= user.avatar_url %>" alt="<%= user.name %>" />
+                    <% } else { %>
+                      <div class="admin-room-placeholder"><%= (user.name || "?").charAt(0).toUpperCase() %></div>
+                    <% } %>
+                  </div>
+                  <div class="admin-menu-body">
+                    <div class="admin-menu-title">
+                      <div>
+                        <h3><%= user.name %></h3>
+                        <p><%= user.email %></p>
+                      </div>
+                      <div class="admin-menu-price">
+                        <span><%= user.role %></span>
+                      </div>
+                    </div>
+                    <div class="admin-menu-meta">
+                      <span class="admin-menu-pill">ID <%= user.id %></span>
+                      <span class="admin-menu-pill <%= user.is_active ? "available" : "unavailable" %>">
+                        <%= user.is_active ? "Active" : "Inactive" %>
+                      </span>
+                    </div>
+                    <details class="admin-menu-edit">
+                      <summary class="btn">Edit user</summary>
+                      <form action="/admin/users/<%= user.id %>" method="POST">
+                        <div class="admin-menu-edit-grid">
+                          <input name="name" value="<%= user.name %>" />
+                          <input name="email" value="<%= user.email %>" />
+                          <input name="password" type="text" placeholder="New password (optional)" />
+                          <select name="role">
+                            <option value="user" <%= user.role === 'user' ? 'selected' : '' %>>User</option>
+                            <option value="admin" <%= user.role === 'admin' ? 'selected' : '' %>>Admin</option>
+                          </select>
+                          <select name="is_active">
+                            <option value="1" <%= user.is_active ? 'selected' : '' %>>Active</option>
+                            <option value="0" <%= user.is_active ? '' : 'selected' %>>Deactivate</option>
+                          </select>
+                        </div>
+                        <div class="admin-menu-edit-actions">
+                          <button class="btn" type="submit">Save</button>
+                          <button class="btn danger" type="submit" formaction="/admin/users/<%= user.id %>/delete" <%= user.role === 'admin' ? 'disabled' : '' %>>
+                            Delete
+                          </button>
+                        </div>
+                      </form>
+                    </details>
+                  </div>
+                </article>
+              <% }) %>
+            <% } %>
+            <div class="empty-state admin-menu-empty is-hidden">
+              <h3>No users in this view.</h3>
+              <p>Switch tabs or create a new user.</p>
             </div>
-            <% users.forEach(function(user) { %>
-              <form class="admin-table-row" action="/admin/users/<%= user.id %>" method="POST">
-                <span><%= user.id %></span>
-                <input name="name" value="<%= user.name %>" />
-                <input name="email" value="<%= user.email %>" />
-                <select name="role">
-                  <option value="user" <%= user.role === 'user' ? 'selected' : '' %>>User</option>
-                  <option value="admin" <%= user.role === 'admin' ? 'selected' : '' %>>Admin</option>
-                </select>
-                <select name="is_active">
-                  <option value="1" <%= user.is_active ? 'selected' : '' %>>Active</option>
-                  <option value="0" <%= user.is_active ? '' : 'selected' %>>Deactivate</option>
-                </select>
-                <div class="admin-actions">
-                  <button class="btn" type="submit">Save</button>
-                  <button class="btn danger" type="submit" formaction="/admin/users/<%= user.id %>/delete">Delete</button>
-                </div>
-                <input type="hidden" name="password" value="<%= user.password %>" />
-              </form>
-            <% }) %>
           </div>
         </section>
       </main>
 
       <%- include("../partials/footer") %>
     </div>
+    <script>
+      const adminTabs = document.querySelectorAll("[data-admin-tab]");
+      const adminCards = document.querySelectorAll("[data-admin-category]");
+      const emptyState = document.querySelector(".admin-menu-empty");
+
+      function normalize(value) {
+        return (value || "").toString().toLowerCase();
+      }
+
+      function updateAdminFilter(category) {
+        const target = normalize(category);
+        let visibleCount = 0;
+        adminCards.forEach((card) => {
+          const cardCategory = normalize(card.dataset.adminCategory);
+          const isMatch = cardCategory === target;
+          card.classList.toggle("is-hidden", !isMatch);
+          if (isMatch) visibleCount += 1;
+        });
+        if (emptyState) {
+          emptyState.classList.toggle("is-hidden", visibleCount > 0);
+        }
+      }
+
+      if (adminTabs.length && adminCards.length) {
+        adminTabs.forEach((tab) => {
+          tab.addEventListener("click", () => {
+            adminTabs.forEach((btn) => btn.classList.remove("active"));
+            tab.classList.add("active");
+            updateAdminFilter(tab.dataset.adminTab);
+          });
+        });
+        updateAdminFilter(adminTabs[0].dataset.adminTab);
+      }
+    </script>
   </body>
 </html>
+

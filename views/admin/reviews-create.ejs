@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Create Review</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("../partials/admin-header", { page: "admin-reviews" }) %>
+
+      <main>
+        <section class="section admin-section">
+          <div class="section-head split">
+            <div>
+              <h2>Create Review</h2>
+              <p>Add a new review for a user and room.</p>
+            </div>
+            <div class="section-actions">
+              <a class="btn ghost" href="/admin/reviews">Back to reviews</a>
+              <a class="btn" href="/admin">Back to dashboard</a>
+            </div>
+          </div>
+
+          <form class="admin-form" action="/admin/reviews" method="POST">
+            <h3>Review Details</h3>
+            <div class="admin-grid-form">
+              <input name="user_id" type="number" placeholder="User ID" required />
+              <input name="room_id" type="number" placeholder="Room ID" required />
+              <input name="rating" type="number" min="1" max="5" placeholder="Rating" required />
+              <input name="rating_food" type="number" min="1" max="5" placeholder="Food Rating" required />
+              <input name="rating_service" type="number" min="1" max="5" placeholder="Service Rating" required />
+              <select name="is_visible">
+                <option value="1" selected>Visible</option>
+                <option value="0">Hidden</option>
+              </select>
+              <input name="image_url" type="text" placeholder="Image URL" />
+              <textarea name="comment" rows="2" placeholder="Comment"></textarea>
+            </div>
+            <button class="btn primary admin-cta" type="submit">Create Review</button>
+          </form>
+        </section>
+      </main>
+
+      <%- include("../partials/footer") %>
+    </div>
+  </body>
+</html>

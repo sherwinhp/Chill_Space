@@ -12,8 +12,8 @@ function toCartItem(row) {
     qty: row.qty,
     details: row.details || "",
     roomId: row.room_id,
-    startTime: row.start_time,
-    endTime: row.end_time,
+    startTime: formatLocalDateTime(row.start_time),
+    endTime: formatLocalDateTime(row.end_time),
     holdId: row.hold_id,
   };
 }
@@ -41,9 +41,10 @@ async function migrateSessionCartToUser(sessionId, userId) {
   );
 }
 
-async function findBookingDuplicate({ userId, sessionId, roomId, startTime, endTime }) {
-  const params = [roomId, startTime, endTime];
-  let where = "room_id = ? AND start_time = ? AND end_time = ? AND item_type = 'room_booking'";
+async function findBookingOverlap({ userId, sessionId, roomId, startTime, endTime }) {
+  const params = [roomId, endTime, startTime];
+  let where =
+    "room_id = ? AND item_type = 'room_booking' AND start_time < ? AND end_time > ?";
   if (userId) {
     where += " AND user_id = ?";
     params.push(userId);
@@ -134,6 +135,31 @@ async function clearCart({ userId, sessionId }) {
   return rows.map((row) => row.hold_id).filter(Boolean);
 }
 
+async function removeExpiredRoomBookings({ userId, sessionId, now }) {
+  const nowValue =
+    now instanceof Date ? now.toISOString().slice(0, 19).replace("T", " ") : now;
+  const rows = await db.query(
+    `
+      SELECT cart_item_id, hold_id
+      FROM cart_items
+      WHERE item_type = 'room_booking'
+        AND (user_id = ? OR session_id = ?)
+        AND start_time <= ?
+    `,
+    [userId || 0, sessionId || "", nowValue]
+  );
+
+  if (!rows.length) return [];
+
+  const ids = rows.map((row) => row.cart_item_id);
+  const placeholders = ids.map(() => "?").join(", ");
+  await db.query(
+    `DELETE FROM cart_items WHERE cart_item_id IN (${placeholders})`,
+    ids
+  );
+  return rows.map((row) => row.hold_id).filter(Boolean);
+}
+
 function normalizeDateTime(value) {
   if (!value) return null;
   if (value instanceof Date) {
@@ -145,13 +171,27 @@ function normalizeDateTime(value) {
   return value;
 }
 
+function formatLocalDateTime(value) {
+  if (!value) return null;
+  const dateValue = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(dateValue.getTime())) return value;
+  const year = dateValue.getFullYear();
+  const month = String(dateValue.getMonth() + 1).padStart(2, "0");
+  const day = String(dateValue.getDate()).padStart(2, "0");
+  const hour = String(dateValue.getHours()).padStart(2, "0");
+  const minute = String(dateValue.getMinutes()).padStart(2, "0");
+  const second = String(dateValue.getSeconds()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+}
+
 module.exports = {
   listCartItems,
   migrateSessionCartToUser,
-  findBookingDuplicate,
+  findBookingOverlap,
   addCartItem,
   incrementMenuItem,
   updateCartItemQty,
   deleteCartItem,
   clearCart,
+  removeExpiredRoomBookings,
 };
