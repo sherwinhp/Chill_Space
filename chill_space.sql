@@ -264,6 +264,7 @@ CREATE TABLE `reviews` (
   `rating_food` int NOT NULL DEFAULT '0',
   `rating_service` int NOT NULL DEFAULT '0',
   `comment` text NOT NULL,
+  `admin_reply` text DEFAULT NULL,
   `category` enum('room','food','service') NOT NULL DEFAULT 'room',
   `is_visible` tinyint(1) NOT NULL DEFAULT '1',
   `image_url` varchar(500) DEFAULT NULL,

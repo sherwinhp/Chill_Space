@@ -36,16 +36,41 @@ const fallbackReviews = [
 function normalizeReviews(rows, { allowFallback = false } = {}) {
   if (!rows || !rows.length) return allowFallback ? fallbackReviews : [];
   return rows.map((r) => ({
+    id: r.review_id,
+    userId: r.user_id,
     name: r.user_name || "Anonymous",
     rating: Number(r.rating) || 0,
     ratingFood: Number(r.rating_food) || Number(r.rating) || 0,
     ratingService: Number(r.rating_service) || Number(r.rating) || 0,
     date: r.created_at ? new Date(r.created_at).toISOString().split("T")[0] : "",
     text: r.comment || "",
+    adminReply: r.admin_reply || "",
     room: r.room_name || undefined,
     imageUrl: r.image_url || "",
     category: r.category || "room",
   }));
+}
+
+async function getOwnedReview(req, res, id) {
+  if (!req.session || !req.session.userId) {
+    res.redirect("/login");
+    return null;
+  }
+
+  const [rows] = await Reviews.getById(id);
+  const review = rows && rows[0];
+
+  if (!review) {
+    res.status(404).send("Review not found");
+    return null;
+  }
+
+  if (review.user_id !== req.session.userId) {
+    res.status(403).send("You can only manage your own reviews.");
+    return null;
+  }
+
+  return review;
 }
 
 module.exports = {
@@ -127,9 +152,10 @@ module.exports = {
   editForm: async (req, res) => {
     try {
       const id = req.params.id;
-      const [review] = await Reviews.getById(id);
+      const review = await getOwnedReview(req, res, id);
 
-      res.render("reviews/edit", { review: review[0] });
+      if (!review) return;
+      res.render("reviews/edit", { review });
     } catch (err) {
       console.error(err);
       res.status(500).send("Error loading edit page");
@@ -140,6 +166,8 @@ module.exports = {
   update: async (req, res) => {
     try {
       const id = req.params.id;
+      const review = await getOwnedReview(req, res, id);
+      if (!review) return;
       const { rating, comment, currentImageUrl } = req.body;
       const imageUrl = req.file ? `/uploads/${req.file.filename}` : currentImageUrl || null;
 
@@ -162,6 +190,8 @@ module.exports = {
   delete: async (req, res) => {
     try {
       const id = req.params.id;
+      const review = await getOwnedReview(req, res, id);
+      if (!review) return;
       await Reviews.delete(id);
       res.redirect("/reviews");
     } catch (err) {

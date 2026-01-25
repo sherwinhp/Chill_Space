@@ -68,6 +68,29 @@ const Reviews = {
     );
   },
 
+  updateAdmin: (
+    id,
+    ratingRoom,
+    ratingFood,
+    ratingService,
+    comment,
+    imageUrl,
+    adminReply
+  ) => {
+    return db.query(
+      "UPDATE reviews SET rating = ?, rating_food = ?, rating_service = ?, comment = ?, image_url = ?, admin_reply = ? WHERE review_id = ?",
+      [
+        ratingRoom,
+        ratingFood,
+        ratingService,
+        comment,
+        imageUrl || null,
+        adminReply || null,
+        id,
+      ]
+    );
+  },
+
   setVisibility: (id, isVisible) => {
     return db.query("UPDATE reviews SET is_visible = ? WHERE review_id = ?", [
       isVisible ? 1 : 0,
@@ -91,6 +114,7 @@ const Reviews = {
           r.rating_service,
           r.comment,
           r.image_url,
+          r.admin_reply,
           r.created_at,
           u.name AS user_name
        FROM reviews r
@@ -110,6 +134,7 @@ const Reviews = {
           r.rating_service,
           r.comment,
           r.image_url,
+          r.admin_reply,
           r.created_at,
           u.name AS user_name
        FROM reviews r

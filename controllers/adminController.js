@@ -291,13 +291,14 @@ async function addReview(req, res) {
 }
 
 async function editReview(req, res) {
-  await Reviews.update(
+  await Reviews.updateAdmin(
     req.params.id,
     Number(req.body.rating),
     Number(req.body.rating_food || req.body.rating),
     Number(req.body.rating_service || req.body.rating),
     req.body.comment,
-    req.body.image_url || null
+    req.body.image_url || null,
+    req.body.admin_reply
   );
   if (typeof req.body.is_visible !== "undefined") {
     await Reviews.setVisibility(req.params.id, req.body.is_visible === "1");

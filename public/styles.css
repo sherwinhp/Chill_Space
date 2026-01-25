@@ -893,6 +893,27 @@ body {
   font-size: 14px;
 }
 
+.review-reply {
+  margin-top: 10px;
+  border-left: 3px solid #111;
+  padding-left: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.review-reply strong {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+}
+
+.review-reply p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .review-photo {
   margin-top: 12px;
   border-radius: 14px;
@@ -905,6 +926,21 @@ body {
   height: 180px;
   object-fit: cover;
   display: block;
+}
+
+.review-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.review-actions .btn {
+  font-size: 11px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .event-tabs {
@@ -2839,6 +2875,27 @@ body {
 }
 
 .admin-menu-desc {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.admin-review-reply {
+  margin-top: 10px;
+  border-left: 3px solid #111;
+  padding-left: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.admin-review-reply strong {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+}
+
+.admin-review-reply p {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.5;

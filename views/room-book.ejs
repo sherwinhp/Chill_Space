@@ -132,6 +132,12 @@
                       <span>Service: <strong><%= Number(review.rating_service || 0).toFixed(1) %></strong></span>
                     </div>
                     <p><%= review.comment %></p>
+                    <% if (review.admin_reply) { %>
+                      <div class="review-reply">
+                        <strong>Admin reply</strong>
+                        <p><%= review.admin_reply %></p>
+                      </div>
+                    <% } %>
                     <% if (review.image_url) { %>
                       <div class="room-review-photo">
                         <img src="<%= review.image_url %>" alt="Review photo" />

@@ -74,9 +74,21 @@
                 </div>
             </div>
             <p><%= r.text %></p>
+            <% if (r.adminReply) { %>
+              <div class="review-reply">
+                <strong>Admin reply</strong>
+                <p><%= r.adminReply %></p>
+              </div>
+            <% } %>
             <% if (r.imageUrl) { %>
               <div class="review-photo">
                 <img src="<%= r.imageUrl %>" alt="Review photo from <%= r.name %>" />
+              </div>
+            <% } %>
+            <% if (session && session.userId && r.userId && session.userId === r.userId) { %>
+              <div class="review-actions">
+                <a class="btn ghost" href="/reviews/edit/<%= r.id %>">Edit</a>
+                <a class="btn danger" href="/reviews/delete/<%= r.id %>" onclick="return confirm('Delete this review?')">Delete</a>
               </div>
             <% } %>
           </article>

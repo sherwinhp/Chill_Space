@@ -58,6 +58,12 @@
                     <% if (review.comment) { %>
                       <p class="admin-menu-desc"><%= review.comment %></p>
                     <% } %>
+                    <% if (review.admin_reply) { %>
+                      <div class="admin-review-reply">
+                        <strong>Admin reply</strong>
+                        <p><%= review.admin_reply %></p>
+                      </div>
+                    <% } %>
                     <div class="admin-menu-meta">
                       <span class="admin-menu-pill">Room <%= review.rating %></span>
                       <span class="admin-menu-pill">Food <%= review.rating_food || review.rating %></span>
@@ -79,6 +85,7 @@
                           </select>
                           <input name="image_url" type="text" value="<%= review.image_url || "" %>" placeholder="Image URL" />
                           <textarea name="comment" rows="2" placeholder="Comment"><%= review.comment || "" %></textarea>
+                          <textarea name="admin_reply" rows="2" placeholder="Admin reply"><%= review.admin_reply || "" %></textarea>
                         </div>
                         <div class="admin-menu-edit-actions">
                           <button class="btn" type="submit">Save</button>
