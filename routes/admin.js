@@ -65,6 +65,7 @@ router.post("/reviews/:id/delete", adminController.removeReview);
 
 router.get("/users", adminController.renderUsers);
 router.get("/users/new", adminController.renderUsersCreate);
+router.get("/users/:id/purchases", adminController.renderUserPurchases);
 router.post("/users", adminController.addUser);
 router.post("/users/:id", adminController.editUser);
 router.post("/users/:id/delete", adminController.removeUser);

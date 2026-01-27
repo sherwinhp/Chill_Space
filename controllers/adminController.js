@@ -24,10 +24,12 @@ const {
   createUser,
   updateUser,
   deleteUser,
+  findById,
 } = require("../models/usersModel");
 const {
   listAllTransactionsWithItems,
   getSalesSummary,
+  listTransactionsWithItems,
 } = require("../models/transactionsModel");
 
 async function renderDashboard(req, res) {
@@ -349,7 +351,26 @@ async function removeUser(req, res) {
 
 async function renderPurchases(req, res) {
   const { transactions, itemsByTransaction } = await listAllTransactionsWithItems(100);
-  res.render("admin/purchases", { transactions, itemsByTransaction });
+  res.render("admin/purchases", { transactions, itemsByTransaction, user: null });
+}
+
+async function renderUserPurchases(req, res) {
+  const userId = Number(req.params.id);
+  const user = await findById(userId);
+  if (!user) {
+    return res.status(404).send("User not found");
+  }
+  const { transactions, itemsByTransaction } = await listTransactionsWithItems(userId);
+  const enrichedTransactions = transactions.map((transaction) => ({
+    ...transaction,
+    user_name: user.name,
+    user_email: user.email,
+  }));
+  res.render("admin/purchases", {
+    transactions: enrichedTransactions,
+    itemsByTransaction,
+    user,
+  });
 }
 
 module.exports = {
@@ -389,4 +410,5 @@ module.exports = {
   editUser,
   removeUser,
   renderPurchases,
+  renderUserPurchases,
 };

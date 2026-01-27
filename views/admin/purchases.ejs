@@ -15,16 +15,29 @@
         <section class="section admin-section">
           <div class="section-head split">
             <div>
-              <h2>Purchase History</h2>
-              <p>All user transactions with itemized details.</p>
+              <h2>
+                <%= user ? `Purchase History - ${user.name}` : "Purchase History" %>
+              </h2>
+              <p>
+                <%= user ? `Orders for ${user.email}` : "All user transactions with itemized details." %>
+              </p>
             </div>
-            <a class="btn ghost" href="/admin">Back to dashboard</a>
+            <div class="section-actions">
+              <% if (user) { %>
+                <a class="btn ghost" href="/admin/users">Back to users</a>
+              <% } %>
+              <a class="btn ghost" href="/admin">Back to dashboard</a>
+            </div>
           </div>
 
           <% if (!transactions || !transactions.length) { %>
             <div class="empty-state">
               <h3>No purchases yet.</h3>
-              <p>Transactions will appear here after payments are completed.</p>
+              <p>
+                <%= user
+                  ? "This user has no completed transactions yet."
+                  : "Transactions will appear here after payments are completed." %>
+              </p>
             </div>
           <% } else { %>
             <div class="purchase-grid">
