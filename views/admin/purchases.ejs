@@ -23,6 +23,15 @@
               </p>
             </div>
             <div class="section-actions">
+              <div class="search-field">
+                <input
+                  class="search-input"
+                  type="search"
+                  placeholder="Search purchases"
+                  aria-label="Search purchases"
+                  data-search-input="admin-purchases"
+                />
+              </div>
               <% if (user) { %>
                 <a class="btn ghost" href="/admin/users">Back to users</a>
               <% } %>
@@ -42,7 +51,12 @@
           <% } else { %>
             <div class="purchase-grid">
               <% transactions.forEach(function(transaction) { %>
-                <div class="purchase-card">
+                <% const items = itemsByTransaction[transaction.transaction_id] || []; %>
+                <div
+                  class="purchase-card"
+                  data-search-item="admin-purchases"
+                  data-search-text="<%= [transaction.transaction_id, transaction.status, transaction.provider, transaction.total_amount, transaction.user_name, transaction.user_email, new Date(transaction.created_at).toLocaleString(), items.map((item) => item.item_name).join(' '), items.map((item) => item.details).join(' ')].filter(Boolean).join(' ') %>"
+                >
                   <div class="purchase-head">
                     <div>
                       <h3>Invoice #<%= transaction.transaction_id %></h3>
@@ -61,7 +75,7 @@
                   </div>
 
                   <div class="purchase-items">
-                    <% (itemsByTransaction[transaction.transaction_id] || []).forEach(function(item) { %>
+                    <% items.forEach(function(item) { %>
                       <div class="purchase-item">
                         <div>
                           <strong><%= item.item_name %></strong>
@@ -89,11 +103,16 @@
                 </div>
               <% }) %>
             </div>
+            <div class="empty-state search-empty is-hidden" data-search-empty="admin-purchases">
+              <h3>No purchases match your search.</h3>
+              <p>Try another keyword or clear the search.</p>
+            </div>
           <% } %>
         </section>
       </main>
 
       <%- include("../partials/footer") %>
     </div>
+    <script src="/search.js"></script>
   </body>
 </html>

@@ -21,10 +21,19 @@
 
       <main>
         <section class="section">
-          <div class="section-head">
+          <div class="section-head split">
             <div>
               <h2>Your Bookings</h2>
               <p>Track the rooms you booked and the status of each request.</p>
+            </div>
+            <div class="search-field">
+              <input
+                class="search-input"
+                type="search"
+                placeholder="Search bookings"
+                aria-label="Search bookings"
+                data-search-input="bookings"
+              />
             </div>
           </div>
 
@@ -53,7 +62,12 @@
               <% } else { %>
                 <div class="booking-grid">
                   <% bookings.forEach(function(booking) { %>
-                    <article class="booking-card">
+                    <article
+                      class="booking-card"
+                      data-search-item="bookings"
+                      data-search-scope="upcoming"
+                      data-search-text="<%= [booking.roomName, booking.userName, booking.userEmail, booking.adminStatus, booking.paymentStatus, new Date(booking.startTime).toLocaleString(), new Date(booking.endTime).toLocaleString()].filter(Boolean).join(' ') %>"
+                    >
                       <div class="booking-media">
                         <% if (booking.roomImage) { %>
                           <img src="<%= booking.roomImage %>" alt="<%= booking.roomName %>" />
@@ -102,6 +116,10 @@
                     </article>
                   <% }) %>
                 </div>
+                <div class="empty-state search-empty is-hidden" data-search-empty="bookings" data-search-scope="upcoming">
+                  <h3>No bookings match your search.</h3>
+                  <p>Try another keyword or clear the search.</p>
+                </div>
               <% } %>
             </div>
 
@@ -114,7 +132,12 @@
               <% } else { %>
                 <div class="booking-grid">
                   <% pastBookings.forEach(function(booking) { %>
-                    <article class="booking-card">
+                    <article
+                      class="booking-card"
+                      data-search-item="bookings"
+                      data-search-scope="history"
+                      data-search-text="<%= [booking.roomName, booking.userName, booking.userEmail, booking.adminStatus, booking.paymentStatus, new Date(booking.startTime).toLocaleString(), new Date(booking.endTime).toLocaleString()].filter(Boolean).join(' ') %>"
+                    >
                       <div class="booking-media">
                         <% if (booking.roomImage) { %>
                           <img src="<%= booking.roomImage %>" alt="<%= booking.roomName %>" />
@@ -158,6 +181,10 @@
                     </article>
                   <% }) %>
                 </div>
+                <div class="empty-state search-empty is-hidden" data-search-empty="bookings" data-search-scope="history">
+                  <h3>No bookings match your search.</h3>
+                  <p>Try another keyword or clear the search.</p>
+                </div>
               <% } %>
             </div>
           <% } %>
@@ -182,5 +209,6 @@
         });
       }
     </script>
+    <script src="/search.js"></script>
   </body>
 </html>

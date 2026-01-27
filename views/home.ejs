@@ -21,10 +21,19 @@
 
       <main>
         <section class="section" id="rooms">
-          <div class="section-head">
+          <div class="section-head split">
             <div>
               <h2>Gaming Rooms</h2>
               <p>Find the perfect spot for gaming, Netflix, and hanging out with friends.</p>
+            </div>
+            <div class="search-field">
+              <input
+                class="search-input"
+                type="search"
+                placeholder="Search rooms"
+                aria-label="Search rooms"
+                data-search-input="rooms"
+              />
             </div>
           </div>
 
@@ -36,7 +45,11 @@
           <% } else { %>
             <div class="cards">
               <% rooms.forEach(function(room) { %>
-                <article class="room-card">
+                <article
+                  class="room-card"
+                  data-search-item="rooms"
+                  data-search-text="<%= [room.name, room.subtitle, (room.features || []).join(' '), room.capacity, room.pricePerHour].filter(Boolean).join(' ') %>"
+                >
                   <div class="card-media">
                     <img src="<%= room.image %>" alt="<%= room.name %>" />
                     <% if (room.isAvailable) { %>
@@ -65,6 +78,10 @@
                 </article>
               <% }) %>
             </div>
+            <div class="empty-state wide centered search-empty is-hidden" data-search-empty="rooms">
+              <h3>No rooms match your search.</h3>
+              <p>Try a different keyword or clear the search.</p>
+            </div>
           <% } %>
         </section>
 
@@ -72,5 +89,6 @@
       <%- include("partials/footer") %>
     </div>
     <script src="/script.js"></script>
+    <script src="/search.js"></script>
   </body>
 </html>

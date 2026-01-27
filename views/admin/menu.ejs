@@ -19,6 +19,15 @@
               <p>Create, update, or remove menu items.</p>
             </div>
             <div class="section-actions">
+              <div class="search-field">
+                <input
+                  class="search-input"
+                  type="search"
+                  placeholder="Search menu"
+                  aria-label="Search menu"
+                  data-search-input="admin-menu"
+                />
+              </div>
               <a class="btn ghost" href="/admin">Back to dashboard</a>
               <a class="btn primary admin-cta" href="/admin/menu/new">Create menu</a>
             </div>
@@ -39,7 +48,11 @@
             <% } else { %>
               <% const categoryLabels = { food: "Food", drink: "Beverages", addon: "Room Themes" }; %>
               <% menuItems.forEach(function(item) { %>
-                <article class="admin-menu-card" data-menu-category="<%= item.category %>">
+                <article
+                  class="admin-menu-card"
+                  data-menu-category="<%= item.category %>"
+                  data-search-text="<%= [item.name, item.description, item.category, item.id].filter(Boolean).join(' ') %>"
+                >
                   <div class="admin-menu-media">
                     <% if (item.image) { %>
                       <img src="<%= item.image %>" alt="<%= item.name %>" />
@@ -96,6 +109,10 @@
               <h3>No items in this category.</h3>
               <p>Switch tabs or create a new item.</p>
             </div>
+            <div class="empty-state search-empty is-hidden" data-search-empty="admin-menu">
+              <h3>No menu items match your search.</h3>
+              <p>Try another keyword or clear the search.</p>
+            </div>
           </div>
 
         </section>
@@ -107,22 +124,40 @@
       const menuTabs = document.querySelectorAll("[data-menu-tab]");
       const menuCards = document.querySelectorAll("[data-menu-category]");
       const emptyState = document.querySelector(".admin-menu-empty");
+      const searchInput = document.querySelector('[data-search-input="admin-menu"]');
+      const searchEmpty = document.querySelector('[data-search-empty="admin-menu"]');
 
       function normalize(value) {
         return (value || "").toString().toLowerCase();
       }
 
-      function updateMenuFilter(category) {
-        const target = normalize(category);
+      function getActiveCategory() {
+        const activeTab = document.querySelector("[data-menu-tab].active");
+        if (activeTab && activeTab.dataset.menuTab) {
+          return activeTab.dataset.menuTab;
+        }
+        return menuTabs.length ? menuTabs[0].dataset.menuTab : "food";
+      }
+
+      function updateMenuFilter() {
+        const target = normalize(getActiveCategory());
+        const query = normalize(searchInput ? searchInput.value : "");
+        let categoryCount = 0;
         let visibleCount = 0;
         menuCards.forEach((card) => {
           const cardCategory = normalize(card.dataset.menuCategory);
-          const isMatch = cardCategory === target;
+          const inCategory = cardCategory === target;
+          if (inCategory) categoryCount += 1;
+          const text = normalize(card.dataset.searchText || card.textContent);
+          const isMatch = inCategory && (!query || text.includes(query));
           card.classList.toggle("is-hidden", !isMatch);
           if (isMatch) visibleCount += 1;
         });
         if (emptyState) {
-          emptyState.classList.toggle("is-hidden", visibleCount > 0);
+          emptyState.classList.toggle("is-hidden", categoryCount > 0 || query);
+        }
+        if (searchEmpty) {
+          searchEmpty.classList.toggle("is-hidden", !query || visibleCount > 0);
         }
       }
 
@@ -131,12 +166,15 @@
           tab.addEventListener("click", () => {
             menuTabs.forEach((btn) => btn.classList.remove("active"));
             tab.classList.add("active");
-            updateMenuFilter(tab.dataset.menuTab);
+            updateMenuFilter();
           });
         });
-        updateMenuFilter(menuTabs[0].dataset.menuTab);
+        updateMenuFilter();
       }
 
+      if (searchInput) {
+        searchInput.addEventListener("input", updateMenuFilter);
+      }
     </script>
   </body>
 </html>

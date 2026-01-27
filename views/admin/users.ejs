@@ -19,6 +19,15 @@
               <p>Create, update, or delete users.</p>
             </div>
             <div class="section-actions">
+              <div class="search-field">
+                <input
+                  class="search-input"
+                  type="search"
+                  placeholder="Search users"
+                  aria-label="Search users"
+                  data-search-input="admin-users"
+                />
+              </div>
               <a class="btn ghost" href="/admin">Back to dashboard</a>
               <a class="btn primary admin-cta" href="/admin/users/new">Create user</a>
             </div>
@@ -39,7 +48,11 @@
             <% } else { %>
               <% users.forEach(function(user) { %>
                 <% const status = user.is_active ? user.role : "inactive"; %>
-                <article class="admin-menu-card" data-admin-category="<%= status %>">
+                <article
+                  class="admin-menu-card"
+                  data-admin-category="<%= status %>"
+                  data-search-text="<%= [user.name, user.email, user.role, user.id, user.is_active ? 'active' : 'inactive'].filter(Boolean).join(' ') %>"
+                >
                   <div class="admin-menu-media">
                     <% if (user.avatar_url) { %>
                       <img src="<%= user.avatar_url %>" alt="<%= user.name %>" />
@@ -96,6 +109,10 @@
               <h3>No users in this view.</h3>
               <p>Switch tabs or create a new user.</p>
             </div>
+            <div class="empty-state search-empty is-hidden" data-search-empty="admin-users">
+              <h3>No users match your search.</h3>
+              <p>Try another keyword or clear the search.</p>
+            </div>
           </div>
         </section>
       </main>
@@ -106,22 +123,40 @@
       const adminTabs = document.querySelectorAll("[data-admin-tab]");
       const adminCards = document.querySelectorAll("[data-admin-category]");
       const emptyState = document.querySelector(".admin-menu-empty");
+      const searchInput = document.querySelector('[data-search-input="admin-users"]');
+      const searchEmpty = document.querySelector('[data-search-empty="admin-users"]');
 
       function normalize(value) {
         return (value || "").toString().toLowerCase();
       }
 
-      function updateAdminFilter(category) {
-        const target = normalize(category);
+      function getActiveCategory() {
+        const activeTab = document.querySelector("[data-admin-tab].active");
+        if (activeTab && activeTab.dataset.adminTab) {
+          return activeTab.dataset.adminTab;
+        }
+        return adminTabs.length ? adminTabs[0].dataset.adminTab : "user";
+      }
+
+      function updateAdminFilter() {
+        const target = normalize(getActiveCategory());
+        const query = normalize(searchInput ? searchInput.value : "");
+        let categoryCount = 0;
         let visibleCount = 0;
         adminCards.forEach((card) => {
           const cardCategory = normalize(card.dataset.adminCategory);
-          const isMatch = cardCategory === target;
+          const inCategory = cardCategory === target;
+          if (inCategory) categoryCount += 1;
+          const text = normalize(card.dataset.searchText || card.textContent);
+          const isMatch = inCategory && (!query || text.includes(query));
           card.classList.toggle("is-hidden", !isMatch);
           if (isMatch) visibleCount += 1;
         });
         if (emptyState) {
-          emptyState.classList.toggle("is-hidden", visibleCount > 0);
+          emptyState.classList.toggle("is-hidden", categoryCount > 0 || query);
+        }
+        if (searchEmpty) {
+          searchEmpty.classList.toggle("is-hidden", !query || visibleCount > 0);
         }
       }
 
@@ -130,10 +165,14 @@
           tab.addEventListener("click", () => {
             adminTabs.forEach((btn) => btn.classList.remove("active"));
             tab.classList.add("active");
-            updateAdminFilter(tab.dataset.adminTab);
+            updateAdminFilter();
           });
         });
-        updateAdminFilter(adminTabs[0].dataset.adminTab);
+        updateAdminFilter();
+      }
+
+      if (searchInput) {
+        searchInput.addEventListener("input", updateAdminFilter);
       }
     </script>
   </body>

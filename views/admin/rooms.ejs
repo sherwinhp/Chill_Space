@@ -19,14 +19,27 @@
               <p>Create, update, or remove rooms.</p>
             </div>
             <div class="admin-head-actions">
-            <a class="btn" href="/admin">Back to dashboard</a>
+              <div class="search-field">
+                <input
+                  class="search-input"
+                  type="search"
+                  placeholder="Search rooms"
+                  aria-label="Search rooms"
+                  data-search-input="admin-rooms"
+                />
+              </div>
+              <a class="btn" href="/admin">Back to dashboard</a>
               <a class="btn primary" href="/admin/rooms/new">Create Room</a>
             </div>
           </div>
 
           <div class="admin-cards">
             <% rooms.forEach(function(room) { %>
-              <div class="admin-room-card">
+              <div
+                class="admin-room-card"
+                data-search-item="admin-rooms"
+                data-search-text="<%= [room.name, room.subtitle, room.description, room.capacity, room.pricePerHour, room.isAvailable ? 'available' : 'unavailable', (room.features || []).join(' ')].filter(Boolean).join(' ') %>"
+              >
                 <div class="admin-room-media">
                   <% if (room.image) { %>
                     <img src="<%= room.image %>" alt="<%= room.name %>" />
@@ -76,11 +89,16 @@
               </div>
             <% }) %>
           </div>
+          <div class="empty-state search-empty is-hidden" data-search-empty="admin-rooms">
+            <h3>No rooms match your search.</h3>
+            <p>Try another keyword or clear the search.</p>
+          </div>
         </section>
       </main>
 
       <%- include("../partials/footer") %>
     </div>
+    <script src="/search.js"></script>
   </body>
 </html>
 

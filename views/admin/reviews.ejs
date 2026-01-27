@@ -19,6 +19,15 @@
               <p>Create, update, or delete reviews.</p>
             </div>
             <div class="section-actions">
+              <div class="search-field">
+                <input
+                  class="search-input"
+                  type="search"
+                  placeholder="Search reviews"
+                  aria-label="Search reviews"
+                  data-search-input="admin-reviews"
+                />
+              </div>
               <a class="btn ghost" href="/admin">Back to dashboard</a>
               <a class="btn primary admin-cta" href="/admin/reviews/new">Create review</a>
             </div>
@@ -37,7 +46,11 @@
               </div>
             <% } else { %>
               <% reviews.forEach(function(review) { %>
-                <article class="admin-menu-card" data-admin-category="<%= review.is_visible ? 'visible' : 'hidden' %>">
+                <article
+                  class="admin-menu-card"
+                  data-admin-category="<%= review.is_visible ? 'visible' : 'hidden' %>"
+                  data-search-text="<%= [review.user_name, review.room_name, review.comment, review.admin_reply, review.rating, review.rating_food, review.rating_service].filter(Boolean).join(' ') %>"
+                >
                   <div class="admin-menu-media">
                     <% if (review.image_url) { %>
                       <img src="<%= review.image_url %>" alt="Review image" />
@@ -101,6 +114,10 @@
               <h3>No reviews in this view.</h3>
               <p>Switch tabs to see more reviews.</p>
             </div>
+            <div class="empty-state search-empty is-hidden" data-search-empty="admin-reviews">
+              <h3>No reviews match your search.</h3>
+              <p>Try another keyword or clear the search.</p>
+            </div>
           </div>
         </section>
       </main>
@@ -111,22 +128,40 @@
       const adminTabs = document.querySelectorAll("[data-admin-tab]");
       const adminCards = document.querySelectorAll("[data-admin-category]");
       const emptyState = document.querySelector(".admin-menu-empty");
+      const searchInput = document.querySelector('[data-search-input="admin-reviews"]');
+      const searchEmpty = document.querySelector('[data-search-empty="admin-reviews"]');
 
       function normalize(value) {
         return (value || "").toString().toLowerCase();
       }
 
-      function updateAdminFilter(category) {
-        const target = normalize(category);
+      function getActiveCategory() {
+        const activeTab = document.querySelector("[data-admin-tab].active");
+        if (activeTab && activeTab.dataset.adminTab) {
+          return activeTab.dataset.adminTab;
+        }
+        return adminTabs.length ? adminTabs[0].dataset.adminTab : "visible";
+      }
+
+      function updateAdminFilter() {
+        const target = normalize(getActiveCategory());
+        const query = normalize(searchInput ? searchInput.value : "");
+        let categoryCount = 0;
         let visibleCount = 0;
         adminCards.forEach((card) => {
           const cardCategory = normalize(card.dataset.adminCategory);
-          const isMatch = cardCategory === target;
+          const inCategory = cardCategory === target;
+          if (inCategory) categoryCount += 1;
+          const text = normalize(card.dataset.searchText || card.textContent);
+          const isMatch = inCategory && (!query || text.includes(query));
           card.classList.toggle("is-hidden", !isMatch);
           if (isMatch) visibleCount += 1;
         });
         if (emptyState) {
-          emptyState.classList.toggle("is-hidden", visibleCount > 0);
+          emptyState.classList.toggle("is-hidden", categoryCount > 0 || query);
+        }
+        if (searchEmpty) {
+          searchEmpty.classList.toggle("is-hidden", !query || visibleCount > 0);
         }
       }
 
@@ -135,10 +170,14 @@
           tab.addEventListener("click", () => {
             adminTabs.forEach((btn) => btn.classList.remove("active"));
             tab.classList.add("active");
-            updateAdminFilter(tab.dataset.adminTab);
+            updateAdminFilter();
           });
         });
-        updateAdminFilter(adminTabs[0].dataset.adminTab);
+        updateAdminFilter();
+      }
+
+      if (searchInput) {
+        searchInput.addEventListener("input", updateAdminFilter);
       }
     </script>
   </body>

@@ -18,7 +18,18 @@
               <h2>Manage Bookings</h2>
               <p>Create, update, approve, or delete bookings.</p>
             </div>
-            <a class="btn" href="/admin">Back to dashboard</a>
+            <div class="section-actions">
+              <div class="search-field">
+                <input
+                  class="search-input"
+                  type="search"
+                  placeholder="Search bookings"
+                  aria-label="Search bookings"
+                  data-search-input="admin-bookings"
+                />
+              </div>
+              <a class="btn" href="/admin">Back to dashboard</a>
+            </div>
           </div>
 
           <% if (!bookings || !bookings.length) { %>
@@ -29,7 +40,13 @@
           <% } else { %>
             <div class="admin-booking-grid">
               <% bookings.forEach(function(booking) { %>
-                <form class="admin-booking-card" action="/admin/bookings/<%= booking.id %>" method="POST">
+                <form
+                  class="admin-booking-card"
+                  action="/admin/bookings/<%= booking.id %>"
+                  method="POST"
+                  data-search-item="admin-bookings"
+                  data-search-text="<%= [booking.roomName, booking.userName, booking.userEmail, booking.adminStatus, booking.paymentStatus, new Date(booking.startTime).toLocaleString(), new Date(booking.endTime).toLocaleString()].filter(Boolean).join(' ') %>"
+                >
                   <div class="admin-booking-media">
                     <% if (booking.roomImage) { %>
                       <img src="<%= booking.roomImage %>" alt="<%= booking.roomName %>" />
@@ -99,12 +116,17 @@
                 </form>
               <% }) %>
             </div>
+            <div class="empty-state search-empty is-hidden" data-search-empty="admin-bookings">
+              <h3>No bookings match your search.</h3>
+              <p>Try another keyword or clear the search.</p>
+            </div>
           <% } %>
         </section>
       </main>
 
       <%- include("../partials/footer") %>
     </div>
+    <script src="/search.js"></script>
   </body>
 </html>
 

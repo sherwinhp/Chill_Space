@@ -21,10 +21,19 @@
 
       <main>
         <section class="section">
-          <div class="section-head">
+          <div class="section-head split">
             <div>
               <h2>Food, Drinks &amp; Themes</h2>
               <p>Enhance your gaming experience with snacks and themes.</p>
+            </div>
+            <div class="search-field">
+              <input
+                class="search-input"
+                type="search"
+                placeholder="Search menu"
+                aria-label="Search menu"
+                data-search-input="menu"
+              />
             </div>
           </div>
 
@@ -48,6 +57,7 @@
                   data-id="<%= item.id %>"
                   data-name="<%= item.name %>"
                   data-price="<%= item.price %>"
+                  data-search-text="<%= [item.name, item.description, item.category].filter(Boolean).join(' ') %>"
                 >
                   <div class="menu-head">
                     <% if (item.imageUrl) { %>

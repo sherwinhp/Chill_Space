@@ -9,17 +9,32 @@
           <h2>User Reviews</h2>
           <p>Read feedback about our rooms, food, and service.</p>
         </div>
-        <% if (session && session.userId) { %>
-          <a href="/reviews/add" class="btn primary reviews-cta">Write a Review</a>
-        <% } else { %>
-          <a href="/login" class="btn primary reviews-cta">Login to Write a Review</a>
-        <% } %>
+        <div class="reviews-actions">
+          <div class="search-field">
+            <input
+              class="search-input"
+              type="search"
+              placeholder="Search reviews"
+              aria-label="Search reviews"
+              data-search-input="reviews"
+            />
+          </div>
+          <% if (session && session.userId) { %>
+            <a href="/reviews/add" class="btn primary reviews-cta">Write a Review</a>
+          <% } else { %>
+            <a href="/login" class="btn primary reviews-cta">Login to Write a Review</a>
+          <% } %>
+        </div>
       </div>
 
       <% if (reviews && reviews.length > 0) { %>
         <div class="reviews-grid">
           <% reviews.forEach(r => { %>
-            <article class="review-card">
+            <article
+              class="review-card"
+              data-search-item="reviews"
+              data-search-text="<%= [r.name, r.room, r.text, r.adminReply, r.date].filter(Boolean).join(' ') %>"
+            >
               <div class="review-top">
                 <div class="avatar">
                   <%= r.name
@@ -94,6 +109,10 @@
           </article>
         <% }) %>
       </div>
+      <div class="empty-state search-empty is-hidden" data-search-empty="reviews">
+        <h3>No reviews match your search.</h3>
+        <p>Try a different keyword or clear the search.</p>
+      </div>
       <% } else { %>
         <div class="empty-state">
           <h3>No reviews yet.</h3>
@@ -103,5 +122,6 @@
     </section>
   </main>
 
+  <script src="/search.js"></script>
   <%- include("../partials/footer") %>
 </div>
