@@ -29,9 +29,9 @@
           </div>
 
           <div class="menu-tabs">
-            <button class="menu-tab active" data-category="Food">Food</button>
-            <button class="menu-tab" data-category="Beverages">Beverages</button>
-            <button class="menu-tab" data-category="Room Themes">Room Themes</button>
+            <button class="menu-tab active" data-category="food">Food</button>
+            <button class="menu-tab" data-category="drink">Beverages</button>
+            <button class="menu-tab" data-category="addon">Room Themes</button>
           </div>
 
           <% if (!menuItems || !menuItems.length) { %>
@@ -44,7 +44,7 @@
               <% menuItems.forEach(function(item) { %>
                 <article
                   class="menu-card"
-                  data-category="<%= item.displayCategory %>"
+                  data-category="<%= item.category %>"
                   data-id="<%= item.id %>"
                   data-name="<%= item.name %>"
                   data-price="<%= item.price %>"
@@ -75,6 +75,10 @@
                   </div>
                 </article>
               <% }) %>
+            </div>
+            <div class="empty-state menu-empty is-hidden">
+              <h3>No items in this category.</h3>
+              <p>Try another tab to see available items.</p>
             </div>
           <% } %>
         </section>

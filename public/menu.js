@@ -1,5 +1,7 @@
 const menuTabs = document.querySelectorAll(".menu-tab");
 const menuGrid = document.querySelector("[data-menu-grid]");
+const emptyState = document.querySelector(".menu-empty");
+const normalizeCategory = (value) => (value || "").toString().trim().toLowerCase();
 function addToCart(payload) {
   fetch("/cart/items", {
     method: "POST",
@@ -40,19 +42,33 @@ menuTabs.forEach((tab) => {
   tab.addEventListener("click", () => {
     menuTabs.forEach((btn) => btn.classList.remove("active"));
     tab.classList.add("active");
-    const category = tab.dataset.category;
+    const category = normalizeCategory(tab.dataset.category);
     if (!menuGrid) return;
+    let visibleCount = 0;
     menuGrid.querySelectorAll(".menu-card").forEach((card) => {
-      card.hidden = card.dataset.category !== category;
+      const cardCategory = normalizeCategory(card.dataset.category);
+      const isMatch = cardCategory === category;
+      card.hidden = !isMatch;
+      if (isMatch) visibleCount += 1;
     });
+    if (emptyState) {
+      emptyState.classList.toggle("is-hidden", visibleCount > 0);
+    }
   });
 });
 
 if (menuGrid) {
-  const defaultCategory = "Food";
+  const defaultCategory = "food";
+  let visibleCount = 0;
   menuGrid.querySelectorAll(".menu-card").forEach((card) => {
-    card.hidden = card.dataset.category !== defaultCategory;
+    const cardCategory = normalizeCategory(card.dataset.category);
+    const isMatch = cardCategory === defaultCategory;
+    card.hidden = !isMatch;
+    if (isMatch) visibleCount += 1;
   });
+  if (emptyState) {
+    emptyState.classList.toggle("is-hidden", visibleCount > 0);
+  }
 }
 
 window.dispatchEvent(new Event("cart:updated"));
