@@ -5,6 +5,57 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Register</title>
   <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .password-strength {
+      margin-top: 0.55rem;
+    }
+
+    .password-strength-meter {
+      height: 8px;
+      background: #e4e7f0;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 0.5rem;
+    }
+
+    .password-strength-fill {
+      height: 100%;
+      width: 0%;
+      background: #ef4444;
+      transition: width 0.2s ease, background 0.2s ease;
+    }
+
+    .password-strength-text {
+      margin: 0 0 0.45rem;
+      font-size: 0.86rem;
+      color: #5e6678;
+    }
+
+    .password-rules {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 0.2rem;
+      font-size: 0.82rem;
+      color: #6f7688;
+    }
+
+    .password-rules li::before {
+      content: "\2717";
+      color: #d9363e;
+      margin-right: 0.4rem;
+    }
+
+    .password-rules li.ok {
+      color: #156f3f;
+    }
+
+    .password-rules li.ok::before {
+      content: "\2713";
+      color: #1a8f50;
+    }
+  </style>
 </head>
 <body>
   <div class="page">
@@ -41,7 +92,17 @@
                 <input id="register-password" type="password" name="password" placeholder="Enter password" required />
                 <button class="password-toggle" type="button" data-target="register-password">Show</button>
               </div>
-              <small class="field-hint">Use at least 8 characters with uppercase and special character.</small>
+              <div class="password-strength" aria-live="polite">
+                <div class="password-strength-meter">
+                  <div id="password-strength-fill" class="password-strength-fill"></div>
+                </div>
+                <p id="password-strength-text" class="password-strength-text">Strength: Too weak</p>
+                <ul class="password-rules">
+                  <li id="rule-length">At least 8 characters</li>
+                  <li id="rule-uppercase">At least 1 uppercase letter</li>
+                  <li id="rule-special">At least 1 special character</li>
+                </ul>
+              </div>
             </label>
             <label>
               Confirm password
@@ -84,11 +145,60 @@
     });
 
     const statusEl = document.getElementById('register-status');
+    const passwordInput = document.getElementById('register-password');
+    const confirmPasswordInput = document.getElementById('register-confirm-password');
+    const strengthFill = document.getElementById('password-strength-fill');
+    const strengthText = document.getElementById('password-strength-text');
+    const rules = {
+      length: document.getElementById('rule-length'),
+      uppercase: document.getElementById('rule-uppercase'),
+      special: document.getElementById('rule-special'),
+    };
+
+    function evaluatePasswordStrength(password) {
+      const checks = {
+        length: password.length >= 8,
+        uppercase: /[A-Z]/.test(password),
+        special: /[^\w\s]/.test(password),
+      };
+      const passed = Object.values(checks).filter(Boolean).length;
+
+      Object.entries(checks).forEach(([key, ok]) => {
+        rules[key].classList.toggle('ok', ok);
+      });
+
+      const strengthLevels = ['Too weak', 'Weak', 'Medium', 'Strong'];
+      const strengthColors = ['#ef4444', '#f97316', '#eab308', '#16a34a'];
+      strengthFill.style.width = `${(passed / 3) * 100}%`;
+      strengthFill.style.background = strengthColors[passed];
+      strengthText.textContent = `Strength: ${strengthLevels[passed]}`;
+
+      return checks;
+    }
+
+    passwordInput.addEventListener('input', () => {
+      evaluatePasswordStrength(passwordInput.value);
+    });
+
+    evaluatePasswordStrength(passwordInput.value);
+
     document.getElementById('register-form').addEventListener('submit', async (event) => {
       event.preventDefault();
       statusEl.textContent = '';
       const formData = new FormData(event.target);
       const payload = Object.fromEntries(formData.entries());
+      const checks = evaluatePasswordStrength(payload.password || '');
+      if (!checks.length || !checks.uppercase || !checks.special) {
+        statusEl.style.color = 'red';
+        statusEl.textContent = 'Please create a stronger password before registering.';
+        return;
+      }
+      if ((payload.password || '') !== (payload.confirm_password || '')) {
+        statusEl.style.color = 'red';
+        statusEl.textContent = 'Passwords do not match.';
+        confirmPasswordInput.focus();
+        return;
+      }
       try {
         const res = await fetch('/auth/register', {
           method: 'POST',

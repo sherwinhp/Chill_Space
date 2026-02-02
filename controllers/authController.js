@@ -1,4 +1,9 @@
+const crypto = require("crypto");
 const { findByEmail, createUser, findById } = require("../models/usersModel");
+
+const mock2faChallenges = {};
+const MOCK_2FA_CODE = "123456";
+const MOCK_2FA_EXPIRY_MS = 5 * 60 * 1000;
 
 async function register(req, res) {
   const { name, email, password, confirm_password, address, contact_number } = req.body;
@@ -43,6 +48,43 @@ async function login(req, res) {
   }
   if (!user.is_active) {
     return res.status(403).json({ error: "Account is deactivated." });
+  }
+  if (user.role === "user") {
+    const challengeId = crypto.randomBytes(16).toString("hex");
+    mock2faChallenges[challengeId] = {
+      userId: user.id,
+      expiresAt: Date.now() + MOCK_2FA_EXPIRY_MS,
+    };
+    return res.json({
+      requires2fa: true,
+      challengeId,
+      message: "Mock 2FA enabled. Use code 123456 to continue.",
+    });
+  }
+  if (req.setSession) {
+    req.setSession(user);
+  }
+  res.json({ user: sanitize(user) });
+}
+
+async function verifyTwoFactor(req, res) {
+  const { challengeId, code } = req.body;
+  const challenge = mock2faChallenges[challengeId];
+  if (!challenge) {
+    return res.status(400).json({ error: "2FA challenge not found. Please log in again." });
+  }
+  if (challenge.expiresAt < Date.now()) {
+    delete mock2faChallenges[challengeId];
+    return res.status(400).json({ error: "2FA challenge expired. Please log in again." });
+  }
+  if (String(code || "").trim() !== MOCK_2FA_CODE) {
+    return res.status(401).json({ error: "Invalid verification code." });
+  }
+
+  const user = await findById(challenge.userId);
+  delete mock2faChallenges[challengeId];
+  if (!user || !user.is_active) {
+    return res.status(401).json({ error: "Unable to complete login." });
   }
   if (req.setSession) {
     req.setSession(user);
@@ -95,6 +137,7 @@ function sanitize(user) {
 module.exports = {
   register,
   login,
+  verifyTwoFactor,
   logout,
   renderLoginPage,
   renderRegisterPage,

@@ -1,20 +1,48 @@
 const db = require("../db");
 
+function pick(row, keys, fallback = null) {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(row, key) && row[key] != null) {
+      return row[key];
+    }
+  }
+  return fallback;
+}
+
 function toMenuItem(row) {
+  const rawCategory = String(pick(row, ["category", "type"], "food")).toLowerCase();
+  const category = ["food", "drink", "addon"].includes(rawCategory) ? rawCategory : "food";
   return {
-    id: row.item_id,
-    name: row.name,
-    category: row.category,
-    description: row.description || "",
-    price: Number(row.price),
-    image: row.image_url || "",
-    isAvailable: Boolean(row.is_available),
+    id: Number(pick(row, ["item_id", "product_id", "id"], 0)),
+    name: pick(row, ["name", "product_name", "title"], ""),
+    category,
+    description: pick(row, ["description", "product_description"], ""),
+    price: Number(pick(row, ["price", "product_price"], 0)),
+    image: pick(row, ["image_url", "image", "product_image"], ""),
+    isAvailable: Boolean(pick(row, ["is_available", "available", "isAvailable"], 1)),
   };
 }
 
 async function listMenuItems() {
-  const rows = await db.query("SELECT * FROM menu_items ORDER BY item_id ASC");
-  return rows.map(toMenuItem);
+  try {
+    const rows = await db.query("SELECT * FROM menu_items ORDER BY item_id ASC");
+    return rows.map(toMenuItem);
+  } catch (error) {
+    if (error && error.code !== "ER_NO_SUCH_TABLE") {
+      throw error;
+    }
+    try {
+      const legacyRows = await db.query("SELECT * FROM products");
+      return legacyRows
+        .map(toMenuItem)
+        .sort((a, b) => Number(a.id || 0) - Number(b.id || 0));
+    } catch (legacyError) {
+      if (legacyError && legacyError.code === "ER_NO_SUCH_TABLE") {
+        return [];
+      }
+      throw legacyError;
+    }
+  }
 }
 
 async function createMenuItem(payload) {

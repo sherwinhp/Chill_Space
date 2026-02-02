@@ -5,6 +5,58 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Login</title>
   <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(11, 13, 19, 0.65);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      padding: 1rem;
+    }
+
+    .modal-backdrop.active {
+      display: flex;
+    }
+
+    .modal-card {
+      width: min(420px, 100%);
+      background: #ffffff;
+      border-radius: 1rem;
+      padding: 1.25rem;
+      box-shadow: 0 16px 45px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-card h3 {
+      margin: 0 0 0.5rem;
+      color: #13151d;
+    }
+
+    .modal-card p {
+      margin: 0 0 1rem;
+      color: #4d5363;
+    }
+
+    .modal-card input {
+      width: 100%;
+      padding: 0.65rem 0.75rem;
+      border-radius: 0.65rem;
+      border: 1px solid #cfd5e5;
+      font-size: 1rem;
+      letter-spacing: 0.15rem;
+      text-align: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .modal-status {
+      min-height: 1.3rem;
+      margin: 0;
+      font-size: 0.9rem;
+      color: #be123c;
+    }
+  </style>
 </head>
 <body>
   <div class="page">
@@ -52,6 +104,18 @@
     <%- include("partials/footer") %>
   </div>
 
+  <div id="mock-2fa-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="mock-2fa-title">
+    <div class="modal-card">
+      <h3 id="mock-2fa-title">Verify your login</h3>
+      <p>Enter your mock 2FA code to continue. Demo code: <strong>123456</strong>.</p>
+      <form id="mock-2fa-form">
+        <input id="mock-2fa-code" name="code" type="text" placeholder="6-digit code" maxlength="6" pattern="\d{6}" required />
+        <button class="btn primary full" type="submit">Verify code</button>
+      </form>
+      <p id="mock-2fa-status" class="modal-status"></p>
+    </div>
+  </div>
+
   <script>
     document.querySelectorAll('.password-toggle').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -64,8 +128,31 @@
     });
 
     const statusEl = document.getElementById('login-status');
+    const twoFaModal = document.getElementById('mock-2fa-modal');
+    const twoFaForm = document.getElementById('mock-2fa-form');
+    const twoFaCode = document.getElementById('mock-2fa-code');
+    const twoFaStatus = document.getElementById('mock-2fa-status');
     const params = new URLSearchParams(window.location.search);
     const redirectTo = params.get('redirect') || '/';
+    let pendingChallengeId = null;
+
+    function openTwoFaModal() {
+      twoFaModal.classList.add('active');
+      twoFaStatus.textContent = '';
+      twoFaCode.value = '';
+      twoFaCode.focus();
+    }
+
+    function closeTwoFaModal() {
+      twoFaModal.classList.remove('active');
+    }
+
+    twoFaModal.addEventListener('click', (event) => {
+      if (event.target === twoFaModal) {
+        closeTwoFaModal();
+      }
+    });
+
     if (params.get('reason') === 'checkout') {
       statusEl.style.color = '#22242c';
       statusEl.textContent = 'Please log in to continue checkout.';
@@ -83,12 +170,46 @@
         });
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || 'Login failed');
+        if (body.requires2fa && body.challengeId) {
+          pendingChallengeId = body.challengeId;
+          statusEl.style.color = '#22242c';
+          statusEl.textContent = body.message || 'Enter your verification code to continue.';
+          openTwoFaModal();
+          return;
+        }
         statusEl.style.color = 'green';
         statusEl.textContent = 'Logged in! Redirecting...';
         window.location.href = redirectTo;
       } catch (err) {
         statusEl.style.color = 'red';
         statusEl.textContent = err.message;
+      }
+    });
+
+    twoFaForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!pendingChallengeId) {
+        twoFaStatus.textContent = 'Session expired. Please log in again.';
+        return;
+      }
+
+      try {
+        const res = await fetch('/auth/verify-2fa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            challengeId: pendingChallengeId,
+            code: twoFaCode.value.trim(),
+          }),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || 'Verification failed');
+        twoFaStatus.style.color = 'green';
+        twoFaStatus.textContent = 'Verification successful. Redirecting...';
+        window.location.href = redirectTo;
+      } catch (err) {
+        twoFaStatus.style.color = '#be123c';
+        twoFaStatus.textContent = err.message;
       }
     });
   </script>

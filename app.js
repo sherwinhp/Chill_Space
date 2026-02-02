@@ -77,6 +77,8 @@ app.post("/payments/paypal/create", express.json(), paymentsController.createPay
 app.post("/api/paypal/create-order", express.json(), paymentsController.createPaypalButtonOrder);
 app.post("/api/paypal/capture-order", express.json(), paymentsController.capturePaypalButtonOrder);
 app.get("/menu", menuController.renderMenu);
+app.get("/products", menuController.getMenu);
+app.get("/api/products", menuController.getMenu);
 app.get("/events", eventsPageController.renderEvents);
 app.get("/cart", (req, res) => res.render("cart"));
 app.get("/checkout", (req, res) => {
@@ -93,6 +95,7 @@ app.get("/login", authController.renderLoginPage);
 app.get("/register", authController.renderRegisterPage);
 app.get("/auth/me", authController.me);
 app.post("/auth/login", authController.login);
+app.post("/auth/verify-2fa", authController.verifyTwoFactor);
 app.post("/auth/register", authController.register);
 app.post("/auth/logout", authController.logout);
 app.use("/reviews", reviewsRouter);

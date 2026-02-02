@@ -54,8 +54,13 @@ async function renderMenu(req, res) {
 }
 
 async function getMenu(req, res) {
-  const items = await listMenuItems();
-  res.json(items);
+  try {
+    const items = await listMenuItems();
+    res.json(items);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error retrieving products" });
+  }
 }
 
 module.exports = {
