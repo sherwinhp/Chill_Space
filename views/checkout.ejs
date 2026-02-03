@@ -32,7 +32,7 @@
 
           <div class="payment-layout">
             <div class="payment-column">
-              <div class="payment-card">
+              <div class="payment-card" data-wallet-balance-cents="<%= Number(walletBalance || 0) %>">
                 <div class="payment-block">
                   <h3>Payment options</h3>
                   <label class="payment-pill nets">
@@ -43,6 +43,11 @@
                   <label class="payment-pill paynow is-disabled">
                     <input type="radio" name="paymentType" value="paynow" disabled />
                     <span class="pill-text">PayNow (coming soon)</span>
+                    <span class="pill-indicator"></span>
+                  </label>
+                  <label class="payment-pill wallet">
+                    <input type="radio" name="paymentType" value="wallet" />
+                    <span class="pill-text">Pay with Wallet (Balance: $<%= (Number(walletBalance || 0) / 100).toFixed(2) %>)</span>
                     <span class="pill-indicator"></span>
                   </label>
                 </div>

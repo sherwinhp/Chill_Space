@@ -10,8 +10,9 @@ const cartController = require("./controllers/cartController");
 const authController = require("./controllers/authController");
 const paymentsController = require("./controllers/paymentsController");
 const purchasesController = require("./controllers/purchasesController");
+const walletController = require("./controllers/walletController");
 const reviewsRouter = require("./routes/reviews");
-const { sessionMiddleware, requireAdmin } = require("./middleware");
+const { sessionMiddleware, requireAdmin, attachWalletBalance } = require("./middleware");
 const profileController = require("./controllers/profileController");
 const adminRouter = require("./routes/admin");
 
@@ -49,6 +50,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.static(path.join(__dirname, "public")));
+app.use(attachWalletBalance);
 
 app.use((req, res, next) => {
   if (req.session && req.session.role === "admin") {
@@ -76,10 +78,14 @@ app.delete("/cart/clear", cartController.clear);
 app.post("/payments/paypal/create", express.json(), paymentsController.createPaypalOrder);
 app.post("/api/paypal/create-order", express.json(), paymentsController.createPaypalButtonOrder);
 app.post("/api/paypal/capture-order", express.json(), paymentsController.capturePaypalButtonOrder);
+app.post("/payments/wallet/pay", express.json(), paymentsController.payCheckoutWithWallet);
 app.get("/menu", menuController.renderMenu);
 app.get("/products", menuController.getMenu);
 app.get("/api/products", menuController.getMenu);
 app.get("/events", eventsPageController.renderEvents);
+app.get("/wallet", walletController.renderWallet);
+app.post("/wallet/topup/paypal/create", express.json(), walletController.createPaypalTopup);
+app.post("/wallet/topup/paypal/capture", express.json(), walletController.capturePaypalTopup);
 app.get("/cart", (req, res) => res.render("cart"));
 app.get("/checkout", (req, res) => {
   if (!req.session || !req.session.userId) {
@@ -93,9 +99,13 @@ app.get("/profile", profileController.renderProfile);
 app.post("/profile", uploadImage.single("avatar"), profileController.updateProfile);
 app.get("/login", authController.renderLoginPage);
 app.get("/register", authController.renderRegisterPage);
+app.get("/forgot-password", authController.renderForgotPasswordPage);
+app.get("/reset-password", authController.renderResetPasswordPage);
 app.get("/auth/me", authController.me);
 app.post("/auth/login", authController.login);
 app.post("/auth/verify-2fa", authController.verifyTwoFactor);
+app.post("/auth/forgot-password", authController.forgotPassword);
+app.post("/auth/reset-password", authController.resetPassword);
 app.post("/auth/register", authController.register);
 app.post("/auth/logout", authController.logout);
 app.use("/reviews", reviewsRouter);

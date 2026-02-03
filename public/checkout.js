@@ -3,7 +3,11 @@ const checkoutTotal = document.querySelector("[data-checkout-total]");
 const checkoutCount = document.querySelector("[data-checkout-count]");
 const confirmPaymentButton = document.querySelector("[data-confirm-payment]");
 const paypalContainer = document.querySelector("#paypal-button-container");
+const paymentCard = document.querySelector("[data-wallet-balance-cents]");
+const walletOptionInput = document.querySelector('input[name="paymentType"][value="wallet"]');
+let walletBalanceCents = paymentCard ? Number(paymentCard.dataset.walletBalanceCents || 0) : 0;
 let paypalButtonsRendered = false;
+let currentTotalCents = 0;
 
 function fetchCart() {
   return fetch("/cart/items")
@@ -33,6 +37,14 @@ function renderCheckout(items) {
   if (!items.length) {
     checkoutItems.innerHTML = '<p class="empty-note">No items yet.</p>';
     checkoutTotal.textContent = "$0.00";
+    currentTotalCents = 0;
+    if (walletOptionInput) {
+      walletOptionInput.disabled = true;
+      const walletLabel = walletOptionInput.closest("label");
+      if (walletLabel) {
+        walletLabel.classList.add("is-disabled");
+      }
+    }
     if (checkoutCount) {
       checkoutCount.textContent = "0";
     }
@@ -104,9 +116,18 @@ function renderCheckout(items) {
   });
 
   const total = items.reduce((sum, item) => sum + Number(item.price) * Number(item.qty || 1), 0);
+  currentTotalCents = Math.round(total * 100);
   checkoutTotal.textContent = `$${total.toFixed(2)}`;
   if (checkoutCount) {
     checkoutCount.textContent = `${itemCount}`;
+  }
+  if (walletOptionInput) {
+    const enough = walletBalanceCents >= currentTotalCents && currentTotalCents > 0;
+    walletOptionInput.disabled = !enough;
+    const walletLabel = walletOptionInput.closest("label");
+    if (walletLabel) {
+      walletLabel.classList.toggle("is-disabled", !enough);
+    }
   }
   renderPaypalButtons(total);
 }
@@ -172,11 +193,29 @@ function renderPaypalButtons(total) {
 }
 
 if (confirmPaymentButton) {
-  confirmPaymentButton.addEventListener("click", () => {
+  confirmPaymentButton.addEventListener("click", async () => {
     const selected = document.querySelector(
       "input[name='paymentType']:checked"
     );
     const type = selected ? selected.value : "card";
     if (type === "paypal") return;
+    if (type === "wallet") {
+      try {
+        const response = await fetch("/payments/wallet/pay", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        const body = await response.json();
+        if (!response.ok || !body.success) {
+          throw new Error(body.error || "Wallet payment failed.");
+        }
+        if (Number.isFinite(Number(body.balanceCents))) {
+          walletBalanceCents = Number(body.balanceCents);
+        }
+        window.location.href = `/invoice/${body.transactionId}`;
+      } catch (error) {
+        alert(error.message || "Wallet payment failed.");
+      }
+    }
   });
 }

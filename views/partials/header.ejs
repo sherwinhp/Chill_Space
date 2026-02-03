@@ -13,6 +13,8 @@
 <% const eventsHref = typeof eventsLink !== "undefined" ? eventsLink : "/events"; %>
 <% const profileHref = typeof profileLink !== "undefined" ? profileLink : "/profile"; %>
 <% const hideTabsSafe = typeof hideTabs !== "undefined" ? hideTabs : false; %>
+<% const walletBalanceCents = Number(typeof walletBalance !== "undefined" ? walletBalance : 0); %>
+<% const walletBalanceLabel = (walletBalanceCents / 100).toFixed(2); %>
 
 <header class="topbar">
   <div class="brand">
@@ -64,6 +66,9 @@
         <a class="tab <%= page === 'admin' ? 'active' : '' %>" href="/admin">Admin</a>
       <% } %>
       <a class="tab <%= page === 'profile' ? 'active' : '' %>" href="<%= profileHref %>">Profile</a>
+      <% if (session && session.name) { %>
+        <a class="tab <%= page === 'wallet' ? 'active' : '' %>" href="/wallet">Wallet: $<%= walletBalanceLabel %></a>
+      <% } %>
     </nav>
   <% } %>
   <script src="/cart-badge.js" defer></script>

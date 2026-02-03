@@ -1,6 +1,7 @@
 
 // Tiny middleware helpers to keep app.js tidy.
 const crypto = require("crypto");
+const { getWalletBalanceCents } = require("./models/walletModel");
 
 const sessions = {};
 
@@ -73,6 +74,21 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+async function attachWalletBalance(req, res, next) {
+  res.locals.walletBalance = 0;
+  if (!req.session || !req.session.userId) {
+    return next();
+  }
+  try {
+    res.locals.walletBalance = await getWalletBalanceCents(req.session.userId);
+  } catch (error) {
+    if (error.code !== "ER_NO_SUCH_TABLE") {
+      console.error("Wallet balance middleware failed:", error.message);
+    }
+  }
+  return next();
+}
+
 function notFound(req, res) {
   res.status(404).json({ error: "Not found" });
 }
@@ -87,6 +103,7 @@ module.exports = {
   requestLogger,
   requireAuth,
   requireAdmin,
+  attachWalletBalance,
   notFound,
   errorHandler,
 };

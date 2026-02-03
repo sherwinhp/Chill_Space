@@ -12,6 +12,7 @@ function normalizeDateTime(value) {
 }
 
 async function createTransactionFromCart({
+  connection: existingConnection,
   userId,
   sessionId,
   providerOrderId,
@@ -36,9 +37,12 @@ async function createTransactionFromCart({
     throw new Error("Invalid cart total.");
   }
 
-  const connection = await db.pool.getConnection();
+  const connection = existingConnection || (await db.pool.getConnection());
+  const ownsTransaction = !existingConnection;
   try {
-    await connection.beginTransaction();
+    if (ownsTransaction) {
+      await connection.beginTransaction();
+    }
 
     const [transactionResult] = await connection.execute(
       `
@@ -117,13 +121,19 @@ async function createTransactionFromCart({
       [userId, sessionId || ""]
     );
 
-    await connection.commit();
+    if (ownsTransaction) {
+      await connection.commit();
+    }
     return { transactionId, total: total.toFixed(2), currency };
   } catch (error) {
-    await connection.rollback();
+    if (ownsTransaction) {
+      await connection.rollback();
+    }
     throw error;
   } finally {
-    connection.release();
+    if (ownsTransaction) {
+      connection.release();
+    }
   }
 }
 
@@ -135,7 +145,7 @@ async function getTransactionById(transactionId, userId) {
         t.user_id,
         t.amount AS total_amount,
         t.currency,
-        'paypal' AS provider,
+        CASE WHEN t.orderId LIKE 'WALLET-%' THEN 'wallet' ELSE 'paypal' END AS provider,
         t.orderId AS provider_order_id,
         t.status,
         t.time AS created_at,
@@ -182,7 +192,7 @@ async function listTransactionsWithItems(userId) {
         id AS transaction_id,
         amount AS total_amount,
         currency,
-        'paypal' AS provider,
+        CASE WHEN orderId LIKE 'WALLET-%' THEN 'wallet' ELSE 'paypal' END AS provider,
         orderId AS provider_order_id,
         status,
         time AS created_at
@@ -235,7 +245,7 @@ async function listAllTransactionsWithItems(limit = 50) {
         t.id AS transaction_id,
         t.amount AS total_amount,
         t.currency,
-        'paypal' AS provider,
+        CASE WHEN t.orderId LIKE 'WALLET-%' THEN 'wallet' ELSE 'paypal' END AS provider,
         t.orderId AS provider_order_id,
         t.status,
         t.time AS created_at,
@@ -310,6 +320,7 @@ async function findTransactionByProviderOrderId(orderId, userId) {
         user_id,
         amount AS total_amount,
         currency,
+        CASE WHEN orderId LIKE 'WALLET-%' THEN 'wallet' ELSE 'paypal' END AS provider,
         orderId AS provider_order_id,
         status,
         time AS created_at

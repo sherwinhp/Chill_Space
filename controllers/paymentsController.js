@@ -8,6 +8,7 @@ const {
   findTransactionByProviderOrderId,
 } = require("../models/transactionsModel");
 const { releaseBookingHold } = require("../models/bookingsModel");
+const { payWithWallet } = require("../models/walletModel");
 
 function getOwner(req) {
   const userId = req.session ? req.session.userId : null;
@@ -138,8 +139,42 @@ async function capturePaypalButtonOrder(req, res) {
   }
 }
 
+async function payCheckoutWithWallet(req, res) {
+  try {
+    const { userId, sessionId } = getOwner(req);
+    if (!userId) {
+      return res.status(401).json({ error: "Login required." });
+    }
+
+    const expiredHolds = await removeExpiredRoomBookings({
+      userId,
+      sessionId,
+      now: new Date(),
+    });
+    await Promise.all(expiredHolds.map((holdId) => releaseBookingHold(holdId)));
+
+    const items = await listCartItems({ userId, sessionId });
+    if (!items.length) {
+      return res.status(400).json({ error: "Cart is empty." });
+    }
+
+    const result = await payWithWallet({ userId, sessionId, items });
+    return res.json({
+      success: true,
+      transactionId: result.transactionId,
+      balanceCents: result.balanceCents,
+    });
+  } catch (error) {
+    if (error.message === "Insufficient wallet balance.") {
+      return res.status(400).json({ error: error.message });
+    }
+    return res.status(500).json({ error: error.message || "Wallet payment failed." });
+  }
+}
+
 module.exports = {
   createPaypalOrder,
   createPaypalButtonOrder,
   capturePaypalButtonOrder,
+  payCheckoutWithWallet,
 };
