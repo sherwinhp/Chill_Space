@@ -9,6 +9,10 @@ const {
 } = require("../models/transactionsModel");
 const { releaseBookingHold } = require("../models/bookingsModel");
 const { payWithWallet, issueTransactionCashbackIfEligible } = require("../models/walletModel");
+const {
+  createPayNowPaymentRequest,
+  getPaymentRequestStatus,
+} = require("../services/hitpayService");
 
 function getOwner(req) {
   const userId = req.session ? req.session.userId : null;
@@ -178,9 +182,117 @@ async function payCheckoutWithWallet(req, res) {
   }
 }
 
+async function createHitpayPayNowPayment(req, res) {
+  try {
+    const { userId, sessionId } = getOwner(req);
+    if (!userId) {
+      return res.status(401).json({ error: "Login required." });
+    }
+
+    const items = await listCartItems({ userId, sessionId });
+    if (!items.length) {
+      return res.status(400).json({ error: "Cart is empty." });
+    }
+
+    const total = items.reduce(
+      (sum, item) => sum + Number(item.price) * Number(item.qty || 1),
+      0
+    );
+    if (!Number.isFinite(total) || total <= 0) {
+      return res.status(400).json({ error: "Invalid cart total." });
+    }
+
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const payment = await createPayNowPaymentRequest({
+      amount: total.toFixed(2),
+      currency: "SGD",
+      email: req.session.email,
+      name: req.session.name || "Customer",
+      referenceNumber: `user-${userId}-${Date.now()}`,
+      redirectUrl: `${baseUrl}/payments/hitpay/return`,
+    });
+
+    return res.json({
+      id: payment.id,
+      paymentUrl: payment.url,
+    });
+  } catch (error) {
+    console.error("HitPay create payment failed:", error.message);
+    return res.status(500).json({ error: error.message || "HitPay error." });
+  }
+}
+
+async function handleHitpayReturn(req, res) {
+  try {
+    const { userId, sessionId } = getOwner(req);
+    if (!userId) {
+      return res.redirect("/login?redirect=/checkout&reason=checkout");
+    }
+
+    const requestId = req.query.reference || req.query.request_id || req.query.id;
+    if (!requestId) {
+      return res.redirect("/checkout?hitpay=missing_reference");
+    }
+
+    const providerOrderId = `HITPAY-${requestId}`;
+    const existing = await findTransactionByProviderOrderId(providerOrderId, userId);
+    if (existing) {
+      return res.redirect(`/invoice/${existing.transaction_id}`);
+    }
+
+    const paymentRequest = await getPaymentRequestStatus(requestId);
+    const paid =
+      String(paymentRequest.status || "").toLowerCase() === "completed" ||
+      (Array.isArray(paymentRequest.payments) &&
+        paymentRequest.payments.some(
+          (payment) => String(payment.status || "").toLowerCase() === "succeeded"
+        ));
+
+    if (!paid) {
+      return res.redirect("/checkout?hitpay=failed");
+    }
+
+    const expiredHolds = await removeExpiredRoomBookings({
+      userId,
+      sessionId,
+      now: new Date(),
+    });
+    await Promise.all(expiredHolds.map((holdId) => releaseBookingHold(holdId)));
+
+    const items = await listCartItems({ userId, sessionId });
+    if (!items.length) {
+      return res.redirect("/checkout?hitpay=empty_cart");
+    }
+
+    const transaction = await createTransactionFromCart({
+      userId,
+      sessionId,
+      providerOrderId,
+      items,
+      payerId: paymentRequest.id || requestId,
+      payerEmail: paymentRequest.email || req.session.email,
+      status: "COMPLETED",
+    });
+
+    issueTransactionCashbackIfEligible(transaction.transactionId).catch((error) => {
+      console.error("Cashback reward issuance failed:", error.message);
+    });
+
+    return res.redirect(`/invoice/${transaction.transactionId}`);
+  } catch (error) {
+    return res.redirect(
+      `/checkout?hitpay=error&message=${encodeURIComponent(
+        error.message || "Unable to verify HitPay payment."
+      )}`
+    );
+  }
+}
+
 module.exports = {
   createPaypalOrder,
   createPaypalButtonOrder,
   capturePaypalButtonOrder,
   payCheckoutWithWallet,
+  createHitpayPayNowPayment,
+  handleHitpayReturn,
 };

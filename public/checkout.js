@@ -9,6 +9,38 @@ let walletBalanceCents = paymentCard ? Number(paymentCard.dataset.walletBalanceC
 let paypalButtonsRendered = false;
 let currentTotalCents = 0;
 
+async function readJsonOrText(response) {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+  const text = await response.text();
+  return { error: text };
+}
+
+const hitpayStatusMessages = {
+  failed: "PayNow payment was not completed. Please try again.",
+  missing_reference: "Missing HitPay payment reference. Please try again.",
+  empty_cart: "Your cart is empty after payment verification. Please contact support if you were charged.",
+  error: "Unable to verify your PayNow payment. Please try again.",
+};
+
+function showHitpayStatusMessage() {
+  const params = new URLSearchParams(window.location.search);
+  const status = params.get("hitpay");
+  if (!status) return;
+  const fromQuery = params.get("message");
+  const message = fromQuery || hitpayStatusMessages[status];
+  if (message) {
+    alert(message);
+  }
+  params.delete("hitpay");
+  params.delete("message");
+  const query = params.toString();
+  const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+  window.history.replaceState({}, "", nextUrl);
+}
+
 function fetchCart() {
   return fetch("/cart/items")
     .then((res) => res.json())
@@ -135,6 +167,7 @@ function renderCheckout(items) {
 fetchCart().then(renderCheckout).catch(() => {
   renderCheckout([]);
 });
+showHitpayStatusMessage();
 
 function renderPaypalButtons(total) {
   if (!paypalContainer || paypalButtonsRendered) return;
@@ -199,6 +232,25 @@ if (confirmPaymentButton) {
     );
     const type = selected ? selected.value : "card";
     if (type === "paypal") return;
+    if (type === "paynow") {
+      try {
+        if (!currentTotalCents || currentTotalCents <= 0) {
+          throw new Error("Your cart is empty. Please add items before paying.");
+        }
+        const response = await fetch("/payments/hitpay/paynow/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        const body = await readJsonOrText(response);
+        if (!response.ok || !body.paymentUrl) {
+          throw new Error(body.error || "Unable to start PayNow payment.");
+        }
+        window.location.href = body.paymentUrl;
+      } catch (error) {
+        alert(error.message || "Unable to start PayNow payment.");
+      }
+      return;
+    }
     if (type === "wallet") {
       try {
         const response = await fetch("/payments/wallet/pay", {
@@ -216,6 +268,8 @@ if (confirmPaymentButton) {
       } catch (error) {
         alert(error.message || "Wallet payment failed.");
       }
+      return;
     }
+    alert("Select PayNow, Wallet, or use the PayPal button to continue.");
   });
 }
