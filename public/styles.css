@@ -3155,3 +3155,124 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+.has-modal {
+  overflow: hidden;
+}
+
+.nets-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+}
+
+.nets-modal.is-open {
+  display: flex;
+}
+
+.nets-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(13, 15, 25, 0.55);
+  backdrop-filter: blur(6px);
+}
+
+.nets-modal__panel {
+  position: relative;
+  width: min(520px, 100%);
+  border-radius: 22px;
+  border: 1px solid var(--stroke);
+  background: #fff;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.nets-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  background: linear-gradient(135deg, #e6428a, #ff7ab8);
+  color: #fff;
+}
+
+.nets-modal__header h3 {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.nets-modal__close {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+
+.nets-modal__body {
+  padding: 18px 18px 12px;
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  text-align: center;
+}
+
+.nets-modal__status {
+  font-weight: 700;
+}
+
+.nets-modal__spinner {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 4px solid rgba(13, 15, 25, 0.12);
+  border-top-color: rgba(230, 66, 138, 0.9);
+  animation: nets-spin 0.9s linear infinite;
+}
+
+.nets-modal__spinner[hidden] {
+  display: none;
+}
+
+@keyframes nets-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.nets-modal__qr {
+  width: min(320px, 100%);
+  border-radius: 16px;
+  border: 1px solid var(--stroke);
+  padding: 12px;
+  background: #fff;
+}
+
+.nets-modal__timer {
+  font-weight: 800;
+  color: #1d2230;
+}
+
+.nets-modal__hint {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.nets-modal__footer {
+  padding: 14px 18px 18px;
+  display: flex;
+  justify-content: flex-end;
+  background: #f7f8fb;
+  border-top: 1px solid var(--stroke);
+}

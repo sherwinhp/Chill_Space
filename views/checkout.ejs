@@ -94,6 +94,29 @@
 
       <%- include("partials/footer") %>
     </div>
+
+    <div class="nets-modal" hidden data-nets-modal aria-hidden="true">
+      <div class="nets-modal__backdrop"></div>
+      <div class="nets-modal__panel" role="dialog" aria-modal="true" aria-labelledby="nets-modal-title">
+        <div class="nets-modal__header">
+          <h3 id="nets-modal-title">Scan NETS QR</h3>
+          <button class="nets-modal__close" type="button" data-nets-cancel aria-label="Close NETS QR modal">×</button>
+        </div>
+
+        <div class="nets-modal__body">
+          <div class="nets-modal__status" data-nets-status aria-live="polite">Generating QR…</div>
+          <div class="nets-modal__spinner" data-nets-spinner></div>
+          <img class="nets-modal__qr" data-nets-qr alt="NETS QR Code" hidden />
+          <div class="nets-modal__timer" data-nets-timer>Time remaining: 5:00</div>
+          <div class="nets-modal__hint">Do not close this window until payment is completed.</div>
+        </div>
+
+        <div class="nets-modal__footer">
+          <button class="btn ghost" type="button" data-nets-cancel>Cancel payment</button>
+        </div>
+      </div>
+    </div>
+
     <script src="/checkout.js"></script>
   </body>
 </html>

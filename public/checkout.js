@@ -5,9 +5,24 @@ const confirmPaymentButton = document.querySelector("[data-confirm-payment]");
 const paypalContainer = document.querySelector("#paypal-button-container");
 const paymentCard = document.querySelector("[data-wallet-balance-cents]");
 const walletOptionInput = document.querySelector('input[name="paymentType"][value="wallet"]');
+const netsModal = document.querySelector("[data-nets-modal]");
+const netsStatusEl = netsModal ? netsModal.querySelector("[data-nets-status]") : null;
+const netsQrImgEl = netsModal ? netsModal.querySelector("[data-nets-qr]") : null;
+const netsTimerEl = netsModal ? netsModal.querySelector("[data-nets-timer]") : null;
+const netsSpinnerEl = netsModal ? netsModal.querySelector("[data-nets-spinner]") : null;
+const netsCancelButtons = netsModal ? netsModal.querySelectorAll("[data-nets-cancel]") : [];
+const confirmPaymentDefaultLabel = confirmPaymentButton
+  ? confirmPaymentButton.textContent.trim()
+  : "Confirm payment";
 let walletBalanceCents = paymentCard ? Number(paymentCard.dataset.walletBalanceCents || 0) : 0;
 let paypalButtonsRendered = false;
 let currentTotalCents = 0;
+let netsEventSource = null;
+let netsTimerInterval = null;
+let netsRemainingSeconds = 0;
+let netsTxnRetrievalRef = null;
+let netsCompleting = false;
+let netsCreatingQr = false;
 
 async function readJsonOrText(response) {
   const contentType = response.headers.get("content-type") || "";
@@ -39,6 +54,236 @@ function showHitpayStatusMessage() {
   const query = params.toString();
   const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
   window.history.replaceState({}, "", nextUrl);
+}
+
+function formatCountdown(seconds) {
+  const safeSeconds = Number.isFinite(Number(seconds)) ? Math.max(0, Number(seconds)) : 0;
+  const m = Math.floor(safeSeconds / 60);
+  const s = safeSeconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function setConfirmBusy(isBusy, label) {
+  if (!confirmPaymentButton) return;
+  confirmPaymentButton.disabled = Boolean(isBusy);
+  confirmPaymentButton.textContent =
+    typeof label === "string" ? label : confirmPaymentDefaultLabel;
+}
+
+function isNetsSuccessPayload(payload) {
+  const responseCode =
+    payload?.response_code ?? payload?.result?.response_code ?? payload?.result?.responseCode;
+  const txnStatus =
+    payload?.txn_status ?? payload?.result?.txn_status ?? payload?.result?.txnStatus;
+  const normalizedTxnStatus =
+    typeof txnStatus === "string" ? txnStatus.trim().toLowerCase() : txnStatus;
+  return (
+    String(responseCode) === "00" &&
+    (Number(normalizedTxnStatus) === 1 ||
+      normalizedTxnStatus === "success" ||
+      normalizedTxnStatus === "completed")
+  );
+}
+
+function stopNetsBackgroundWork() {
+  if (netsEventSource) {
+    netsEventSource.close();
+    netsEventSource = null;
+  }
+  if (netsTimerInterval) {
+    clearInterval(netsTimerInterval);
+    netsTimerInterval = null;
+  }
+}
+
+function resetNetsModalUi() {
+  if (netsStatusEl) netsStatusEl.textContent = "Generating QR…";
+  if (netsSpinnerEl) netsSpinnerEl.hidden = false;
+  if (netsQrImgEl) {
+    netsQrImgEl.hidden = true;
+    netsQrImgEl.removeAttribute("src");
+  }
+  netsRemainingSeconds = 300;
+  if (netsTimerEl) netsTimerEl.textContent = `Time remaining: ${formatCountdown(netsRemainingSeconds)}`;
+  netsTxnRetrievalRef = null;
+  netsCompleting = false;
+}
+
+function openNetsModal() {
+  if (!netsModal) return;
+  netsModal.hidden = false;
+  netsModal.classList.add("is-open");
+  netsModal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("has-modal");
+}
+
+function closeNetsModal({ keepState = false } = {}) {
+  stopNetsBackgroundWork();
+  netsCreatingQr = false;
+  setConfirmBusy(false);
+
+  if (!netsModal) return;
+  netsModal.classList.remove("is-open");
+  netsModal.setAttribute("aria-hidden", "true");
+  netsModal.hidden = true;
+  document.body.classList.remove("has-modal");
+
+  if (!keepState) {
+    resetNetsModalUi();
+  }
+}
+
+async function completeNetsPayment(txnRetrievalRef) {
+  const response = await fetch("/payments/nets/qr/complete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ txnRetrievalRef }),
+  });
+  const body = await readJsonOrText(response);
+  if (!response.ok || !body || !body.success || !body.transactionId) {
+    throw new Error(body?.error || "Unable to finalize NETS payment.");
+  }
+  window.location.href = `/invoice/${body.transactionId}`;
+}
+
+function startNetsTimer() {
+  netsRemainingSeconds = 300;
+  if (netsTimerEl) {
+    netsTimerEl.textContent = `Time remaining: ${formatCountdown(netsRemainingSeconds)}`;
+  }
+
+  netsTimerInterval = setInterval(() => {
+    netsRemainingSeconds -= 1;
+    if (netsTimerEl) {
+      netsTimerEl.textContent = `Time remaining: ${formatCountdown(netsRemainingSeconds)}`;
+    }
+
+    if (netsRemainingSeconds <= 0) {
+      stopNetsBackgroundWork();
+      if (netsStatusEl) {
+        netsStatusEl.textContent = "Payment failed. Please try again.";
+      }
+      if (netsSpinnerEl) netsSpinnerEl.hidden = true;
+      setConfirmBusy(false);
+      alert("Payment failed. Please try again.");
+      closeNetsModal();
+    }
+  }, 1000);
+}
+
+function startNetsSse(txnRetrievalRef) {
+  const safeRef = encodeURIComponent(String(txnRetrievalRef));
+  netsEventSource = new EventSource(`/payments/nets/qr/stream/${safeRef}`);
+
+  netsEventSource.addEventListener("message", async (event) => {
+    if (!event?.data) return;
+    let payload;
+    try {
+      payload = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+
+    if (payload?.fail) {
+      stopNetsBackgroundWork();
+      if (netsStatusEl) {
+        netsStatusEl.textContent =
+          payload?.details || "NETS status check failed. Please close this window and try again.";
+      }
+      if (netsSpinnerEl) netsSpinnerEl.hidden = true;
+      setConfirmBusy(false);
+      return;
+    }
+
+    if (isNetsSuccessPayload(payload) && !netsCompleting) {
+      netsCompleting = true;
+      stopNetsBackgroundWork();
+      if (netsStatusEl) netsStatusEl.textContent = "Payment received. Creating invoice…";
+      setConfirmBusy(true, "Finalizing NETS…");
+      try {
+        await completeNetsPayment(txnRetrievalRef);
+      } catch (error) {
+        netsCompleting = false;
+        setConfirmBusy(false);
+        if (netsStatusEl) {
+          netsStatusEl.textContent = error.message || "Unable to finalize NETS payment.";
+        }
+      }
+    }
+  });
+
+  netsEventSource.addEventListener("done", async (event) => {
+    const result = String(event?.data || "").trim().toLowerCase();
+    if (result !== "success") {
+      stopNetsBackgroundWork();
+      if (netsStatusEl) {
+        netsStatusEl.textContent =
+          result === "timeout"
+            ? "NETS QR timed out. Please close this window and try again."
+            : "NETS payment failed. Please close this window and try again.";
+      }
+      if (netsSpinnerEl) netsSpinnerEl.hidden = true;
+      setConfirmBusy(false);
+      return;
+    }
+
+    if (netsCompleting) return;
+    netsCompleting = true;
+    stopNetsBackgroundWork();
+    if (netsStatusEl) netsStatusEl.textContent = "Payment received. Creating invoice…";
+    setConfirmBusy(true, "Finalizing NETS…");
+    try {
+      await completeNetsPayment(txnRetrievalRef);
+    } catch (error) {
+      netsCompleting = false;
+      setConfirmBusy(false);
+      if (netsStatusEl) {
+        netsStatusEl.textContent = error.message || "Unable to finalize NETS payment.";
+      }
+    }
+  });
+}
+
+async function startNetsQrPopup() {
+  if (netsCreatingQr) return;
+  netsCreatingQr = true;
+
+  resetNetsModalUi();
+  openNetsModal();
+  setConfirmBusy(true, "Starting NETS…");
+
+  try {
+    const response = await fetch("/payments/nets/qr/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const body = await readJsonOrText(response);
+    if (!response.ok || !body || !body.qrCodeUrl || !body.txnRetrievalRef) {
+      throw new Error(body?.error || "Unable to generate NETS QR.");
+    }
+
+    netsTxnRetrievalRef = body.txnRetrievalRef;
+    if (netsStatusEl) {
+      netsStatusEl.textContent = "Scan with your bank app to complete payment.";
+    }
+    if (netsSpinnerEl) netsSpinnerEl.hidden = true;
+    if (netsQrImgEl) {
+      netsQrImgEl.src = body.qrCodeUrl;
+      netsQrImgEl.hidden = false;
+    }
+
+    startNetsTimer();
+    startNetsSse(netsTxnRetrievalRef);
+  } catch (error) {
+    if (netsStatusEl) {
+      netsStatusEl.textContent = error.message || "Unable to generate NETS QR.";
+    }
+    if (netsSpinnerEl) netsSpinnerEl.hidden = true;
+    setConfirmBusy(false);
+  } finally {
+    netsCreatingQr = false;
+  }
 }
 
 function fetchCart() {
@@ -226,12 +471,26 @@ function renderPaypalButtons(total) {
 }
 
 if (confirmPaymentButton) {
+  if (netsCancelButtons && netsCancelButtons.length) {
+    netsCancelButtons.forEach((button) => {
+      button.addEventListener("click", () => closeNetsModal());
+    });
+  }
+
   confirmPaymentButton.addEventListener("click", async () => {
     const selected = document.querySelector(
       "input[name='paymentType']:checked"
     );
     const type = selected ? selected.value : "card";
     if (type === "paypal") return;
+    if (type === "nets") {
+      if (!netsModal) {
+        alert("NETS QR is not available on this page.");
+        return;
+      }
+      await startNetsQrPopup();
+      return;
+    }
     if (type === "paynow") {
       try {
         if (!currentTotalCents || currentTotalCents <= 0) {

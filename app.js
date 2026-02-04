@@ -79,6 +79,10 @@ app.post("/payments/paypal/create", express.json(), paymentsController.createPay
 app.post("/api/paypal/create-order", express.json(), paymentsController.createPaypalButtonOrder);
 app.post("/api/paypal/capture-order", express.json(), paymentsController.capturePaypalButtonOrder);
 app.post("/payments/wallet/pay", express.json(), paymentsController.payCheckoutWithWallet);
+app.post("/payments/nets/qr/create", express.json(), paymentsController.createNetsQrPayment);
+app.get("/payments/nets/qr/status/:txnRetrievalRef", paymentsController.getNetsTxnStatus);
+app.get("/payments/nets/qr/stream/:txnRetrievalRef", paymentsController.streamNetsTxnStatus);
+app.post("/payments/nets/qr/complete", express.json(), paymentsController.completeNetsPayment);
 app.post("/payments/hitpay/paynow/create", express.json(), paymentsController.createHitpayPayNowPayment);
 app.get("/payments/hitpay/return", paymentsController.handleHitpayReturn);
 app.get("/menu", menuController.renderMenu);
