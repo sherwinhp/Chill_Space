@@ -1,8 +1,5 @@
 const CASHBACK_RATE = 0.05;
-const MIN_CASHBACK_CENTS = 100;
 
 module.exports = {
   CASHBACK_RATE,
-  MIN_CASHBACK_CENTS,
 };
-

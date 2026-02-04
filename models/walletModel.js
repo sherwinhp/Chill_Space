@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 const db = require("../db");
 const { createTransactionFromCart } = require("./transactionsModel");
-const { CASHBACK_RATE, MIN_CASHBACK_CENTS } = require("../config/walletRewards");
+const { CASHBACK_RATE } = require("../config/walletRewards");
 
 function toCents(value) {
   const numeric = Number(value);
@@ -15,6 +15,14 @@ function buildOrderRef() {
 
 function buildCashbackRef(bookingId) {
   return `booking_cashback:${bookingId}`;
+}
+
+function buildTransactionCashbackRef(transactionId) {
+  return `order_cashback:${transactionId}`;
+}
+
+function buildTransactionCashbackReversalRef(transactionId) {
+  return `order_cashback_reversal:${transactionId}`;
 }
 
 function parseMetadata(value) {
@@ -33,7 +41,7 @@ function isCashbackEligibleBooking(booking) {
 }
 
 function calculateCashbackCents(bookingTotalCents) {
-  return Math.max(MIN_CASHBACK_CENTS, Math.round(Number(bookingTotalCents) * CASHBACK_RATE));
+  return Math.round(Number(bookingTotalCents) * CASHBACK_RATE);
 }
 
 async function getWalletBalanceCents(userId) {
@@ -295,6 +303,268 @@ async function payWithWallet({ userId, sessionId, items }) {
   }
 }
 
+async function issueTransactionCashbackIfEligible(transactionId) {
+  const connection = await db.pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [txRows] = await connection.execute(
+      `
+        SELECT id, user_id, amount, status, currency
+        FROM transactions
+        WHERE id = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [transactionId]
+    );
+    if (!txRows.length) {
+      await connection.rollback();
+      return { ok: true, skipped: true, reason: "transaction_not_found" };
+    }
+
+    const tx = txRows[0];
+    if (String(tx.status || "").toUpperCase() !== "COMPLETED") {
+      await connection.rollback();
+      return { ok: true, skipped: true, reason: "transaction_not_completed" };
+    }
+
+    const invoiceTotalCents = Math.round(Number(tx.amount) * 100);
+    if (!Number.isFinite(invoiceTotalCents) || invoiceTotalCents <= 0) {
+      await connection.rollback();
+      return { ok: true, skipped: true, reason: "invalid_transaction_total" };
+    }
+
+    const cashbackCents = calculateCashbackCents(invoiceTotalCents);
+    if (cashbackCents <= 0) {
+      await connection.rollback();
+      return { ok: true, skipped: true, reason: "cashback_zero" };
+    }
+
+    const providerRef = buildTransactionCashbackRef(tx.id);
+    await connection.execute(
+      `
+        INSERT INTO wallets (user_id, balance_cents)
+        VALUES (?, 0)
+        ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP
+      `,
+      [tx.user_id]
+    );
+
+    try {
+      await connection.execute(
+        `
+          INSERT INTO wallet_transactions
+            (user_id, type, amount_cents, status, provider, provider_ref, metadata)
+          VALUES (?, 'reward', ?, 'completed', 'system', ?, ?)
+        `,
+        [
+          tx.user_id,
+          cashbackCents,
+          providerRef,
+          parseMetadata({
+            label: "Order Cashback",
+            transaction_id: tx.id,
+            cashback_rate: CASHBACK_RATE,
+            reward_base_type: "invoice_total",
+            reward_base_cents: invoiceTotalCents,
+            cashback_cents: cashbackCents,
+            currency: tx.currency || "SGD",
+          }),
+        ]
+      );
+    } catch (error) {
+      if (error && error.code === "ER_DUP_ENTRY") {
+        await connection.rollback();
+        return { ok: true, skipped: true, reason: "already_rewarded" };
+      }
+      throw error;
+    }
+
+    await connection.execute(
+      "UPDATE wallets SET balance_cents = balance_cents + ? WHERE user_id = ?",
+      [cashbackCents, tx.user_id]
+    );
+
+    await connection.commit();
+    return {
+      ok: true,
+      skipped: false,
+      transactionId: tx.id,
+      cashbackCents,
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function reverseTransactionCashbackIfExists(transactionId, reason = "refund_or_cancelled") {
+  const connection = await db.pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const cashbackRef = buildTransactionCashbackRef(transactionId);
+    const reversalRef = buildTransactionCashbackReversalRef(transactionId);
+    const [cashbackRows] = await connection.execute(
+      `
+        SELECT id, user_id, amount_cents, status
+        FROM wallet_transactions
+        WHERE provider = 'system'
+          AND type = 'reward'
+          AND provider_ref = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [cashbackRef]
+    );
+    if (!cashbackRows.length) {
+      await connection.rollback();
+      return { ok: true, skipped: true, reason: "no_cashback" };
+    }
+
+    const cashback = cashbackRows[0];
+    if (cashback.status !== "completed") {
+      await connection.rollback();
+      return { ok: true, skipped: true, reason: "cashback_not_completed" };
+    }
+
+    const [existingReversalRows] = await connection.execute(
+      `
+        SELECT id
+        FROM wallet_transactions
+        WHERE provider = 'system'
+          AND type = 'adjustment'
+          AND provider_ref = ?
+        LIMIT 1
+      `,
+      [reversalRef]
+    );
+    if (existingReversalRows.length) {
+      await connection.rollback();
+      return { ok: true, skipped: true, reason: "already_reversed" };
+    }
+
+    await connection.execute(
+      `
+        INSERT INTO wallets (user_id, balance_cents)
+        VALUES (?, 0)
+        ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP
+      `,
+      [cashback.user_id]
+    );
+
+    const [walletRows] = await connection.execute(
+      "SELECT balance_cents FROM wallets WHERE user_id = ? LIMIT 1 FOR UPDATE",
+      [cashback.user_id]
+    );
+    const currentBalanceCents = walletRows.length ? Number(walletRows[0].balance_cents || 0) : 0;
+    const reversalAmountCents = Number(cashback.amount_cents || 0);
+    if (currentBalanceCents < reversalAmountCents) {
+      await connection.rollback();
+      return { ok: true, skipped: true, reason: "insufficient_wallet_balance_for_reversal" };
+    }
+
+    await connection.execute(
+      `
+        INSERT INTO wallet_transactions
+          (user_id, type, amount_cents, status, provider, provider_ref, metadata)
+        VALUES (?, 'adjustment', ?, 'completed', 'system', ?, ?)
+      `,
+      [
+        cashback.user_id,
+        -reversalAmountCents,
+        reversalRef,
+        parseMetadata({
+          label: "Cashback Reversal",
+          reversed_transaction_ref: cashbackRef,
+          reversal_reason: reason,
+        }),
+      ]
+    );
+
+    await connection.execute(
+      "UPDATE wallets SET balance_cents = balance_cents - ? WHERE user_id = ?",
+      [reversalAmountCents, cashback.user_id]
+    );
+
+    await connection.commit();
+    return {
+      ok: true,
+      skipped: false,
+      transactionId: transactionId,
+      reversalCents: reversalAmountCents,
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function reverseOrderCashbackForBookingIfRefunded(bookingId) {
+  const rows = await db.query(
+    `
+      SELECT
+        b.booking_id,
+        b.user_id,
+        b.room_id,
+        b.start_time,
+        b.end_time,
+        b.payment_status,
+        b.admin_status
+      FROM bookings b
+      WHERE b.booking_id = ?
+      LIMIT 1
+    `,
+    [bookingId]
+  );
+  if (!rows.length) {
+    return { ok: true, skipped: true, reason: "booking_not_found" };
+  }
+
+  const booking = rows[0];
+  const isRefundedOrCancelled =
+    booking.admin_status === "declined" ||
+    booking.payment_status === "cancelled" ||
+    booking.payment_status === "refunded" ||
+    booking.payment_status === "void";
+  if (!isRefundedOrCancelled) {
+    return { ok: true, skipped: true, reason: "booking_not_refunded_or_cancelled" };
+  }
+
+  const linkedTxRows = await db.query(
+    `
+      SELECT t.id
+      FROM transaction_items ti
+      JOIN transactions t ON t.id = ti.transaction_id
+      WHERE t.user_id = ?
+        AND ti.item_type = 'room_booking'
+        AND ti.room_id = ?
+        AND ti.start_time BETWEEN DATE_SUB(?, INTERVAL 12 HOUR) AND DATE_ADD(?, INTERVAL 12 HOUR)
+        AND ti.end_time BETWEEN DATE_SUB(?, INTERVAL 12 HOUR) AND DATE_ADD(?, INTERVAL 12 HOUR)
+      ORDER BY t.time DESC
+      LIMIT 1
+    `,
+    [
+      booking.user_id,
+      booking.room_id,
+      booking.start_time,
+      booking.start_time,
+      booking.end_time,
+      booking.end_time,
+    ]
+  );
+  if (!linkedTxRows.length) {
+    return { ok: true, skipped: true, reason: "linked_transaction_not_found" };
+  }
+
+  return reverseTransactionCashbackIfExists(linkedTxRows[0].id, "booking_refunded_or_cancelled");
+}
+
 async function issueBookingCashbackIfEligible(bookingId) {
   const connection = await db.pool.getConnection();
   try {
@@ -305,6 +575,7 @@ async function issueBookingCashbackIfEligible(bookingId) {
         SELECT
           b.booking_id,
           b.user_id,
+          b.room_id,
           b.start_time,
           b.end_time,
           b.payment_status,
@@ -337,15 +608,48 @@ async function issueBookingCashbackIfEligible(bookingId) {
       return { ok: true, skipped: true, reason: "invalid_booking_times" };
     }
 
-    const bookingTotalCents = Math.round(
+    const bookingOnlyTotalCents = Math.round(
       ((end.getTime() - start.getTime()) / 3600000) * Number(booking.hourly_rate) * 100
     );
-    if (!Number.isFinite(bookingTotalCents) || bookingTotalCents <= 0) {
+    if (!Number.isFinite(bookingOnlyTotalCents) || bookingOnlyTotalCents <= 0) {
       await connection.rollback();
       return { ok: true, skipped: true, reason: "invalid_booking_total" };
     }
 
-    const cashbackCents = calculateCashbackCents(bookingTotalCents);
+    // Prefer full checkout total when this booking was part of a mixed cart payment.
+    let rewardBaseCents = bookingOnlyTotalCents;
+    let rewardBaseType = "booking_total";
+    const [linkedTransactionRows] = await connection.execute(
+      `
+        SELECT t.id, t.amount
+        FROM transaction_items ti
+        JOIN transactions t ON t.id = ti.transaction_id
+        WHERE t.user_id = ?
+          AND ti.item_type = 'room_booking'
+          AND ti.room_id = ?
+          AND ti.start_time BETWEEN DATE_SUB(?, INTERVAL 12 HOUR) AND DATE_ADD(?, INTERVAL 12 HOUR)
+          AND ti.end_time BETWEEN DATE_SUB(?, INTERVAL 12 HOUR) AND DATE_ADD(?, INTERVAL 12 HOUR)
+        ORDER BY t.time DESC
+        LIMIT 1
+      `,
+      [
+        booking.user_id,
+        booking.room_id,
+        booking.start_time,
+        booking.start_time,
+        booking.end_time,
+        booking.end_time,
+      ]
+    );
+    if (linkedTransactionRows.length) {
+      const txTotalCents = Math.round(Number(linkedTransactionRows[0].amount) * 100);
+      if (Number.isFinite(txTotalCents) && txTotalCents > 0) {
+        rewardBaseCents = txTotalCents;
+        rewardBaseType = "checkout_total";
+      }
+    }
+
+    const cashbackCents = calculateCashbackCents(rewardBaseCents);
     const providerRef = buildCashbackRef(booking.booking_id);
 
     await connection.execute(
@@ -372,8 +676,9 @@ async function issueBookingCashbackIfEligible(bookingId) {
             label: "Booking Cashback",
             booking_id: booking.booking_id,
             cashback_rate: CASHBACK_RATE,
-            booking_total_cents: bookingTotalCents,
-            min_cashback_cents: MIN_CASHBACK_CENTS,
+            booking_total_cents: bookingOnlyTotalCents,
+            reward_base_type: rewardBaseType,
+            reward_base_cents: rewardBaseCents,
             cashback_cents: cashbackCents,
           }),
         ]
@@ -417,5 +722,8 @@ module.exports = {
   findWalletTransactionByProviderRef,
   completePaypalTopup,
   payWithWallet,
+  issueTransactionCashbackIfEligible,
+  reverseTransactionCashbackIfExists,
+  reverseOrderCashbackForBookingIfRefunded,
   issueBookingCashbackIfEligible,
 };

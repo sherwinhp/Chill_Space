@@ -58,6 +58,9 @@
               <div class="invoice-total">
                 <span>Total paid</span>
                 <strong>$<%= Number(invoice.total_amount).toFixed(2) %></strong>
+                <% if (Number(invoiceCashbackCents || 0) > 0) { %>
+                  <small>Cashback earned: +$<%= (Number(invoiceCashbackCents) / 100).toFixed(2) %></small>
+                <% } %>
               </div>
             </div>
 

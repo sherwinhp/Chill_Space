@@ -66,6 +66,7 @@
               <div class="order-table">
                 <div class="order-row order-head">
                   <span>Type</span>
+                  <span>Order ID</span>
                   <span>Status</span>
                   <span>Provider</span>
                   <span>Amount</span>
@@ -75,9 +76,22 @@
                     <p class="empty-note">No wallet transactions yet.</p>
                   <% } else { %>
                     <% transactions.forEach(function(tx) { %>
-                      <% const txLabel = tx.type === 'reward' ? 'Booking Cashback' : tx.type; %>
+                      <% const txLabel = tx.type === 'reward' ? 'Order Cashback' : tx.type; %>
+                      <% let orderIdLabel = "-"; %>
+                      <% if (tx.provider_ref && tx.provider_ref.startsWith("order_cashback:")) { %>
+                        <% orderIdLabel = "#" + tx.provider_ref.split(":")[1]; %>
+                      <% } else if (tx.provider_ref && tx.provider_ref.startsWith("order_cashback_reversal:")) { %>
+                        <% orderIdLabel = "#" + tx.provider_ref.split(":")[1]; %>
+                      <% } else if (tx.provider_ref && tx.provider_ref.startsWith("WALLET-")) { %>
+                        <% orderIdLabel = tx.provider_ref; %>
+                      <% } else if (tx.provider_ref && tx.provider_ref.startsWith("booking_cashback:")) { %>
+                        <% orderIdLabel = "Booking #" + tx.provider_ref.split(":")[1]; %>
+                      <% } else if (tx.provider_ref) { %>
+                        <% orderIdLabel = tx.provider_ref; %>
+                      <% } %>
                       <div class="order-row">
                         <span><%= txLabel %></span>
+                        <span><%= orderIdLabel %></span>
                         <span><%= tx.status %></span>
                         <span><%= tx.provider %></span>
                         <span><%= Number(tx.amount_cents || 0) < 0 ? '-' : '+' %>$<%= (Math.abs(Number(tx.amount_cents || 0)) / 100).toFixed(2) %></span>

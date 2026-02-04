@@ -620,6 +620,10 @@ body {
   background: #35c47c;
 }
 
+.legend-dot.peak {
+  background: #d14b4b;
+}
+
 .legend-dot.booked {
   background: #f27a7a;
 }
@@ -644,6 +648,19 @@ body {
   gap: 8px;
 }
 
+.calendar-weekday {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  font-weight: 700;
+  padding: 4px 0 2px;
+}
+
+.calendar-spacer {
+  display: block;
+  min-height: 38px;
+}
+
 .calendar-day {
   border: 1px solid var(--stroke);
   border-radius: 12px;
@@ -663,6 +680,12 @@ body {
   border-color: rgba(242, 122, 122, 0.4);
   color: #9b2f2f;
   background: rgba(242, 122, 122, 0.12);
+}
+
+.calendar-day.peak-day.available {
+  border-color: rgba(209, 75, 75, 0.5);
+  color: #8e2222;
+  background: rgba(209, 75, 75, 0.18);
 }
 
 .booking-slots {

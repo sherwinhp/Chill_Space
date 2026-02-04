@@ -2,6 +2,7 @@ const {
   getTransactionById,
   listTransactionsWithItems,
 } = require("../models/transactionsModel");
+const { calculateCashbackCents } = require("../models/walletModel");
 
 async function renderInvoice(req, res) {
   if (!req.session || !req.session.userId) {
@@ -17,8 +18,11 @@ async function renderInvoice(req, res) {
   if (!invoice) {
     return res.status(404).send("Invoice not found.");
   }
+  const invoiceCashbackCents = calculateCashbackCents(
+    Math.round(Number(invoice.total_amount || 0) * 100)
+  );
 
-  return res.render("invoice", { invoice });
+  return res.render("invoice", { invoice, invoiceCashbackCents });
 }
 
 async function renderPurchases(req, res) {

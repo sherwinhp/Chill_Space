@@ -54,7 +54,8 @@
                 <p class="room-description"><%= room.description || "No description yet." %></p>
                 <div class="room-meta">
                   <span>Capacity: <strong><%= room.capacity %> pax</strong></span>
-                  <span>Rate: <strong>$<%= room.pricePerHour.toFixed(2) %>/hr</strong></span>
+                  <span>Rate: <strong>$<%= Number(pricing.normalRate).toFixed(2) %>/hr (normal)</strong></span>
+                  <span>Peak Rate: <strong>$<%= Number(pricing.peakRate).toFixed(2) %>/hr</strong></span>
                 </div>
                 <% if (room.features && room.features.length) { %>
                   <div class="room-features">
@@ -72,7 +73,8 @@
             data-booking-widget
             data-room-id="<%= room.id %>"
             data-room-name="<%= room.name %>"
-            data-room-rate="<%= room.pricePerHour %>"
+            data-normal-rate="<%= pricing.normalRate %>"
+            data-peak-rate="<%= pricing.peakRate %>"
           >
             <div class="booking-widget-head">
               <div>
@@ -81,6 +83,7 @@
               </div>
               <div class="booking-legend">
                 <span><i class="legend-dot available"></i>Available</span>
+                <span><i class="legend-dot peak"></i>Peak day</span>
                 <span><i class="legend-dot booked"></i>Booked</span>
                 <span><i class="legend-dot selected"></i>Selected</span>
               </div>

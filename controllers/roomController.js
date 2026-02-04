@@ -7,6 +7,11 @@ const {
   createBookingHold,
   releaseBookingHold,
 } = require("../models/bookingsModel");
+const {
+  NORMAL_RATE_PER_HOUR,
+  PEAK_RATE_PER_HOUR,
+  getMaxAllowedDate,
+} = require("../utils/bookingPricing");
 
 async function listRooms(req, res) {
   const rooms = await listRoomsData();
@@ -34,6 +39,10 @@ async function renderRoomBooking(req, res) {
   const reviewCount = stats ? Number(stats.review_count || 0) : 0;
   res.render("room-book", {
     room,
+    pricing: {
+      normalRate: NORMAL_RATE_PER_HOUR,
+      peakRate: PEAK_RATE_PER_HOUR,
+    },
     rating: {
       average: avgRating,
       count: reviewCount,
@@ -75,6 +84,10 @@ async function listAvailability(req, res) {
   if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
     return res.status(400).json({ error: "Invalid date range." });
   }
+  const maxAllowedDate = getMaxAllowedDate(new Date());
+  if (startDate > maxAllowedDate || endDate > maxAllowedDate) {
+    return res.status(400).json({ error: "Bookings are only available up to 3 months ahead." });
+  }
 
   const [bookings, holds] = await Promise.all([
     listBookingsByRoomRange(roomId, startDate, endDate),
@@ -103,6 +116,10 @@ async function createHold(req, res) {
   }
   if (start <= new Date()) {
     return res.status(400).json({ error: "Booking time must be in the future." });
+  }
+  const maxAllowedDate = getMaxAllowedDate(new Date());
+  if (start > maxAllowedDate || end > maxAllowedDate) {
+    return res.status(400).json({ error: "Bookings are only available up to 3 months ahead." });
   }
 
   const normalizedStart = formatLocalDateTime(start);

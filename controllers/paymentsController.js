@@ -8,7 +8,7 @@ const {
   findTransactionByProviderOrderId,
 } = require("../models/transactionsModel");
 const { releaseBookingHold } = require("../models/bookingsModel");
-const { payWithWallet } = require("../models/walletModel");
+const { payWithWallet, issueTransactionCashbackIfEligible } = require("../models/walletModel");
 
 function getOwner(req) {
   const userId = req.session ? req.session.userId : null;
@@ -128,6 +128,9 @@ async function capturePaypalButtonOrder(req, res) {
       payerEmail,
       status: capture.status,
     });
+    issueTransactionCashbackIfEligible(transaction.transactionId).catch((error) => {
+      console.error("Cashback reward issuance failed:", error.message);
+    });
 
     return res.json({
       status: capture.status,
@@ -159,6 +162,9 @@ async function payCheckoutWithWallet(req, res) {
     }
 
     const result = await payWithWallet({ userId, sessionId, items });
+    issueTransactionCashbackIfEligible(result.transactionId).catch((error) => {
+      console.error("Cashback reward issuance failed:", error.message);
+    });
     return res.json({
       success: true,
       transactionId: result.transactionId,

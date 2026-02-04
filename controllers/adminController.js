@@ -4,7 +4,6 @@ const {
   createBookingDb,
   updateBookingDb,
   deleteBookingDb,
-  findBookingDbById,
 } = require("../models/bookingsModel");
 const {
   listMenuItems,
@@ -32,10 +31,7 @@ const {
   getSalesSummary,
   listTransactionsWithItems,
 } = require("../models/transactionsModel");
-const {
-  isCashbackEligibleBooking,
-  issueBookingCashbackIfEligible,
-} = require("../models/walletModel");
+const { reverseOrderCashbackForBookingIfRefunded } = require("../models/walletModel");
 
 async function renderDashboard(req, res) {
   const [bookings, events, salesSummary] = await Promise.all([
@@ -128,7 +124,6 @@ async function addBooking(req, res) {
 }
 
 async function editBooking(req, res) {
-  const before = await findBookingDbById(req.params.id);
   await updateBookingDb(req.params.id, {
     user_id: Number(req.body.user_id),
     room_id: Number(req.body.room_id),
@@ -139,14 +134,9 @@ async function editBooking(req, res) {
     payment_status: req.body.payment_status,
     admin_status: req.body.admin_status,
   });
-  const after = await findBookingDbById(req.params.id);
-  const becameEligible =
-    !isCashbackEligibleBooking(before) && isCashbackEligibleBooking(after);
-  if (becameEligible) {
-    issueBookingCashbackIfEligible(after.id).catch((error) => {
-      console.error("Cashback reward issuance failed:", error.message);
-    });
-  }
+  reverseOrderCashbackForBookingIfRefunded(req.params.id).catch((error) => {
+    console.error("Cashback reversal failed:", error.message);
+  });
   res.redirect("/admin/bookings");
 }
 

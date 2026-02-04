@@ -13,7 +13,8 @@ const addButton = document.querySelector("[data-booking-add]");
 const state = {
   roomId: null,
   roomName: "",
-  roomRate: 0,
+  normalRate: 12,
+  peakRate: 15,
   bookings: [],
   selectedDate: null,
   selectedSlot: null,
@@ -50,6 +51,15 @@ function addMonths(date, months) {
   const next = new Date(date);
   next.setMonth(next.getMonth() + months);
   return next;
+}
+
+function isPeakDay(value) {
+  const day = value.getDay();
+  return day === 5 || day === 6 || day === 0;
+}
+
+function getRateForDay(value) {
+  return isPeakDay(value) ? state.peakRate : state.normalRate;
 }
 
 function listDays(start, end) {
@@ -121,12 +131,30 @@ function renderCalendar(start, end) {
 
     const grid = document.createElement("div");
     grid.className = "calendar-grid";
+    ["M", "T", "W", "T", "F", "S", "S"].forEach((label) => {
+      const header = document.createElement("span");
+      header.className = "calendar-weekday";
+      header.textContent = label;
+      grid.appendChild(header);
+    });
+    if (month.days.length) {
+      const firstDay = month.days[0];
+      const offset = (firstDay.getDay() + 6) % 7;
+      for (let i = 0; i < offset; i += 1) {
+        const spacer = document.createElement("span");
+        spacer.className = "calendar-spacer";
+        grid.appendChild(spacer);
+      }
+    }
 
     month.days.forEach((day) => {
       const available = dayHasAvailability(day);
       const cell = document.createElement("button");
       cell.type = "button";
       cell.className = `calendar-day ${available ? "available" : "booked"}`;
+      if (isPeakDay(day)) {
+        cell.classList.add("peak-day");
+      }
       cell.textContent = day.getDate();
       cell.dataset.date = day.toISOString();
       cell.addEventListener("click", () => selectDay(day));
@@ -202,10 +230,12 @@ function updateSummary() {
   const startTime = state.selectedSlot.start;
   const slotCount = state.selectedRange ? state.selectedRange.end - state.selectedRange.start + 1 : 1;
   const endTime = new Date(startTime.getTime() + slotCount * SLOT_MINUTES * 60000);
-  const total = Number((slotCount * state.roomRate).toFixed(2));
+  const hourlyRate = getRateForDay(state.selectedDate);
+  const total = Number((slotCount * hourlyRate).toFixed(2));
+  const rateLabel = isPeakDay(state.selectedDate) ? "Peak" : "Normal";
   summaryEl.textContent = `${state.roomName} - ${formatDate(state.selectedDate)} (${formatTime(
     startTime
-  )} to ${formatTime(endTime)})`;
+  )} to ${formatTime(endTime)}) - ${rateLabel} $${hourlyRate.toFixed(2)}/hr - Total $${total.toFixed(2)}`;
   addButton.disabled = false;
   addButton.dataset.total = total.toFixed(2);
 }
@@ -235,7 +265,8 @@ function bookSlot() {
   const startTime = state.selectedSlot.start;
   const slotCount = state.selectedRange ? state.selectedRange.end - state.selectedRange.start + 1 : 1;
   const endTime = new Date(startTime.getTime() + slotCount * SLOT_MINUTES * 60000);
-  const total = Number((slotCount * state.roomRate).toFixed(2));
+  const hourlyRate = getRateForDay(state.selectedDate);
+  const total = Number((slotCount * hourlyRate).toFixed(2));
   fetch(`/rooms/${state.roomId}/hold`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -287,7 +318,8 @@ function initWidget() {
   if (!widget) return;
   state.roomId = Number(widget.dataset.roomId);
   state.roomName = widget.dataset.roomName || "";
-  state.roomRate = Number(widget.dataset.roomRate || 0);
+  state.normalRate = Number(widget.dataset.normalRate || 12);
+  state.peakRate = Number(widget.dataset.peakRate || 15);
   const params = new URLSearchParams(window.location.search);
   const startParam = params.get("start");
   const endParam = params.get("end");

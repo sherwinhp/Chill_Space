@@ -10,6 +10,8 @@ const {
   removeExpiredRoomBookings,
 } = require("../models/cartModel");
 const { releaseBookingHold } = require("../models/bookingsModel");
+const { findRoomById } = require("../models/roomsModel");
+const { calculateBookingPrice, getMaxAllowedDate } = require("../utils/bookingPricing");
 
 function getOwner(req) {
   const userId = req.session ? req.session.userId : null;
@@ -82,8 +84,24 @@ async function addItem(req, res) {
     if (!startValue || Number.isNaN(startValue.getTime()) || startValue <= new Date()) {
       return res.status(400).json({ error: "Booking time must be in the future." });
     }
+    const endValue = parseLocalDateTime(end_time);
+    if (!endValue || Number.isNaN(endValue.getTime()) || endValue <= startValue) {
+      return res.status(400).json({ error: "Invalid booking time range." });
+    }
+    const maxAllowedDate = getMaxAllowedDate(new Date());
+    if (startValue > maxAllowedDate || endValue > maxAllowedDate) {
+      return res.status(400).json({ error: "Bookings are only available up to 3 months ahead." });
+    }
+    const room = await findRoomById(Number(room_id));
+    if (!room) {
+      return res.status(404).json({ error: "Room not found." });
+    }
+    const serverPrice = calculateBookingPrice(startValue, endValue);
+    if (!Number.isFinite(serverPrice) || serverPrice <= 0) {
+      return res.status(400).json({ error: "Unable to calculate booking price." });
+    }
     const normalizedStart = formatLocalDateTime(startValue);
-    const normalizedEnd = formatLocalDateTime(parseLocalDateTime(end_time));
+    const normalizedEnd = formatLocalDateTime(endValue);
     const duplicate = await findBookingOverlap({
       userId,
       sessionId,
@@ -99,7 +117,7 @@ async function addItem(req, res) {
       sessionId,
       type: "room_booking",
       name,
-      price: Number(price),
+      price: serverPrice,
       qty: 1,
       details,
       roomId: Number(room_id),

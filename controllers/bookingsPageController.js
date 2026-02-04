@@ -5,6 +5,8 @@ const {
   updateBookingDb,
 } = require("../models/bookingsModel");
 const { listRooms, findRoomById } = require("../models/roomsModel");
+const { reverseOrderCashbackForBookingIfRefunded } = require("../models/walletModel");
+const { calculateBookingPrice, getMaxAllowedDate } = require("../utils/bookingPricing");
 
 async function renderBookings(req, res) {
   try {
@@ -65,8 +67,12 @@ async function createBooking(req, res) {
       return res.status(400).send("End time must be later than start time.");
     }
 
-    const totalMinutes = (end - start) / 60000;
-    const totalPrice = Number(((totalMinutes / 60) * room.pricePerHour).toFixed(2));
+    const maxAllowedDate = getMaxAllowedDate(new Date());
+    if (start > maxAllowedDate || end > maxAllowedDate) {
+      return res.status(400).send("Bookings are only available up to 3 months ahead.");
+    }
+
+    const totalPrice = calculateBookingPrice(start, end);
 
     await createBookingDb({
       user_id: req.session.userId,
@@ -106,6 +112,9 @@ async function cancelBooking(req, res) {
     await updateBookingDb(req.params.id, {
       payment_status: "cancelled",
       admin_status: "declined",
+    });
+    reverseOrderCashbackForBookingIfRefunded(req.params.id).catch((error) => {
+      console.error("Cashback reversal failed:", error.message);
     });
 
     res.redirect("/bookings");
