@@ -72,7 +72,10 @@ async function createBooking(req, res) {
       return res.status(400).send("Bookings are only available up to 3 months ahead.");
     }
 
-    const totalPrice = calculateBookingPrice(start, end);
+    const totalPrice = calculateBookingPrice(start, end, {
+      normalRate: room.normalHourlyRate,
+      peakRate: room.peakHourlyRate,
+    });
 
     await createBookingDb({
       user_id: req.session.userId,

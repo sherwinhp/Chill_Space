@@ -19,6 +19,8 @@ const state = {
   selectedDate: null,
   selectedSlot: null,
   selectedRange: null,
+  viewMonthIndex: 0,
+  calendarBaseMonth: null,
 };
 
 function dispatchCartUpdate() {
@@ -51,6 +53,18 @@ function addMonths(date, months) {
   const next = new Date(date);
   next.setMonth(next.getMonth() + months);
   return next;
+}
+
+function startOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function endOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
+function monthDiff(from, to) {
+  return (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
 }
 
 function isPeakDay(value) {
@@ -110,60 +124,77 @@ function dayHasAvailability(day) {
 function renderCalendar(start, end) {
   if (!calendarEl) return;
   calendarEl.innerHTML = "";
+  const baseMonth = state.calendarBaseMonth || startOfMonth(new Date());
+  const visibleMonth = addMonths(baseMonth, state.viewMonthIndex);
+  const visibleStart = startOfMonth(visibleMonth);
+  const visibleEnd = endOfMonth(visibleMonth);
+  const days = listDays(visibleStart, visibleEnd).filter((day) => day >= toDateOnly(start) && day <= toDateOnly(end));
 
-  const days = listDays(start, end);
-  const byMonth = days.reduce((acc, day) => {
-    const key = `${day.getFullYear()}-${day.getMonth()}`;
-    if (!acc[key]) {
-      acc[key] = {
-        label: day.toLocaleDateString("en-SG", { month: "long", year: "numeric" }),
-        days: [],
-      };
-    }
-    acc[key].days.push(day);
-    return acc;
-  }, {});
+  const nav = document.createElement("div");
+  nav.className = "calendar-nav";
+  const prevDisabled = state.viewMonthIndex <= 0;
+  const nextDisabled = state.viewMonthIndex >= MONTHS_AHEAD - 1;
+  nav.innerHTML = `
+    <button type="button" class="calendar-nav-btn" data-calendar-prev ${prevDisabled ? "disabled" : ""}>Previous</button>
+    <h4 class="calendar-nav-label">${visibleMonth.toLocaleDateString("en-SG", {
+      month: "long",
+      year: "numeric",
+    })}</h4>
+    <button type="button" class="calendar-nav-btn" data-calendar-next ${nextDisabled ? "disabled" : ""}>Next</button>
+  `;
+  calendarEl.appendChild(nav);
 
-  Object.values(byMonth).forEach((month) => {
-    const section = document.createElement("div");
-    section.className = "calendar-month";
-    section.innerHTML = `<h4>${month.label}</h4>`;
-
-    const grid = document.createElement("div");
-    grid.className = "calendar-grid";
-    ["M", "T", "W", "T", "F", "S", "S"].forEach((label) => {
-      const header = document.createElement("span");
-      header.className = "calendar-weekday";
-      header.textContent = label;
-      grid.appendChild(header);
-    });
-    if (month.days.length) {
-      const firstDay = month.days[0];
-      const offset = (firstDay.getDay() + 6) % 7;
-      for (let i = 0; i < offset; i += 1) {
-        const spacer = document.createElement("span");
-        spacer.className = "calendar-spacer";
-        grid.appendChild(spacer);
-      }
-    }
-
-    month.days.forEach((day) => {
-      const available = dayHasAvailability(day);
-      const cell = document.createElement("button");
-      cell.type = "button";
-      cell.className = `calendar-day ${available ? "available" : "booked"}`;
-      if (isPeakDay(day)) {
-        cell.classList.add("peak-day");
-      }
-      cell.textContent = day.getDate();
-      cell.dataset.date = day.toISOString();
-      cell.addEventListener("click", () => selectDay(day));
-      grid.appendChild(cell);
-    });
-
-    section.appendChild(grid);
-    calendarEl.appendChild(section);
+  const grid = document.createElement("div");
+  grid.className = "calendar-grid";
+  ["M", "T", "W", "T", "F", "S", "S"].forEach((label) => {
+    const header = document.createElement("span");
+    header.className = "calendar-weekday";
+    header.textContent = label;
+    grid.appendChild(header);
   });
+
+  const offset = (visibleStart.getDay() + 6) % 7;
+  for (let i = 0; i < offset; i += 1) {
+    const spacer = document.createElement("span");
+    spacer.className = "calendar-spacer";
+    grid.appendChild(spacer);
+  }
+
+  days.forEach((day) => {
+    const hasAvailability = dayHasAvailability(day);
+    const dayClass = hasAvailability ? "available" : "booked";
+    const cell = document.createElement("button");
+    cell.type = "button";
+    cell.className = `calendar-day ${dayClass}`;
+    if (hasAvailability && isPeakDay(day)) {
+      cell.classList.add("peak-day");
+    }
+    if (!hasAvailability) {
+      cell.classList.add("fully-booked");
+    }
+    cell.textContent = day.getDate();
+    cell.dataset.date = day.toISOString();
+    cell.addEventListener("click", () => selectDay(day));
+    grid.appendChild(cell);
+  });
+
+  calendarEl.appendChild(grid);
+  const prevBtn = calendarEl.querySelector("[data-calendar-prev]");
+  const nextBtn = calendarEl.querySelector("[data-calendar-next]");
+  if (prevBtn) {
+    prevBtn.addEventListener("click", () => {
+      if (state.viewMonthIndex <= 0) return;
+      state.viewMonthIndex -= 1;
+      renderCalendar(start, end);
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener("click", () => {
+      if (state.viewMonthIndex >= MONTHS_AHEAD - 1) return;
+      state.viewMonthIndex += 1;
+      renderCalendar(start, end);
+    });
+  }
 }
 
 function renderSlots(day) {
@@ -245,6 +276,7 @@ async function loadAvailability() {
   statusEl.textContent = "Loading availability...";
   const start = toDateOnly(new Date());
   const end = addMonths(start, MONTHS_AHEAD);
+  state.calendarBaseMonth = startOfMonth(start);
   try {
     const res = await fetch(
       `/rooms/${state.roomId}/availability?start=${start.toISOString()}&end=${end.toISOString()}`
@@ -349,6 +381,10 @@ function applyPrefillSelection() {
 
   state.selectedRange = { start: startIndex, end: endIndex };
   state.selectedSlot = slots[startIndex];
+  if (state.calendarBaseMonth) {
+    state.viewMonthIndex = Math.max(0, Math.min(MONTHS_AHEAD - 1, monthDiff(state.calendarBaseMonth, state.selectedDate)));
+    renderCalendar(toDateOnly(new Date()), addMonths(toDateOnly(new Date()), MONTHS_AHEAD));
+  }
   renderSlots(state.selectedDate);
   updateSummary();
   state.prefill = null;

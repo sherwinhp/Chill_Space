@@ -14,12 +14,17 @@ function parseFeatures(value) {
 }
 
 function toRoom(row) {
+  const fallbackRate = Number(row.hourly_rate || 0);
+  const normalRate = row.normal_hourly_rate != null ? Number(row.normal_hourly_rate) : fallbackRate;
+  const peakRate = row.peak_hourly_rate != null ? Number(row.peak_hourly_rate) : normalRate;
   return {
     id: row.room_id,
     name: row.name,
     subtitle: row.subtitle || "",
     capacity: row.capacity,
-    pricePerHour: Number(row.hourly_rate),
+    pricePerHour: normalRate,
+    normalHourlyRate: normalRate,
+    peakHourlyRate: peakRate,
     description: row.description || "",
     image: row.image_url || "",
     isAvailable: Boolean(row.is_available),
@@ -43,6 +48,8 @@ async function createRoom(payload) {
     subtitle,
     capacity,
     hourly_rate,
+    normal_hourly_rate,
+    peak_hourly_rate,
     description,
     image_url,
     features,
@@ -52,13 +59,15 @@ async function createRoom(payload) {
   try {
     const result = await db.query(
       `INSERT INTO rooms
-        (name, subtitle, capacity, hourly_rate, description, image_url, features, is_available)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        (name, subtitle, capacity, hourly_rate, normal_hourly_rate, peak_hourly_rate, description, image_url, features, is_available)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         name,
         subtitle || "",
         capacity,
         hourly_rate,
+        normal_hourly_rate,
+        peak_hourly_rate,
         description || "",
         image_url || "",
         features || "",
@@ -94,6 +103,8 @@ async function updateRoom(id, updates) {
     "subtitle",
     "capacity",
     "hourly_rate",
+    "normal_hourly_rate",
+    "peak_hourly_rate",
     "description",
     "image_url",
     "features",
@@ -114,7 +125,12 @@ async function updateRoom(id, updates) {
   } catch (error) {
     if (error && error.code === "ER_BAD_FIELD_ERROR") {
       const fallbackFields = fields.filter(
-        (field) => !field.startsWith("subtitle") && !field.startsWith("features") && !field.startsWith("is_available")
+        (field) =>
+          !field.startsWith("subtitle") &&
+          !field.startsWith("features") &&
+          !field.startsWith("is_available") &&
+          !field.startsWith("normal_hourly_rate") &&
+          !field.startsWith("peak_hourly_rate")
       );
       const fallbackParams = params.filter((_, idx) => fallbackFields.includes(fields[idx]));
       fallbackParams.push(id);

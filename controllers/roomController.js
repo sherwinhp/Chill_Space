@@ -8,8 +8,6 @@ const {
   releaseBookingHold,
 } = require("../models/bookingsModel");
 const {
-  NORMAL_RATE_PER_HOUR,
-  PEAK_RATE_PER_HOUR,
   getMaxAllowedDate,
 } = require("../utils/bookingPricing");
 
@@ -40,8 +38,8 @@ async function renderRoomBooking(req, res) {
   res.render("room-book", {
     room,
     pricing: {
-      normalRate: NORMAL_RATE_PER_HOUR,
-      peakRate: PEAK_RATE_PER_HOUR,
+      normalRate: room.normalHourlyRate,
+      peakRate: room.peakHourlyRate,
     },
     rating: {
       average: avgRating,

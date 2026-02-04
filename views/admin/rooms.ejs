@@ -38,7 +38,7 @@
               <div
                 class="admin-room-card"
                 data-search-item="admin-rooms"
-                data-search-text="<%= [room.name, room.subtitle, room.description, room.capacity, room.pricePerHour, room.isAvailable ? 'available' : 'unavailable', (room.features || []).join(' ')].filter(Boolean).join(' ') %>"
+                data-search-text="<%= [room.name, room.subtitle, room.description, room.capacity, room.normalHourlyRate, room.peakHourlyRate, room.isAvailable ? 'available' : 'unavailable', (room.features || []).join(' ')].filter(Boolean).join(' ') %>"
               >
                 <div class="admin-room-media">
                   <% if (room.image) { %>
@@ -54,8 +54,8 @@
                       <p><%= room.subtitle || "Gaming Room" %></p>
                     </div>
                     <div class="admin-room-price">
-                      <span>$<%= room.pricePerHour %></span>
-                      <small>/hour</small>
+                      <span>Normal $<%= Number(room.normalHourlyRate).toFixed(2) %></span>
+                      <small>Peak $<%= Number(room.peakHourlyRate).toFixed(2) %>/hour</small>
                     </div>
                   </div>
                   <p class="admin-room-desc"><%= room.description || "No description yet." %></p>
@@ -70,7 +70,8 @@
                       <input name="name" value="<%= room.name %>" placeholder="Name" required />
                       <input name="subtitle" value="<%= room.subtitle %>" placeholder="Subtitle" />
                       <input name="capacity" type="number" value="<%= room.capacity %>" placeholder="Capacity" required />
-                      <input name="hourly_rate" type="number" step="0.01" value="<%= room.pricePerHour %>" placeholder="Hourly Rate" required />
+                      <input name="normal_hourly_rate" type="number" step="0.01" value="<%= room.normalHourlyRate %>" placeholder="Normal Hourly Rate" required />
+                      <input name="peak_hourly_rate" type="number" step="0.01" value="<%= room.peakHourlyRate %>" placeholder="Peak Hourly Rate" required />
                       <textarea name="description" rows="2" placeholder="Description"><%= room.description %></textarea>
                       <textarea name="features" rows="2" placeholder="Features (comma separated)"><%= room.features ? room.features.join(", ") : "" %></textarea>
                       <label class="admin-inline-check">

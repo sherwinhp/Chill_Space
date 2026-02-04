@@ -96,7 +96,10 @@ async function addItem(req, res) {
     if (!room) {
       return res.status(404).json({ error: "Room not found." });
     }
-    const serverPrice = calculateBookingPrice(startValue, endValue);
+    const serverPrice = calculateBookingPrice(startValue, endValue, {
+      normalRate: room.normalHourlyRate,
+      peakRate: room.peakHourlyRate,
+    });
     if (!Number.isFinite(serverPrice) || serverPrice <= 0) {
       return res.status(400).json({ error: "Unable to calculate booking price." });
     }
