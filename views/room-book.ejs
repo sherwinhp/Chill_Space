@@ -30,8 +30,8 @@
 
           <div class="room-details">
             <div class="room-details-card">
-              <% if (room.image) { %>
-                <img src="<%= room.image %>" alt="<%= room.name %>" />
+              <% if (room.image_url || room.image) { %>
+                <img src="<%= room.image_url %>" alt="<%= room.name %>" />
               <% } %>
               <div class="room-details-body">
                 <div class="room-details-head">
@@ -54,12 +54,18 @@
                 <p class="room-description"><%= room.description || "No description yet." %></p>
                 <div class="room-meta">
                   <span>Capacity: <strong><%= room.capacity %> pax</strong></span>
-                  <span>Rate: <strong>$<%= Number(pricing.normalRate).toFixed(2) %>/hr (normal)</strong></span>
-                  <span>Peak Rate: <strong>$<%= Number(pricing.peakRate).toFixed(2) %>/hr</strong></span>
+                  <span>Normal Rate: <strong>$<%= Number(pricing.normalRate || 0).toFixed(2) %>/hr</strong></span>
+                  <span>Peak Rate (6PM–11PM): <strong>$<%= Number(pricing.peakRate || 0).toFixed(2) %>/hr</strong></span>
                 </div>
-                <% if (room.features && room.features.length) { %>
+                <% const featuresList = Array.isArray(room.features)
+                  ? room.features
+                  : String(room.features || "")
+                      .split(",")
+                      .map((item) => item.trim())
+                      .filter(Boolean); %>
+                <% if (featuresList && featuresList.length) { %>
                   <div class="room-features">
-                    <% room.features.forEach(function(feature) { %>
+                    <% featuresList.forEach(function(feature) { %>
                       <span><%= feature %></span>
                     <% }) %>
                   </div>
@@ -83,7 +89,7 @@
               </div>
               <div class="booking-legend">
                 <span><i class="legend-dot available"></i>Available</span>
-                <span><i class="legend-dot peak"></i>Peak day</span>
+                <span><i class="legend-dot peak"></i>Peak (6PM–11PM)</span>
                 <span><i class="legend-dot booked"></i>Fully booked</span>
                 <span><i class="legend-dot selected"></i>Selected</span>
               </div>

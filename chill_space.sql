@@ -304,6 +304,8 @@ CREATE TABLE `rooms` (
   `description` text,
   `capacity` int NOT NULL,
   `hourly_rate` decimal(10,2) NOT NULL,
+  `normal_hourly_rate` decimal(10,2) DEFAULT NULL,
+  `peak_hourly_rate` decimal(10,2) DEFAULT NULL,
   `image_url` varchar(255) DEFAULT NULL,
   `features` text,
   `is_available` tinyint(1) DEFAULT '1',
@@ -318,7 +320,62 @@ CREATE TABLE `rooms` (
 
 LOCK TABLES `rooms` WRITE;
 /*!40000 ALTER TABLE `rooms` DISABLE KEYS */;
-INSERT INTO `rooms` VALUES (1,'Gamer Room 1','','Good Gaming Room',1,12.00,'/uploads/1769092826605-694259129.jpg','',1,'2026-01-22 14:40:26');
+INSERT INTO `rooms` VALUES (1,'Gamer Room 1','','Good Gaming Room',1,12.00,12.00,12.00,'/images/gamer-room-1.jpg','',1,'2026-01-22 14:40:26');
+
+-- Ensure Gamer Room 1 has features
+UPDATE rooms
+SET features = 'PC setup, Headsets, RGB lighting'
+WHERE name = 'Gamer Room 1' OR room_id = 1;
+
+-- Ensure correct image paths for all rooms
+UPDATE rooms
+SET image_url = '/images/gamer-room-1.jpg'
+WHERE name = 'Gamer Room 1' OR room_id = 1;
+
+UPDATE rooms
+SET image_url = '/images/gamer-room-2.jpg'
+WHERE name = 'Gamer Room 2';
+
+UPDATE rooms
+SET image_url = '/images/squad-room.jpg'
+WHERE name = 'Squad Room';
+
+UPDATE rooms
+SET image_url = '/images/vr-room.jpg'
+WHERE name = 'VR Room';
+
+-- Insert new rooms if missing (no duplicates)
+INSERT INTO rooms
+  (name, subtitle, description, capacity, hourly_rate, normal_hourly_rate, peak_hourly_rate, image_url, features, is_available, created_at)
+SELECT
+  'Squad Room',
+  '4 Pax Team Room',
+  'Team gaming room with 4 PC setups for squad matches and group sessions',
+  4,
+  30.00,
+  30.00,
+  30.00,
+  '/images/squad-room.jpg',
+  '4 PC setup, Team seating, Large display, RGB lighting',
+  1,
+  NOW()
+WHERE NOT EXISTS (SELECT 1 FROM rooms WHERE name = 'Squad Room');
+
+INSERT INTO rooms
+  (name, subtitle, description, capacity, hourly_rate, normal_hourly_rate, peak_hourly_rate, image_url, features, is_available, created_at)
+SELECT
+  'VR Room',
+  'Immersive VR Experience',
+  'VR-ready room with motion play area and safety space for immersive games',
+  2,
+  25.00,
+  25.00,
+  25.00,
+  '/images/vr-room.jpg',
+  'VR headset support, Motion play area, Safety padding',
+  1,
+  NOW()
+WHERE NOT EXISTS (SELECT 1 FROM rooms WHERE name = 'VR Room');
 /*!40000 ALTER TABLE `rooms` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -497,5 +554,32 @@ CREATE TABLE IF NOT EXISTS wallet_transactions (
 ALTER TABLE wallet_transactions
   MODIFY COLUMN type ENUM('topup','payment','refund','adjustment','reward') NOT NULL;
 
+DROP TABLE IF EXISTS password_resets;
 
+/*!40101 SET @saved_cs_client = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+
+CREATE TABLE password_resets (
+  id bigint NOT NULL AUTO_INCREMENT,
+  user_id int NOT NULL,
+  token varchar(128) NOT NULL,
+  expires_at datetime NOT NULL,
+  used_at datetime DEFAULT NULL,
+  created_at timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY uq_password_resets_token (`token`),
+  KEY idx_password_resets_user (`user_id`),
+  CONSTRAINT fk_password_resets_user FOREIGN KEY (`user_id`) REFERENCES users (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+ /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table password_resets
+--
+
+LOCK TABLES password_resets WRITE;
+/*!40000 ALTER TABLE password_resets DISABLE KEYS */;
+/*!40000 ALTER TABLE password_resets ENABLE KEYS */;
+UNLOCK TABLES;
 

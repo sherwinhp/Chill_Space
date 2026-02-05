@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const db = require("../db");
 const { createTransactionFromCart } = require("./transactionsModel");
 const { CASHBACK_RATE } = require("../config/walletRewards");
+const { calculateBookingPrice } = require("../utils/bookingPricing");
 
 function toCents(value) {
   const numeric = Number(value);
@@ -580,7 +581,8 @@ async function issueBookingCashbackIfEligible(bookingId) {
           b.end_time,
           b.payment_status,
           b.admin_status,
-          r.hourly_rate
+          r.normal_hourly_rate,
+          r.peak_hourly_rate
         FROM bookings b
         JOIN rooms r ON r.room_id = b.room_id
         WHERE b.booking_id = ?
@@ -608,9 +610,11 @@ async function issueBookingCashbackIfEligible(bookingId) {
       return { ok: true, skipped: true, reason: "invalid_booking_times" };
     }
 
-    const bookingOnlyTotalCents = Math.round(
-      ((end.getTime() - start.getTime()) / 3600000) * Number(booking.hourly_rate) * 100
-    );
+    const bookingOnlyTotal = calculateBookingPrice(start, end, {
+      normalRate: booking.normal_hourly_rate,
+      peakRate: booking.peak_hourly_rate,
+    });
+    const bookingOnlyTotalCents = Math.round(Number(bookingOnlyTotal) * 100);
     if (!Number.isFinite(bookingOnlyTotalCents) || bookingOnlyTotalCents <= 0) {
       await connection.rollback();
       return { ok: true, skipped: true, reason: "invalid_booking_total" };

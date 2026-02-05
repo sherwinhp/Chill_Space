@@ -14,31 +14,106 @@ function parseFeatures(value) {
 }
 
 function toRoom(row) {
-  const fallbackRate = Number(row.hourly_rate || 0);
-  const normalRate = row.normal_hourly_rate != null ? Number(row.normal_hourly_rate) : fallbackRate;
-  const peakRate = row.peak_hourly_rate != null ? Number(row.peak_hourly_rate) : normalRate;
+  const normalRate = Number(row.normal_hourly_rate);
+  const peakRate = Number(row.peak_hourly_rate);
+  const safeNormalRate = Number.isFinite(normalRate) ? normalRate : 0;
+  const safePeakRate = Number.isFinite(peakRate) ? peakRate : safeNormalRate;
   return {
     id: row.room_id,
     name: row.name,
     subtitle: row.subtitle || "",
     capacity: row.capacity,
-    pricePerHour: normalRate,
-    normalHourlyRate: normalRate,
-    peakHourlyRate: peakRate,
+    pricePerHour: safeNormalRate,
+    normalHourlyRate: safeNormalRate,
+    peakHourlyRate: safePeakRate,
     description: row.description || "",
     image: row.image_url || "",
+    image_url: row.image_url || "",
     isAvailable: Boolean(row.is_available),
     features: parseFeatures(row.features),
   };
 }
 
 async function listRooms() {
-  const rows = await db.query("SELECT * FROM rooms ORDER BY room_id ASC");
+  const rows = await db.query(
+    `SELECT
+      room_id,
+      name,
+      subtitle,
+      description,
+      capacity,
+      normal_hourly_rate,
+      peak_hourly_rate,
+      image_url,
+      features,
+      is_available,
+      created_at
+     FROM rooms
+     ORDER BY room_id ASC`
+  );
+  return rows.map(toRoom);
+}
+
+async function getAllRooms() {
+  const rows = await db.query(
+    `SELECT
+      room_id,
+      name,
+      subtitle,
+      description,
+      capacity,
+      normal_hourly_rate,
+      peak_hourly_rate,
+      image_url,
+      features,
+      is_available,
+      created_at
+     FROM rooms
+     WHERE is_available = 1
+     ORDER BY room_id ASC`
+  );
   return rows.map(toRoom);
 }
 
 async function findRoomById(id) {
-  const rows = await db.query("SELECT * FROM rooms WHERE room_id = ?", [id]);
+  const rows = await db.query(
+    `SELECT
+      room_id,
+      name,
+      subtitle,
+      description,
+      capacity,
+      normal_hourly_rate,
+      peak_hourly_rate,
+      image_url,
+      features,
+      is_available,
+      created_at
+     FROM rooms
+     WHERE room_id = ?`,
+    [id]
+  );
+  return rows.length ? toRoom(rows[0]) : null;
+}
+
+async function getRoomById(roomId) {
+  const rows = await db.query(
+    `SELECT
+      room_id,
+      name,
+      subtitle,
+      description,
+      capacity,
+      normal_hourly_rate,
+      peak_hourly_rate,
+      image_url,
+      features,
+      is_available,
+      created_at
+     FROM rooms
+     WHERE room_id = ?`,
+    [roomId]
+  );
   return rows.length ? toRoom(rows[0]) : null;
 }
 
@@ -47,7 +122,6 @@ async function createRoom(payload) {
     name,
     subtitle,
     capacity,
-    hourly_rate,
     normal_hourly_rate,
     peak_hourly_rate,
     description,
@@ -59,13 +133,12 @@ async function createRoom(payload) {
   try {
     const result = await db.query(
       `INSERT INTO rooms
-        (name, subtitle, capacity, hourly_rate, normal_hourly_rate, peak_hourly_rate, description, image_url, features, is_available)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (name, subtitle, capacity, normal_hourly_rate, peak_hourly_rate, description, image_url, features, is_available)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         name,
         subtitle || "",
         capacity,
-        hourly_rate,
         normal_hourly_rate,
         peak_hourly_rate,
         description || "",
@@ -76,21 +149,6 @@ async function createRoom(payload) {
     );
     return findRoomById(result.insertId);
   } catch (error) {
-    if (error && error.code === "ER_BAD_FIELD_ERROR") {
-      const result = await db.query(
-        `INSERT INTO rooms
-          (name, capacity, hourly_rate, description, image_url)
-         VALUES (?, ?, ?, ?, ?)`,
-        [
-          name,
-          capacity,
-          hourly_rate,
-          description || "",
-          image_url || "",
-        ]
-      );
-      return findRoomById(result.insertId);
-    }
     throw error;
   }
 }
@@ -102,7 +160,6 @@ async function updateRoom(id, updates) {
     "name",
     "subtitle",
     "capacity",
-    "hourly_rate",
     "normal_hourly_rate",
     "peak_hourly_rate",
     "description",
@@ -152,7 +209,9 @@ async function deleteRoom(id) {
 
 module.exports = {
   listRooms,
+  getAllRooms,
   findRoomById,
+  getRoomById,
   createRoom,
   updateRoom,
   deleteRoom,

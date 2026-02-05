@@ -5,6 +5,8 @@ const { findRoomById } = require("./roomsModel");
 const BOOKING_STATUSES = ["pending", "approved", "rejected", "cancelled"];
 const PAYMENT_STATUSES = ["pending", "paid", "refunded", "void"];
 const ACTIVE_STATUSES = new Set(["pending", "approved"]);
+const PEAK_START_HOUR = 18;
+const PEAK_END_HOUR = 23;
 
 const bookings = [
   {
@@ -80,7 +82,11 @@ function createBooking(payload) {
     toMinutes(payload.endTime) - toMinutes(payload.startTime) > 0
       ? toMinutes(payload.endTime) - toMinutes(payload.startTime)
       : 0;
-  const totalPrice = Number(((totalMinutes / 60) * room.pricePerHour).toFixed(2));
+  const rateUsed = isPeakHourTime(payload.startTime)
+    ? Number(room.peakHourlyRate)
+    : Number(room.normalHourlyRate);
+  const safeRate = Number.isFinite(rateUsed) ? rateUsed : 0;
+  const totalPrice = Number(((totalMinutes / 60) * safeRate).toFixed(2));
 
   const booking = {
     id: nextId++,
@@ -209,6 +215,13 @@ function timesOverlap(startA, endA, startB, endB) {
 function toMinutes(value) {
   const [hours, minutes] = value.split(":").map((v) => Number(v));
   return hours * 60 + minutes;
+}
+
+function isPeakHourTime(value) {
+  if (!value || typeof value !== "string") return false;
+  const [hours] = value.split(":").map((v) => Number(v));
+  if (!Number.isFinite(hours)) return false;
+  return hours >= PEAK_START_HOUR && hours < PEAK_END_HOUR;
 }
 
 module.exports = {

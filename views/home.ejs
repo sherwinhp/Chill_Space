@@ -48,10 +48,10 @@
                 <article
                   class="room-card"
                   data-search-item="rooms"
-                  data-search-text="<%= [room.name, room.subtitle, (room.features || []).join(' '), room.capacity, room.pricePerHour].filter(Boolean).join(' ') %>"
+                  data-search-text="<%= [room.name, room.subtitle, (room.features || []).join(' '), room.capacity, room.normalHourlyRate, room.peakHourlyRate].filter(Boolean).join(' ') %>"
                 >
                   <div class="card-media">
-                    <img src="<%= room.image %>" alt="<%= room.name %>" />
+                    <img src="<%= room.image_url %>" alt="<%= room.name %>" />
                     <% if (room.isAvailable) { %>
                       <span class="pill">Available</span>
                     <% } %>
@@ -62,18 +62,27 @@
                         <h3><%= room.name %></h3>
                         <p><%= room.subtitle %></p>
                       </div>
-                      <div class="price">
-                        <strong>$<%= room.pricePerHour %></strong>
-                        <span>/hour</span>
+                      <div class="price room-price">
+                        <strong>Normal: $<%= Number(room.normalHourlyRate || 0).toFixed(2) %>/hr</strong>
+                        <span> | Peak (6PM–11PM): $<%= Number(room.peakHourlyRate || 0).toFixed(2) %>/hr</span>
                       </div>
                     </div>
                     <div class="meta">Capacity: <%= room.capacity %> people</div>
+                    <% const featuresList = Array.isArray(room.features)
+                      ? room.features
+                      : String(room.features || "")
+                          .split(",")
+                          .map((item) => item.trim())
+                          .filter(Boolean); %>
+                    <% const displayFeatures = featuresList.length
+                      ? featuresList
+                      : ["PC setup", "Headsets", "RGB lighting"]; %>
                     <div class="features">
-                      <% room.features.forEach(function(feature) { %>
+                      <% displayFeatures.slice(0, 3).forEach(function(feature) { %>
                         <span><%= feature %></span>
                       <% }) %>
                     </div>
-                    <a class="btn primary full" href="/rooms/<%= room.id %>/book">Book Now</a>
+                    <a class="btn primary full" href="/rooms/<%= room.id %>">Book Now</a>
                   </div>
                 </article>
               <% }) %>

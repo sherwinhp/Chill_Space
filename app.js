@@ -6,6 +6,7 @@ const bookingsPageController = require("./controllers/bookingsPageController");
 const menuController = require("./controllers/menuController");
 const eventsPageController = require("./controllers/eventsPageController");
 const roomController = require("./controllers/roomController");
+const roomsRouter = require("./routes/rooms");
 const cartController = require("./controllers/cartController");
 const authController = require("./controllers/authController");
 const paymentsController = require("./controllers/paymentsController");
@@ -50,6 +51,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.static(path.join(__dirname, "public")));
+app.use("/images", express.static(path.join(__dirname, "public", "images")));
 app.use(attachWalletBalance);
 
 app.use((req, res, next) => {
@@ -66,9 +68,8 @@ app.get("/", homeController.renderHome);
 app.get("/bookings", bookingsPageController.renderBookings);
 app.post("/bookings", bookingsPageController.createBooking);
 app.post("/bookings/:id/cancel", bookingsPageController.cancelBooking);
-app.get("/rooms/:id/book", roomController.renderRoomBooking);
-app.get("/rooms/:id/availability", roomController.listAvailability);
-app.post("/rooms/:id/hold", express.json(), roomController.createHold);
+app.use("/rooms", roomsRouter);
+
 app.post("/holds/:id/release", roomController.releaseHold);
 app.get("/cart/items", cartController.listItems);
 app.post("/cart/items", express.json(), cartController.addItem);

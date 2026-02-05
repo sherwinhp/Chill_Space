@@ -1,13 +1,14 @@
 const NORMAL_RATE_PER_HOUR = 12;
 const PEAK_RATE_PER_HOUR = 15;
 const MAX_BOOKING_MONTHS_AHEAD = 3;
+const PEAK_START_HOUR = 18;
+const PEAK_END_HOUR = 23;
 
-function isPeakDate(value) {
+function isPeakHour(value) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return false;
-  const day = date.getDay();
-  // Friday, Saturday, Sunday are peak days.
-  return day === 5 || day === 6 || day === 0;
+  const hour = date.getHours();
+  return hour >= PEAK_START_HOUR && hour < PEAK_END_HOUR;
 }
 
 function resolveRates(pricing = {}) {
@@ -19,9 +20,9 @@ function resolveRates(pricing = {}) {
   };
 }
 
-function getHourlyRateByDate(value, pricing = {}) {
+function getHourlyRateByTime(value, pricing = {}) {
   const rates = resolveRates(pricing);
-  return isPeakDate(value) ? rates.peakRate : rates.normalRate;
+  return isPeakHour(value) ? rates.peakRate : rates.normalRate;
 }
 
 function getMaxAllowedDate(from = new Date()) {
@@ -41,16 +42,18 @@ function calculateBookingPrice(start, end, pricing = {}) {
     return 0;
   }
   const hours = (endDate - startDate) / 3600000;
-  const hourlyRate = getHourlyRateByDate(startDate, pricing);
+  const hourlyRate = getHourlyRateByTime(startDate, pricing);
   return Number((hours * hourlyRate).toFixed(2));
 }
 
 module.exports = {
   NORMAL_RATE_PER_HOUR,
   PEAK_RATE_PER_HOUR,
+  PEAK_START_HOUR,
+  PEAK_END_HOUR,
   MAX_BOOKING_MONTHS_AHEAD,
-  isPeakDate,
-  getHourlyRateByDate,
+  isPeakHour,
+  getHourlyRateByTime,
   getMaxAllowedDate,
   calculateBookingPrice,
 };

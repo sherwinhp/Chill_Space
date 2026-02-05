@@ -1,4 +1,9 @@
-const { listRooms: listRoomsData, findRoomById } = require("../models/roomsModel");
+const {
+  listRooms: listRoomsData,
+  findRoomById,
+  getAllRooms,
+  getRoomById,
+} = require("../models/roomsModel");
 const Reviews = require("../models/reviewsModel");
 const {
   isRoomAvailable,
@@ -12,22 +17,28 @@ const {
 } = require("../utils/bookingPricing");
 
 async function listRooms(req, res) {
+  const rooms = await getAllRooms();
+  console.log("[ROOMS]", rooms.map((room) => ({ id: room.id, name: room.name, image_url: room.image_url })));
+  res.render("home", { rooms });
+}
+
+async function listRoomsApi(req, res) {
   const rooms = await listRoomsData();
   res.json(rooms);
 }
 
 async function getRoom(req, res) {
   const roomId = Number(req.params.id);
-  const room = await findRoomById(roomId);
+  const room = await getRoomById(roomId);
   if (!room) {
     return res.status(404).json({ error: "Room not found" });
   }
   res.json(room);
 }
 
-async function renderRoomBooking(req, res) {
+async function showRoom(req, res) {
   const roomId = Number(req.params.id);
-  const room = await findRoomById(roomId);
+  const room = await getRoomById(roomId);
   if (!room) {
     return res.status(404).send("Room not found");
   }
@@ -52,7 +63,7 @@ async function renderRoomBooking(req, res) {
 async function checkAvailability(req, res) {
   const roomId = Number(req.params.id);
   const { date, startTime, endTime } = req.query;
-  const room = await findRoomById(roomId);
+  const room = await getRoomById(roomId);
   if (!room) {
     return res.status(404).json({ error: "Room not found" });
   }
@@ -72,7 +83,7 @@ async function listAvailability(req, res) {
     return res.status(400).json({ error: "Missing roomId, start, or end." });
   }
 
-  const room = await findRoomById(roomId);
+  const room = await getRoomById(roomId);
   if (!room) {
     return res.status(404).json({ error: "Room not found" });
   }
@@ -102,7 +113,7 @@ async function createHold(req, res) {
     return res.status(400).json({ error: "Missing room, start, or end time." });
   }
 
-  const room = await findRoomById(roomId);
+  const room = await getRoomById(roomId);
   if (!room) {
     return res.status(404).json({ error: "Room not found" });
   }
@@ -182,8 +193,9 @@ async function releaseHold(req, res) {
 
 module.exports = {
   listRooms,
+  listRoomsApi,
   getRoom,
-  renderRoomBooking,
+  showRoom,
   checkAvailability,
   listAvailability,
   createHold,

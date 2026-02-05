@@ -69,8 +69,8 @@ function renderRoomCreate(req, res) {
 
 async function addRoom(req, res) {
   const imageUrl = req.file ? `/uploads/${req.file.filename}` : req.body.image_url;
-  const normalHourlyRate = Number(req.body.normal_hourly_rate || req.body.hourly_rate);
-  const peakHourlyRate = Number(req.body.peak_hourly_rate || req.body.hourly_rate);
+  const normalHourlyRate = Number(req.body.normal_hourly_rate);
+  const peakHourlyRate = Number(req.body.peak_hourly_rate);
   if (
     !Number.isFinite(normalHourlyRate) ||
     normalHourlyRate <= 0 ||
@@ -83,7 +83,6 @@ async function addRoom(req, res) {
     name: req.body.name,
     subtitle: req.body.subtitle,
     capacity: Number(req.body.capacity),
-    hourly_rate: normalHourlyRate,
     normal_hourly_rate: normalHourlyRate,
     peak_hourly_rate: peakHourlyRate,
     description: req.body.description,
@@ -97,8 +96,8 @@ async function addRoom(req, res) {
 
 async function editRoom(req, res) {
   const imageUrl = req.file ? `/uploads/${req.file.filename}` : req.body.current_image_url;
-  const normalHourlyRate = Number(req.body.normal_hourly_rate || req.body.hourly_rate);
-  const peakHourlyRate = Number(req.body.peak_hourly_rate || req.body.hourly_rate);
+  const normalHourlyRate = Number(req.body.normal_hourly_rate);
+  const peakHourlyRate = Number(req.body.peak_hourly_rate);
   if (
     !Number.isFinite(normalHourlyRate) ||
     normalHourlyRate <= 0 ||
@@ -111,7 +110,6 @@ async function editRoom(req, res) {
     name: req.body.name,
     subtitle: req.body.subtitle,
     capacity: Number(req.body.capacity),
-    hourly_rate: normalHourlyRate,
     normal_hourly_rate: normalHourlyRate,
     peak_hourly_rate: peakHourlyRate,
     description: req.body.description,

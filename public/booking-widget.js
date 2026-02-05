@@ -2,6 +2,8 @@ const OPEN_HOUR = 10;
 const CLOSE_HOUR = 22;
 const SLOT_MINUTES = 60;
 const MONTHS_AHEAD = 3;
+const PEAK_START_HOUR = 18;
+const PEAK_END_HOUR = 23;
 
 const widget = document.querySelector("[data-booking-widget]");
 const calendarEl = document.querySelector("[data-booking-calendar]");
@@ -67,13 +69,13 @@ function monthDiff(from, to) {
   return (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
 }
 
-function isPeakDay(value) {
-  const day = value.getDay();
-  return day === 5 || day === 6 || day === 0;
+function isPeakHour(value) {
+  const hour = value.getHours();
+  return hour >= PEAK_START_HOUR && hour < PEAK_END_HOUR;
 }
 
-function getRateForDay(value) {
-  return isPeakDay(value) ? state.peakRate : state.normalRate;
+function getRateForTime(value) {
+  return isPeakHour(value) ? state.peakRate : state.normalRate;
 }
 
 function listDays(start, end) {
@@ -166,9 +168,6 @@ function renderCalendar(start, end) {
     const cell = document.createElement("button");
     cell.type = "button";
     cell.className = `calendar-day ${dayClass}`;
-    if (hasAvailability && isPeakDay(day)) {
-      cell.classList.add("peak-day");
-    }
     if (!hasAvailability) {
       cell.classList.add("fully-booked");
     }
@@ -261,9 +260,9 @@ function updateSummary() {
   const startTime = state.selectedSlot.start;
   const slotCount = state.selectedRange ? state.selectedRange.end - state.selectedRange.start + 1 : 1;
   const endTime = new Date(startTime.getTime() + slotCount * SLOT_MINUTES * 60000);
-  const hourlyRate = getRateForDay(state.selectedDate);
+  const hourlyRate = getRateForTime(startTime);
   const total = Number((slotCount * hourlyRate).toFixed(2));
-  const rateLabel = isPeakDay(state.selectedDate) ? "Peak" : "Normal";
+  const rateLabel = isPeakHour(startTime) ? "Peak" : "Normal";
   summaryEl.textContent = `${state.roomName} - ${formatDate(state.selectedDate)} (${formatTime(
     startTime
   )} to ${formatTime(endTime)}) - ${rateLabel} $${hourlyRate.toFixed(2)}/hr - Total $${total.toFixed(2)}`;
@@ -297,7 +296,7 @@ function bookSlot() {
   const startTime = state.selectedSlot.start;
   const slotCount = state.selectedRange ? state.selectedRange.end - state.selectedRange.start + 1 : 1;
   const endTime = new Date(startTime.getTime() + slotCount * SLOT_MINUTES * 60000);
-  const hourlyRate = getRateForDay(state.selectedDate);
+  const hourlyRate = getRateForTime(startTime);
   const total = Number((slotCount * hourlyRate).toFixed(2));
   fetch(`/rooms/${state.roomId}/hold`, {
     method: "POST",
