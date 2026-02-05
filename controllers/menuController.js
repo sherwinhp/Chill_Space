@@ -23,10 +23,10 @@ function normalizeImageUrl(value) {
   if (value.startsWith("/")) {
     return encodeURI(value);
   }
-  if (value.startsWith("images/") || value.startsWith("uploads/")) {
+  if (value.startsWith("uploads/") || value.startsWith("images/")) {
     return encodeURI(`/${value}`);
   }
-  return encodeURI(`/images/${value}`);
+  return encodeURI(`/uploads/${value}`);
 }
 
 function resolveMenuImage(item) {
@@ -35,7 +35,7 @@ function resolveMenuImage(item) {
     return normalizeImageUrl(rawImage);
   }
   const fallback = FALLBACK_MENU_IMAGES[item.name];
-  return fallback ? normalizeImageUrl(`images/${fallback}`) : "";
+  return fallback ? normalizeImageUrl(`uploads/${fallback}`) : "";
 }
 
 async function renderMenu(req, res) {

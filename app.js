@@ -51,7 +51,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.static(path.join(__dirname, "public")));
-app.use("/images", express.static(path.join(__dirname, "public", "images")));
+app.use("/images", express.static(path.join(__dirname, "public", "uploads")));
 app.use(attachWalletBalance);
 
 app.use((req, res, next) => {
