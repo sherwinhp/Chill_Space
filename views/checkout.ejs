@@ -6,6 +6,7 @@
     <title>Checkout | Cozy Place Gaming Rooms</title>
     <link rel="stylesheet" href="/styles.css" />
     <script src="https://www.paypal.com/sdk/js?client-id=<%= process.env.PAYPAL_CLIENT_ID %>&currency=SGD"></script>
+    <script src="https://js.stripe.com/v3/"></script>
   </head>
   <body>
     <div class="page">
@@ -37,6 +38,7 @@
                 data-wallet-balance-cents="<%= Number(walletBalance || 0) %>"
                 data-user-email="<%= session && session.email ? session.email : '' %>"
                 data-user-name="<%= session && session.name ? session.name : '' %>"
+                data-stripe-publishable-key="<%= process.env.STRIPE_PUBLISHABLE_KEY || '' %>"
               >
                 <div class="payment-block">
                   <h3>Payment options</h3>
@@ -80,17 +82,17 @@
                   </div>
                   <div class="field">
                     <span>Card number</span>
-                    <input type="text" inputmode="numeric" data-card-number placeholder="4242 4242 4242 4242" />
+                    <div class="stripe-input" id="card-number-element"></div>
                     <small class="field-hint card-brand" data-card-brand></small>
                   </div>
                   <div class="field-group">
                     <label class="field">
                       <span>Expiry (MM/YY)</span>
-                      <input type="text" inputmode="numeric" data-card-expiry placeholder="MM/YY" />
+                      <div class="stripe-input" id="card-expiry-element"></div>
                     </label>
                     <label class="field">
                       <span>CVV</span>
-                      <input type="password" inputmode="numeric" data-card-cvc placeholder="123" />
+                      <div class="stripe-input" id="card-cvc-element"></div>
                     </label>
                     <label class="field">
                       <span>Billing country</span>

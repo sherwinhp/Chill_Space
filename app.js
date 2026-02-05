@@ -101,6 +101,11 @@ app.post("/api/paypal/capture-order", express.json(), paymentsController.capture
 app.post("/payments/wallet/pay", express.json(), paymentsController.payCheckoutWithWallet);
 app.post("/payments/stripe/card/pay", express.json(), paymentsController.payCheckoutWithStripeCard);
 app.post(
+  "/payments/stripe/card/confirm",
+  express.json(),
+  paymentsController.confirmStripeCardPayment
+);
+app.post(
   "/stripe/grabpay/create-session",
   express.json(),
   paymentsController.createStripeGrabPaySession

@@ -19,7 +19,8 @@ const {
 } = require("../services/hitpayService");
 const { upsertPaymentMethod } = require("../models/paymentMethodsModel");
 const {
-  createCardPaymentIntent,
+  createCardPaymentIntentWithPaymentMethod,
+  confirmCardPaymentIntent,
   createGrabPayCheckoutSession,
   retrieveCheckoutSession,
   constructWebhookEvent,
@@ -658,6 +659,21 @@ function parseExpiryInput(expiry) {
   return { expMonth: match[1], expYear: match[2] };
 }
 
+function buildStripeRiskFromIntent(intent) {
+  const charge = intent?.charges?.data?.length ? intent.charges.data[0] : null;
+  const checks = charge?.payment_method_details?.card?.checks || {};
+  const flags = [];
+  if (checks.cvc_check === "fail") flags.push("cvc_mismatch");
+  if (checks.address_line1_check === "fail" || checks.address_postal_code_check === "fail") {
+    flags.push("avs_mismatch");
+  }
+  return {
+    flags,
+    checks,
+    outcome: charge?.outcome || {},
+  };
+}
+
 async function payCheckoutWithStripeCard(req, res) {
   try {
     const { userId, sessionId } = getOwner(req);
@@ -686,19 +702,15 @@ async function payCheckoutWithStripeCard(req, res) {
     }
 
     const body = req.body || {};
-    const expiryParsed = parseExpiryInput(body.card_expiry);
-    const expMonth = body.exp_month || expiryParsed.expMonth;
-    const expYear = body.exp_year || expiryParsed.expYear;
+    const paymentMethodId = body.payment_method_id;
+    if (!paymentMethodId) {
+      return res.status(400).json({ error: "Missing payment method." });
+    }
 
-    const result = await createCardPaymentIntent({
+    const result = await createCardPaymentIntentWithPaymentMethod({
       amount: total.toFixed(2),
       currency: "sgd",
-      card: {
-        number: body.card_number,
-        expMonth,
-        expYear,
-        cvc: body.cvc,
-      },
+      paymentMethodId,
       billing: {
         name: body.card_name || req.session?.name,
         email: body.card_email || req.session?.email,
@@ -715,8 +727,8 @@ async function payCheckoutWithStripeCard(req, res) {
     if (result.requiresAction) {
       return res.json({
         requiresAction: true,
-        redirectUrl: result.nextActionUrl,
         clientSecret: result.clientSecret,
+        paymentIntentId: result.paymentIntentId,
         risk: result.risk,
         card: result.card,
       });
@@ -790,6 +802,9 @@ async function payCheckoutWithStripeCard(req, res) {
     sendBookingConfirmationEmails(transaction.transactionId).catch((error) => {
       console.error("Booking confirmation email failed:", error.message);
     });
+    sendInvoiceEmail(transaction.transactionId, userId).catch((error) => {
+      console.error("Invoice email failed:", error.message);
+    });
 
     return res.json({
       success: true,
@@ -799,6 +814,106 @@ async function payCheckoutWithStripeCard(req, res) {
     });
   } catch (error) {
     console.error("Stripe card payment failed:", error.message);
+    return res.status(500).json({ error: error.message || "Stripe payment failed." });
+  }
+}
+
+async function confirmStripeCardPayment(req, res) {
+  try {
+    const { userId, sessionId } = getOwner(req);
+    if (!userId) {
+      return res.status(401).json({ error: "Login required." });
+    }
+    const paymentIntentId = req.body?.payment_intent_id;
+    if (!paymentIntentId) {
+      return res.status(400).json({ error: "Missing payment intent." });
+    }
+
+    const intent = await confirmCardPaymentIntent(paymentIntentId);
+    if (!intent || intent.status !== "succeeded") {
+      return res.status(400).json({ error: "Stripe payment was not completed." });
+    }
+
+    const risk = buildStripeRiskFromIntent(intent);
+    if (isStripeRiskBlocked(risk)) {
+      try {
+        await refundPaymentIntent({ paymentIntentId });
+      } catch (error) {
+        console.error("Stripe risk refund failed:", error.message);
+      }
+      return res.status(402).json({
+        error: "Payment was flagged as high risk. Booking not created.",
+        risk,
+      });
+    }
+
+    const providerOrderId = `STRIPE-CARD-${paymentIntentId}`;
+    const existing = await findTransactionByProviderOrderId(providerOrderId, userId);
+    if (existing) {
+      return res.json({
+        success: true,
+        transactionId: existing.transaction_id,
+        risk,
+      });
+    }
+
+    const expiredHolds = await removeExpiredRoomBookings({
+      userId,
+      sessionId,
+      now: new Date(),
+    });
+    await Promise.all(expiredHolds.map((holdId) => releaseBookingHold(holdId)));
+
+    const items = await listCartItems({ userId, sessionId });
+    if (!items.length) {
+      return res.status(400).json({ error: "Cart is empty." });
+    }
+
+    const charge = intent.charges?.data?.length ? intent.charges.data[0] : null;
+    const cardDetails = charge?.payment_method_details?.card || {};
+
+    const transaction = await createTransactionFromCart({
+      userId,
+      sessionId,
+      providerOrderId,
+      items,
+      payerId: intent.payment_method || "stripe_card",
+      payerEmail: req.session?.email || "unknown",
+      status: "COMPLETED",
+    });
+
+    if (intent.payment_method && cardDetails.last4 && cardDetails.brand) {
+      upsertPaymentMethod({
+        userId,
+        provider: "stripe",
+        token: intent.payment_method,
+        brand: cardDetails.brand,
+        last4: cardDetails.last4,
+        funding: cardDetails.funding,
+      }).catch((error) => {
+        if (error && error.code !== "ER_NO_SUCH_TABLE") {
+          console.error("Payment method storage failed:", error.message);
+        }
+      });
+    }
+
+    issueTransactionCashbackIfEligible(transaction.transactionId).catch((error) => {
+      console.error("Cashback reward issuance failed:", error.message);
+    });
+    sendBookingConfirmationEmails(transaction.transactionId).catch((error) => {
+      console.error("Booking confirmation email failed:", error.message);
+    });
+    sendInvoiceEmail(transaction.transactionId, userId).catch((error) => {
+      console.error("Invoice email failed:", error.message);
+    });
+
+    return res.json({
+      success: true,
+      transactionId: transaction.transactionId,
+      risk,
+    });
+  } catch (error) {
+    console.error("Stripe card confirmation failed:", error.message);
     return res.status(500).json({ error: error.message || "Stripe payment failed." });
   }
 }
@@ -1023,6 +1138,7 @@ module.exports = {
   capturePaypalButtonOrder,
   payCheckoutWithWallet,
   payCheckoutWithStripeCard,
+  confirmStripeCardPayment,
   createStripeGrabPaySession,
   handleStripeSuccess,
   handleStripeWebhook,

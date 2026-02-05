@@ -250,6 +250,9 @@ function safeStripeError(error) {
   if (error.code === "card_declined") {
     return "Card was declined.";
   }
+  if (error.message) {
+    return error.message;
+  }
   return "Stripe payment failed.";
 }
 
@@ -365,10 +368,116 @@ async function createCardPaymentIntent({
       clientSecret: intent.client_secret,
     };
   } catch (error) {
+    console.error("Stripe card intent failed:", {
+      type: error.type,
+      code: error.code,
+      decline_code: error.decline_code,
+      message: error.message,
+      statusCode: error.statusCode,
+      requestId: error.requestId,
+    });
     recordFailure(failedByUser, userId);
     recordFailure(failedByCard, cardHash);
     throw new Error(safeStripeError(error));
   }
+}
+
+async function createCardPaymentIntentWithPaymentMethod({
+  amount,
+  currency = "sgd",
+  paymentMethodId,
+  billing = {},
+  description,
+  metadata,
+  userId,
+  ipCountry,
+  returnUrl,
+}) {
+  if (!stripe) {
+    throw new Error("Stripe is not configured. Check STRIPE_SECRET_KEY and install the stripe package.");
+  }
+  if (!paymentMethodId) {
+    throw new Error("Missing Stripe payment method.");
+  }
+
+  const velocity = checkVelocity({ userId, cardHash: paymentMethodId });
+  if (velocity.blocked) {
+    throw new Error("Too many failed attempts. Please wait and try again.");
+  }
+
+  try {
+    const countryCode = normalizeCountryCode(billing.country);
+    const intent = await stripe.paymentIntents.create({
+      amount: toStripeAmount(amount),
+      currency,
+      payment_method: paymentMethodId,
+      payment_method_types: ["card"],
+      confirm: true,
+      description,
+      metadata,
+      return_url: returnUrl,
+      expand: ["charges.data.outcome", "charges.data.payment_method_details"],
+    });
+
+    const requiresAction = intent.status === "requires_action";
+    const nextActionUrl = intent.next_action?.redirect_to_url?.url || null;
+    const charge = intent.charges?.data?.length ? intent.charges.data[0] : null;
+    const cardDetails = charge?.payment_method_details?.card || {};
+
+    if (intent.status === "succeeded") {
+      clearFailures(failedByUser, userId);
+      clearFailures(failedByCard, paymentMethodId);
+    } else if (intent.status !== "requires_action") {
+      recordFailure(failedByUser, userId);
+      recordFailure(failedByCard, paymentMethodId);
+    }
+
+    return {
+      status: intent.status,
+      paymentIntentId: intent.id,
+      paymentMethodId,
+      requiresAction,
+      nextActionUrl,
+      card: {
+        brand: cardDetails.brand || null,
+        last4: cardDetails.last4 || null,
+        type: cardDetails.funding || null,
+      },
+      risk: extractRiskSummary(intent, velocity, ipCountry, countryCode),
+      clientSecret: intent.client_secret,
+    };
+  } catch (error) {
+    console.error("Stripe card intent failed:", {
+      type: error.type,
+      code: error.code,
+      decline_code: error.decline_code,
+      message: error.message,
+      statusCode: error.statusCode,
+      requestId: error.requestId,
+    });
+    recordFailure(failedByUser, userId);
+    recordFailure(failedByCard, paymentMethodId);
+    throw new Error(safeStripeError(error));
+  }
+}
+
+async function confirmCardPaymentIntent(paymentIntentId) {
+  if (!stripe) {
+    throw new Error("Stripe is not configured. Check STRIPE_SECRET_KEY and install the stripe package.");
+  }
+  if (!paymentIntentId) {
+    throw new Error("Missing Stripe payment intent.");
+  }
+
+  const intent = await stripe.paymentIntents.retrieve(paymentIntentId, {
+    expand: ["charges.data.outcome", "charges.data.payment_method_details"],
+  });
+  if (intent.status === "requires_confirmation") {
+    return stripe.paymentIntents.confirm(paymentIntentId, {
+      expand: ["charges.data.outcome", "charges.data.payment_method_details"],
+    });
+  }
+  return intent;
 }
 
 async function createGrabPayPaymentIntent({
@@ -481,6 +590,8 @@ module.exports = {
     return stripe.webhooks.constructEvent(payload, signature, STRIPE_WEBHOOK_SECRET);
   },
   refundPaymentIntent,
+  createCardPaymentIntentWithPaymentMethod,
+  confirmCardPaymentIntent,
   validateCardNumber,
   detectCardBrand,
   validateExpiry,

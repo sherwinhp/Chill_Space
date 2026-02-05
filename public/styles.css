@@ -2594,6 +2594,22 @@ body {
   background: #fff;
 }
 
+.stripe-input {
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #fff;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.stripe-input .StripeElement {
+  width: 100%;
+}
+
 .field input:focus,
 .field textarea:focus {
   outline: none;

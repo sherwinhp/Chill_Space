@@ -12,11 +12,24 @@ const stripeCardOption = document.querySelector(
 );
 const cardNameInput = document.querySelector("[data-card-name]");
 const cardEmailInput = document.querySelector("[data-card-email]");
-const cardNumberInput = document.querySelector("[data-card-number]");
-const cardExpiryInput = document.querySelector("[data-card-expiry]");
-const cardCvcInput = document.querySelector("[data-card-cvc]");
 const cardCountryInput = document.querySelector("[data-card-country]");
 const cardPostalInput = document.querySelector("[data-card-postal]");
+const cardNumberMount = document.querySelector("#card-number-element");
+const cardExpiryMount = document.querySelector("#card-expiry-element");
+const cardCvcMount = document.querySelector("#card-cvc-element");
+const stripePublishableKey = paymentCard ? paymentCard.dataset.stripePublishableKey : "";
+const stripe = stripePublishableKey && window.Stripe ? window.Stripe(stripePublishableKey) : null;
+const stripeElements = stripe ? stripe.elements() : null;
+let stripeCardNumberElement = null;
+let stripeCardExpiryElement = null;
+let stripeCardCvcElement = null;
+const stripeCardState = {
+  numberComplete: false,
+  expiryComplete: false,
+  cvcComplete: false,
+  error: null,
+  brand: "unknown",
+};
 const netsModal = document.querySelector("[data-nets-modal]");
 const netsStatusEl = netsModal ? netsModal.querySelector("[data-nets-status]") : null;
 const netsQrImgEl = netsModal ? netsModal.querySelector("[data-nets-qr]") : null;
@@ -35,6 +48,46 @@ let netsRemainingSeconds = 0;
 let netsTxnRetrievalRef = null;
 let netsCompleting = false;
 let netsCreatingQr = false;
+
+if (stripeElements && cardNumberMount && cardExpiryMount && cardCvcMount) {
+  const baseStyle = {
+    base: {
+      color: "#1f2430",
+      fontSize: "14px",
+      fontFamily: "Space Grotesk, sans-serif",
+      "::placeholder": {
+        color: "#a0a4b0",
+      },
+    },
+  };
+
+  stripeCardNumberElement = stripeElements.create("cardNumber", { style: baseStyle });
+  stripeCardExpiryElement = stripeElements.create("cardExpiry", { style: baseStyle });
+  stripeCardCvcElement = stripeElements.create("cardCvc", { style: baseStyle });
+
+  stripeCardNumberElement.mount(cardNumberMount);
+  stripeCardExpiryElement.mount(cardExpiryMount);
+  stripeCardCvcElement.mount(cardCvcMount);
+
+  stripeCardNumberElement.on("change", (event) => {
+    stripeCardState.numberComplete = event.complete;
+    stripeCardState.error = event.error || null;
+    stripeCardState.brand = event.brand || "unknown";
+    updateCardBrand();
+  });
+
+  stripeCardExpiryElement.on("change", (event) => {
+    stripeCardState.expiryComplete = event.complete;
+    stripeCardState.error = event.error || stripeCardState.error;
+    updateCardBrand();
+  });
+
+  stripeCardCvcElement.on("change", (event) => {
+    stripeCardState.cvcComplete = event.complete;
+    stripeCardState.error = event.error || stripeCardState.error;
+    updateCardBrand();
+  });
+}
 
 function toggleStripeCardForm() {
   if (!stripeCardForm) return;
@@ -599,20 +652,39 @@ if (confirmPaymentButton) {
         if (!currentTotalCents || currentTotalCents <= 0) {
           throw new Error("Your cart is empty. Please add items before paying.");
         }
+        if (!stripe) {
+          throw new Error("Stripe is not configured on this page.");
+        }
         const validation = validateCardForm();
         if (!validation.ok) {
           throw new Error(validation.message || "Invalid card details.");
         }
+        const billingName = cardNameInput ? cardNameInput.value : "";
+        const billingEmail = cardEmailInput ? cardEmailInput.value : "";
+        const billingCountry = normalizeCountryInput(
+          cardCountryInput ? cardCountryInput.value : ""
+        );
+        const billingPostal = cardPostalInput ? cardPostalInput.value : "";
+
+        const paymentMethodResult = await stripe.createPaymentMethod({
+          type: "card",
+          card: stripeCardNumberElement,
+          billing_details: {
+            name: billingName || undefined,
+            email: billingEmail || undefined,
+            address: {
+              country: billingCountry || undefined,
+              postal_code: billingPostal || undefined,
+            },
+          },
+        });
+
+        if (paymentMethodResult.error) {
+          throw new Error(paymentMethodResult.error.message || "Unable to create card payment.");
+        }
+
         const payload = {
-          card_name: cardNameInput ? cardNameInput.value : "",
-          card_email: cardEmailInput ? cardEmailInput.value : "",
-          card_number: cardNumberInput ? cardNumberInput.value : "",
-          card_expiry: cardExpiryInput ? cardExpiryInput.value : "",
-          cvc: cardCvcInput ? cardCvcInput.value : "",
-          billing_country: normalizeCountryInput(
-            cardCountryInput ? cardCountryInput.value : ""
-          ),
-          postal_code: cardPostalInput ? cardPostalInput.value : "",
+          payment_method_id: paymentMethodResult.paymentMethod.id,
         };
         setConfirmBusy(true, "Processing card...");
         const response = await fetch("/payments/stripe/card/pay", {
@@ -625,13 +697,27 @@ if (confirmPaymentButton) {
           throw new Error(body.error || "Stripe card payment failed.");
         }
         if (body.requiresAction) {
-          if (body.redirectUrl) {
-            window.location.href = body.redirectUrl;
+          if (!body.clientSecret) {
+            throw new Error("Additional authentication required, but no client secret was returned.");
+          }
+          const actionResult = await stripe.handleCardAction(body.clientSecret);
+          if (actionResult.error) {
+            throw new Error(actionResult.error.message || "Card authentication failed.");
+          }
+          const confirmResponse = await fetch("/payments/stripe/card/confirm", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ payment_intent_id: actionResult.paymentIntent.id }),
+          });
+          const confirmBody = await readJsonOrText(confirmResponse);
+          if (!confirmResponse.ok) {
+            throw new Error(confirmBody.error || "Stripe payment confirmation failed.");
+          }
+          if (confirmBody.success && confirmBody.transactionId) {
+            window.location.href = `/payment-processing/${confirmBody.transactionId}`;
             return;
           }
-          throw new Error(
-            "Additional card authentication required. Please try another payment method."
-          );
+          throw new Error(confirmBody.error || "Stripe payment confirmation failed.");
         }
         if (body.success && body.transactionId) {
           window.location.href = `/payment-processing/${body.transactionId}`;
@@ -722,71 +808,36 @@ function detectCardBrand(number) {
 }
 
 function updateCardBrand() {
-  if (!cardNumberInput || !cardBrandEl) return;
-  const digits = normalizeCardNumber(cardNumberInput.value);
-  const brand = detectCardBrand(digits);
-  if (!digits) {
-    cardBrandEl.textContent = "";
+  if (!cardBrandEl) return;
+  if (stripeCardState.error) {
+    cardBrandEl.textContent = stripeCardState.error.message || "Card details invalid";
+    cardBrandEl.classList.add("is-invalid");
+    return;
+  }
+  if (stripeCardState.brand && stripeCardState.brand !== "unknown") {
+    cardBrandEl.textContent = `${stripeCardState.brand.toUpperCase()} detected`;
     cardBrandEl.classList.remove("is-invalid");
     return;
   }
-  if (brand === "unknown") {
-    cardBrandEl.textContent = "Card type not recognized";
-    cardBrandEl.classList.add("is-invalid");
-    return;
-  }
-  if (digits.length >= 12 && !luhnCheck(digits)) {
-    cardBrandEl.textContent = `${brand.toUpperCase()} - Invalid card number`;
-    cardBrandEl.classList.add("is-invalid");
-    return;
-  }
-  cardBrandEl.textContent = `${brand.toUpperCase()} detected`;
+  cardBrandEl.textContent = "";
   cardBrandEl.classList.remove("is-invalid");
 }
 
 function validateCardForm() {
-  const number = cardNumberInput ? cardNumberInput.value : "";
-  const digits = normalizeCardNumber(number);
-  if (!digits || digits.length < 12) {
-    return { ok: false, message: "Enter a valid card number." };
+  if (!stripe || !stripeCardNumberElement || !stripeCardExpiryElement || !stripeCardCvcElement) {
+    return { ok: false, message: "Stripe card form is not ready." };
   }
-  const brand = detectCardBrand(digits);
-  if (brand === "unknown") {
-    return { ok: false, message: "Card type not recognized." };
+  if (stripeCardState.error) {
+    return { ok: false, message: stripeCardState.error.message || "Card details invalid." };
   }
-  if (!luhnCheck(digits)) {
-    return { ok: false, message: "Card number failed validation." };
-  }
-
-  const expiry = cardExpiryInput ? cardExpiryInput.value : "";
-  const expiryMatch = String(expiry).trim().match(/^(\d{2})\/(\d{2})$/);
-  if (!expiryMatch) {
-    return { ok: false, message: "Expiry must be in MM/YY format." };
-  }
-  const expMonth = Number(expiryMatch[1]);
-  const expYear = Number(expiryMatch[2]) + 2000;
-  if (expMonth < 1 || expMonth > 12) {
-    return { ok: false, message: "Expiry month is invalid." };
-  }
-  const now = new Date();
-  const expiryDate = new Date(expYear, expMonth, 0, 23, 59, 59, 999);
-  if (expiryDate < now) {
-    return { ok: false, message: "Card has expired." };
-  }
-
-  const cvv = cardCvcInput ? String(cardCvcInput.value || "") : "";
-  const cvvDigits = cvv.replace(/\D/g, "");
-  const expected = brand === "amex" ? 4 : 3;
-  if (cvvDigits.length !== expected) {
-    return { ok: false, message: "CVV length is invalid." };
+  if (
+    !stripeCardState.numberComplete ||
+    !stripeCardState.expiryComplete ||
+    !stripeCardState.cvcComplete
+  ) {
+    return { ok: false, message: "Please complete your card details." };
   }
   return { ok: true };
-}
-
-function autoFormatExpiry(value) {
-  const digits = String(value || "").replace(/\D/g, "").slice(0, 4);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
 }
 
 function normalizeCountryInput(value) {
@@ -809,19 +860,4 @@ function normalizeCountryInput(value) {
     PHILIPPINES: "PH",
   };
   return map[normalized] || "";
-}
-
-if (cardNumberInput) {
-  cardNumberInput.addEventListener("input", (event) => {
-    const formatted = formatCardNumber(event.target.value);
-    event.target.value = formatted;
-    updateCardBrand();
-  });
-  cardNumberInput.addEventListener("blur", updateCardBrand);
-}
-
-if (cardExpiryInput) {
-  cardExpiryInput.addEventListener("input", (event) => {
-    event.target.value = autoFormatExpiry(event.target.value);
-  });
 }
