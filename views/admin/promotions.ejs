@@ -30,6 +30,22 @@
             <button class="event-tab" type="button" data-admin-tab="expired">Expired</button>
           </div>
 
+          <div class="section-actions" style="margin-top: 12px;">
+            <div class="search-field" style="max-width: 320px;">
+              <select class="search-input" data-admin-rule-filter aria-label="Promotion visibility filter">
+                <option value="all">All visibility rules</option>
+                <option value="any">Anytime</option>
+                <option value="first">First-timer</option>
+                <option value="weekday">Weekday (Mon–Thu)</option>
+                <option value="weekend">Weekend (Sat–Sun)</option>
+                <option value="happy">Happy hour</option>
+              </select>
+            </div>
+            <div class="mini-muted" style="color:#6c7082; font-size: 12px;">
+              Tip: Use codes containing `FIRST`, `WEEKDAY`, `WEEKEND`, `HAPPY` to control visibility.
+            </div>
+          </div>
+
           <div class="admin-menu-grid">
             <% if (!promotions || !promotions.length) { %>
               <div class="empty-state">
@@ -37,16 +53,9 @@
                 <p>Create your first promotion to boost sales.</p>
               </div>
             <% } else { %>
-              <% const now = new Date(); %>
               <% promotions.forEach(function(promo) { %>
-                <% const start = promo.startDate ? new Date(promo.startDate) : null; %>
-                <% const end = promo.endDate ? new Date(promo.endDate) : start; %>
-                <% const hasStart = start && !isNaN(start.getTime()); %>
-                <% const hasEnd = end && !isNaN(end.getTime()); %>
-                <% let status = "active"; %>
-                <% if (hasStart && now < start) { status = "scheduled"; } %>
-                <% if (hasEnd && now > end) { status = "expired"; } %>
-                <article class="admin-menu-card" data-admin-category="<%= status %>">
+                <% const status = promo.adminStatus || "active"; %>
+                <article class="admin-menu-card" data-admin-category="<%= status %>" data-admin-rule="<%= promo.rule || 'any' %>">
                   <div class="admin-menu-media">
                     <% if (promo.image) { %>
                       <img src="<%= promo.image %>" alt="<%= promo.title %>" />
@@ -70,6 +79,17 @@
                     <div class="admin-menu-meta">
                       <span class="admin-menu-pill"><%= promo.code || "No code" %></span>
                       <span class="admin-menu-pill">Min $<%= Number(promo.minTotal || 0).toFixed(2) %></span>
+                      <span class="admin-menu-pill">
+                        <%= promo.rule === 'weekday' ? 'Weekday' : promo.rule === 'weekend' ? 'Weekend' : promo.rule === 'happy' ? 'Happy hour' : promo.rule === 'first' ? 'First timer' : 'Anytime' %>
+                      </span>
+                      <% if (promo.isHidden) { %>
+                        <span class="admin-menu-pill unavailable">Admin hidden</span>
+                      <% } else { %>
+                        <span class="admin-menu-pill <%= promo.eligibleNow ? 'available' : 'unavailable' %>">
+                          <%= promo.eligibleNow ? 'Visible now' : 'Hidden now' %>
+                        </span>
+                      <% } %>
+                      <span class="admin-menu-pill">Redeemed <%= Number(promo.redeemedCount || 0) %></span>
                       <span class="admin-menu-pill <%= status === "expired" ? "unavailable" : "available" %>">
                         <%= status %>
                       </span>
@@ -84,6 +104,10 @@
                           <input name="min_total" type="number" step="0.01" value="<%= promo.minTotal %>" />
                           <input name="start_date" type="date" value="<%= promo.startDate ? new Date(promo.startDate).toISOString().slice(0,10) : '' %>" />
                           <input name="end_date" type="date" value="<%= promo.endDate ? new Date(promo.endDate).toISOString().slice(0,10) : '' %>" />
+                          <label class="admin-inline-check" style="grid-column: 1 / -1;">
+                            <input type="checkbox" name="is_hidden" value="1" <%= promo.isHidden ? 'checked' : '' %> />
+                            Hide from users
+                          </label>
                           <input type="file" name="image" accept="image/*" />
                           <textarea name="description" rows="2" placeholder="Description"><%= promo.description || "" %></textarea>
                         </div>
@@ -93,6 +117,34 @@
                         </div>
                         <input type="hidden" name="current_image_url" value="<%= promo.image %>" />
                       </form>
+                    </details>
+
+                    <details class="admin-menu-edit">
+                      <summary class="btn">Redeemers</summary>
+                      <% if (!promo.recentRedeemers || !promo.recentRedeemers.length) { %>
+                        <p class="admin-menu-desc" style="margin-top: 10px;">No completed redemptions yet.</p>
+                      <% } else { %>
+                        <div class="admin-table" style="margin-top: 12px;">
+                          <div class="admin-table-row admin-header" style="grid-template-columns: 1fr 1fr 140px 120px;">
+                            <div>Name</div>
+                            <div>Email</div>
+                            <div>Used at</div>
+                            <div>Invoice</div>
+                          </div>
+                          <% promo.recentRedeemers.forEach(function(r) { %>
+                            <div class="admin-table-row" style="grid-template-columns: 1fr 1fr 140px 120px;">
+                              <div><%= r.name %></div>
+                              <div><%= r.email %></div>
+                              <div><%= r.usedAt ? new Date(r.usedAt).toLocaleString() : '-' %></div>
+                              <div>#<%= r.transactionId %></div>
+                            </div>
+                          <% }) %>
+                        </div>
+                        <p class="admin-menu-desc" style="margin-top: 10px;">
+                          Total redeemed: <strong><%= Number(promo.redeemedCount || 0) %></strong> times by
+                          <strong><%= Number(promo.redeemedUsers || 0) %></strong> user(s).
+                        </p>
+                      <% } %>
                     </details>
                   </div>
                 </article>
@@ -112,6 +164,7 @@
       const adminTabs = document.querySelectorAll("[data-admin-tab]");
       const adminCards = document.querySelectorAll("[data-admin-category]");
       const emptyState = document.querySelector(".admin-menu-empty");
+      const ruleFilter = document.querySelector("[data-admin-rule-filter]");
 
       function normalize(value) {
         return (value || "").toString().toLowerCase();
@@ -119,10 +172,13 @@
 
       function updateAdminFilter(category) {
         const target = normalize(category);
+        const ruleTarget = ruleFilter ? normalize(ruleFilter.value) : "all";
         let visibleCount = 0;
         adminCards.forEach((card) => {
           const cardCategory = normalize(card.dataset.adminCategory);
-          const isMatch = cardCategory === target;
+          const cardRule = normalize(card.dataset.adminRule);
+          const ruleMatch = ruleTarget === "all" ? true : cardRule === ruleTarget;
+          const isMatch = cardCategory === target && ruleMatch;
           card.classList.toggle("is-hidden", !isMatch);
           if (isMatch) visibleCount += 1;
         });
@@ -140,6 +196,14 @@
           });
         });
         updateAdminFilter(adminTabs[0].dataset.adminTab);
+      }
+
+      if (ruleFilter) {
+        ruleFilter.addEventListener("change", () => {
+          const active = document.querySelector("[data-admin-tab].active");
+          const key = active ? active.dataset.adminTab : (adminTabs[0] ? adminTabs[0].dataset.adminTab : "active");
+          updateAdminFilter(key);
+        });
       }
     </script>
   </body>

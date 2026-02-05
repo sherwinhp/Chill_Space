@@ -50,10 +50,8 @@ async function renderEvents(req, res) {
       return endYmd >= todayIsoDate();
     });
 
-    // Keep existing promotions loading via siteController for now; events.ejs expects promotions too.
-    // If promotionsController later owns it, swap here.
-    const { listPromotions } = require("../models/promotionsDbModel");
-    const promotions = await listPromotions();
+    const { listVisiblePromotions } = require("./promotionsController");
+    const promotions = await listVisiblePromotions();
     res.render("events", { events: upcomingOnly, promotions });
   } catch (error) {
     console.error(error);

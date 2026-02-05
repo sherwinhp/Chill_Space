@@ -39,6 +39,9 @@ const netsCancelButtons = netsModal ? netsModal.querySelectorAll("[data-nets-can
 const confirmPaymentDefaultLabel = confirmPaymentButton
   ? confirmPaymentButton.textContent.trim()
   : "Confirm payment";
+const promoCodeInput = document.querySelector("[data-promo-code]");
+const promoApplyButton = document.querySelector("[data-promo-apply]");
+const promoRemoveButton = document.querySelector("[data-promo-remove]");
 let walletBalanceCents = paymentCard ? Number(paymentCard.dataset.walletBalanceCents || 0) : 0;
 let paypalButtonsRendered = false;
 let currentTotalCents = 0;
@@ -516,6 +519,65 @@ fetchCart().then(renderCheckout).catch(() => {
 showHitpayStatusMessage();
 showStripeStatusMessage();
 toggleStripeCardForm();
+
+async function refreshCheckout() {
+  const items = await fetchCart();
+  renderCheckout(items);
+}
+
+async function applyPromoCode() {
+  const code = promoCodeInput ? promoCodeInput.value : "";
+  if (!code) {
+    if (window.showToast) window.showToast("Enter a promo code.", "error");
+    return;
+  }
+  try {
+    const response = await fetch("/promotions/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ code }),
+    });
+    const body = await readJsonOrText(response);
+    if (!response.ok) {
+      if (window.showToast) window.showToast(body.error || "Unable to apply promo.", "error");
+      return;
+    }
+    if (window.showToast) window.showToast(body.message || "Promo applied.", "success");
+    await refreshCheckout();
+    window.dispatchEvent(new Event("cart:updated"));
+  } catch (error) {
+    if (window.showToast) window.showToast("Unable to apply promo.", "error");
+  }
+}
+
+async function removePromoCode() {
+  try {
+    const response = await fetch("/promotions/remove", {
+      method: "POST",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+    const body = await readJsonOrText(response);
+    if (!response.ok) {
+      if (window.showToast) window.showToast(body.error || "Unable to remove promo.", "error");
+      return;
+    }
+    if (window.showToast) window.showToast(body.message || "Promo removed.", "success");
+    await refreshCheckout();
+    window.dispatchEvent(new Event("cart:updated"));
+  } catch (error) {
+    if (window.showToast) window.showToast("Unable to remove promo.", "error");
+  }
+}
+
+if (promoApplyButton) {
+  promoApplyButton.addEventListener("click", applyPromoCode);
+}
+
+if (promoRemoveButton) {
+  promoRemoveButton.addEventListener("click", removePromoCode);
+}
 
 if (paymentCard) {
   if (cardNameInput && paymentCard.dataset.userName) {

@@ -11,13 +11,14 @@ function toPromotion(row) {
     startDate: row.start_date,
     endDate: row.end_date,
     image: row.image_url || "",
+    isHidden: Boolean(row.is_hidden || 0),
   };
 }
 
 async function listPromotions() {
   try {
     const rows = await db.query(
-      "SELECT promo_id, title, description, discount_percent, code, min_total, start_date, end_date, image_url FROM promotions ORDER BY start_date DESC"
+      "SELECT promo_id, title, description, discount_percent, code, min_total, start_date, end_date, image_url, is_hidden FROM promotions ORDER BY start_date DESC"
     );
     return rows.map(toPromotion);
   } catch (error) {
@@ -30,6 +31,7 @@ async function listPromotions() {
           ...row,
           code: "",
           min_total: 0,
+          is_hidden: 0,
         })
       );
     }
@@ -47,22 +49,47 @@ async function createPromotion(payload) {
     start_date,
     end_date,
     image_url,
+    is_hidden,
   } = payload;
-  const result = await db.query(
-    `INSERT INTO promotions
-      (title, description, code, discount_percent, min_total, start_date, end_date, image_url)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      title,
-      description || "",
-      code || "",
-      discount_percent,
-      min_total || 0,
-      start_date,
-      end_date,
-      image_url || "",
-    ]
-  );
+  let result;
+  try {
+    result = await db.query(
+      `INSERT INTO promotions
+        (title, description, code, discount_percent, min_total, start_date, end_date, image_url, is_hidden)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        title,
+        description || "",
+        code || "",
+        discount_percent,
+        min_total || 0,
+        start_date,
+        end_date,
+        image_url || "",
+        is_hidden ? 1 : 0,
+      ]
+    );
+  } catch (error) {
+    if (error && error.code === "ER_BAD_FIELD_ERROR") {
+      result = await db.query(
+        `INSERT INTO promotions
+          (title, description, code, discount_percent, min_total, start_date, end_date, image_url)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          title,
+          description || "",
+          code || "",
+          discount_percent,
+          min_total || 0,
+          start_date,
+          end_date,
+          image_url || "",
+        ]
+      );
+    } else {
+      throw error;
+    }
+  }
   return result.insertId;
 }
 
@@ -78,16 +105,45 @@ async function updatePromotion(id, updates) {
     "start_date",
     "end_date",
     "image_url",
+    "is_hidden",
   ];
   allowed.forEach((key) => {
     if (Object.prototype.hasOwnProperty.call(updates, key)) {
       fields.push(`${key} = ?`);
-      params.push(updates[key]);
+      if (key === "is_hidden") {
+        params.push(updates[key] ? 1 : 0);
+      } else {
+        params.push(updates[key]);
+      }
     }
   });
   if (!fields.length) return true;
   params.push(id);
-  await db.query(`UPDATE promotions SET ${fields.join(", ")} WHERE promo_id = ?`, params);
+  try {
+    await db.query(`UPDATE promotions SET ${fields.join(", ")} WHERE promo_id = ?`, params);
+  } catch (error) {
+    if (error && error.code === "ER_BAD_FIELD_ERROR") {
+      // Schema may not include is_hidden yet; retry without it.
+      const filtered = [];
+      const filteredParams = [];
+      allowed
+        .filter((key) => key !== "is_hidden")
+        .forEach((key) => {
+          if (Object.prototype.hasOwnProperty.call(updates, key)) {
+            filtered.push(`${key} = ?`);
+            filteredParams.push(updates[key]);
+          }
+        });
+      if (!filtered.length) return true;
+      filteredParams.push(id);
+      await db.query(
+        `UPDATE promotions SET ${filtered.join(", ")} WHERE promo_id = ?`,
+        filteredParams
+      );
+    } else {
+      throw error;
+    }
+  }
   return true;
 }
 

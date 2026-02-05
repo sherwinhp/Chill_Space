@@ -2095,6 +2095,32 @@ body {
   font-size: 20px;
 }
 
+.promo-inline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.promo-input {
+  width: 170px;
+  max-width: 100%;
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fbfbfe;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.promo-input:focus {
+  outline: none;
+  border-color: #a1a7ff;
+  box-shadow: 0 0 0 3px rgba(161, 167, 255, 0.18);
+}
+
 .order-table {
   margin-top: 18px;
   background: #fff;

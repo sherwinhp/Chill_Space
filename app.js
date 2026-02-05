@@ -11,6 +11,7 @@ const accountController = require("./controllers/accountController");
 const walletController = require("./controllers/walletController");
 const reviewsController = require("./controllers/reviewsController");
 const eventsController = require("./controllers/eventsController");
+const promotionsController = require("./controllers/promotionsController");
 const adminController = require("./controllers/adminController");
 const refundController = require("./controllers/refundController");
 const {
@@ -158,6 +159,8 @@ app.post("/reviews/edit/:id", uploadImage.single("photo"), reviewsController.upd
 app.get("/reviews/delete/:id", reviewsController.delete);
 app.get("/events", eventsController.renderEvents);
 app.post("/events/:id/signup", eventsController.signup);
+app.post("/promotions/apply", express.json(), promotionsController.apply);
+app.post("/promotions/remove", express.json(), promotionsController.remove);
 
 app.use("/admin", requireAdmin);
 app.get("/admin", adminController.renderDashboard);
@@ -182,11 +185,11 @@ app.post("/admin/events/:id", uploadImage.single("image"), eventsController.admi
 app.post("/admin/events/:id/delete", eventsController.adminDelete);
 app.get("/admin/events/:id/participants", eventsController.adminParticipants);
 app.post("/admin/events/:id/signups/:signupId/delete", eventsController.adminRemoveParticipant);
-app.get("/admin/promotions", adminController.renderPromotions);
-app.get("/admin/promotions/new", adminController.renderPromotionsCreate);
-app.post("/admin/promotions", uploadImage.single("image"), adminController.addPromotion);
-app.post("/admin/promotions/:id", uploadImage.single("image"), adminController.editPromotion);
-app.post("/admin/promotions/:id/delete", adminController.removePromotion);
+app.get("/admin/promotions", promotionsController.adminList);
+app.get("/admin/promotions/new", promotionsController.adminCreateForm);
+app.post("/admin/promotions", uploadImage.single("image"), promotionsController.adminCreate);
+app.post("/admin/promotions/:id", uploadImage.single("image"), promotionsController.adminEdit);
+app.post("/admin/promotions/:id/delete", promotionsController.adminDelete);
 app.get("/admin/reviews", adminController.renderReviews);
 app.get("/admin/reviews/new", adminController.renderReviewsCreate);
 app.post("/admin/reviews", adminController.addReview);

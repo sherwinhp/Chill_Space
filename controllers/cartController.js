@@ -228,8 +228,13 @@ async function updateItemQty(req, res) {
   if (!id || !Number.isFinite(qty) || qty <= 0) {
     return res.status(400).json({ error: "Invalid quantity." });
   }
-  await updateCartItemQty(id, qty);
   const { userId, sessionId } = getOwner(req);
+  const itemsBefore = await listCartItems({ userId, sessionId });
+  const targetItem = itemsBefore.find((entry) => entry.id === id);
+  if (targetItem && String(targetItem.details || "").startsWith("promo:")) {
+    return res.status(400).json({ error: "Promo items cannot be edited." });
+  }
+  await updateCartItemQty(id, qty);
   const items = await listCartItems({ userId, sessionId });
   res.json({ items });
 }
