@@ -1178,6 +1178,48 @@ body {
   color: var(--muted);
 }
 
+.event-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.event-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #f2f3f7;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.event-signup {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.event-signup label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.event-signup input {
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  min-width: 120px;
+}
+
 .promo-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

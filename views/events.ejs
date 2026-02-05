@@ -64,6 +64,25 @@
                           </strong>
                         </span>
                       </div>
+
+                      <div class="event-meta">
+                        <% if (event.entryFee && Number(event.entryFee) > 0) { %>
+                          <span class="event-pill">Entry fee: $<%= Number(event.entryFee).toFixed(2) %></span>
+                        <% } else { %>
+                          <span class="event-pill">Free</span>
+                        <% } %>
+                        <% if (event.capacity && Number(event.capacity) > 0) { %>
+                          <span class="event-pill">Spots left: <%= Number(event.spotsLeft ?? event.capacity).toFixed(0) %></span>
+                        <% } %>
+                      </div>
+
+                      <form class="event-signup" data-event-signup data-event-id="<%= event.id %>">
+                        <label>
+                          <span>Pax</span>
+                          <input name="pax" type="number" min="1" step="1" value="1" />
+                        </label>
+                        <button class="btn primary" type="submit">Sign up</button>
+                      </form>
                     </div>
                   </article>
                 <% }) %>

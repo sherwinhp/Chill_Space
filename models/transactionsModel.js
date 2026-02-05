@@ -87,7 +87,7 @@ async function createTransactionFromCart({
           normalizeDateTime(item.startTime),
           normalizeDateTime(item.endTime),
         ]
-      );
+        );
 
       if (item.type === "room_booking" && item.roomId && item.startTime && item.endTime) {
         await connection.execute(
@@ -107,6 +107,27 @@ async function createTransactionFromCart({
             "pending",
           ]
         );
+      }
+
+      if (item.type === "event" && item.itemId) {
+        // Create the participant record only after payment completes.
+        // Note: capacity is best-effort (race conditions possible without reservations).
+        try {
+          await connection.execute(
+            `
+              INSERT INTO event_signups (event_id, user_id, pax, payment_status)
+              VALUES (?, ?, ?, 'paid')
+              ON DUPLICATE KEY UPDATE pax = VALUES(pax), payment_status = 'paid'
+            `,
+            [Number(item.itemId), userId, qty]
+          );
+        } catch (error) {
+          if (error && error.code === "ER_NO_SUCH_TABLE") {
+            // If the table isn't present, don't break checkout (assignment DB might be behind).
+          } else {
+            throw error;
+          }
+        }
       }
 
       if (item.holdId) {

@@ -67,10 +67,20 @@
                     <% if (event.description) { %>
                       <p class="admin-menu-desc"><%= event.description %></p>
                     <% } %>
+                    <% const feeValue = Number(event.entryFee || 0); %>
+                    <% const capacityValue = event.capacity === null || typeof event.capacity === "undefined" ? null : Number(event.capacity || 0); %>
+                    <% const paidPaxValue = Number(event.paidPax || 0); %>
                     <div class="admin-menu-meta">
                       <span class="admin-menu-pill">
                         <%= hasStart ? start.toLocaleDateString() : "TBA" %> - <%= hasEnd ? end.toLocaleDateString() : "TBA" %>
                       </span>
+                      <span class="admin-menu-pill"><%= feeValue > 0 ? `Entry $${feeValue.toFixed(2)}` : "Free" %></span>
+                      <% if (capacityValue && capacityValue > 0) { %>
+                        <span class="admin-menu-pill">Spots <%= paidPaxValue %>/<%= capacityValue %></span>
+                        <span class="admin-menu-pill <%= Number(event.spotsLeft || 0) > 0 ? "available" : "unavailable" %>">
+                          Left <%= Number(event.spotsLeft ?? 0) %>
+                        </span>
+                      <% } %>
                       <span class="admin-menu-pill <%= status === "past" ? "unavailable" : "available" %>">
                         <%= status %>
                       </span>
@@ -82,11 +92,14 @@
                           <input name="title" value="<%= event.title %>" />
                           <input name="event_date" type="date" value="<%= event.startDate ? new Date(event.startDate).toISOString().slice(0,10) : '' %>" />
                           <input name="end_date" type="date" value="<%= event.endDate ? new Date(event.endDate).toISOString().slice(0,10) : '' %>" />
+                          <input name="capacity" type="number" min="0" step="1" placeholder="Capacity (optional)" value="<%= capacityValue === null ? '' : capacityValue %>" />
+                          <input name="entry_fee" type="number" min="0" step="0.01" placeholder="Entry fee (optional)" value="<%= feeValue.toFixed(2) %>" />
                           <input type="file" name="image" accept="image/*" />
                           <textarea name="description" rows="2" placeholder="Description"><%= event.description || "" %></textarea>
                         </div>
                         <div class="admin-menu-edit-actions">
                           <button class="btn" type="submit">Save</button>
+                          <a class="btn ghost" href="/admin/events/<%= event.id %>/participants">Participants</a>
                           <button class="btn danger" type="submit" formaction="/admin/events/<%= event.id %>/delete">Delete</button>
                         </div>
                         <input type="hidden" name="current_image_url" value="<%= event.image %>" />

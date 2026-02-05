@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Event Participants</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("../partials/admin-header", { page: "admin-events" }) %>
+
+      <main>
+        <section class="section admin-section">
+          <div class="section-head split">
+            <div>
+              <h2>Participants - <%= event.title %></h2>
+              <p>Participants appear after payment is completed.</p>
+            </div>
+            <div class="section-actions">
+              <a class="btn ghost" href="/admin/events">Back to events</a>
+              <a class="btn ghost" href="/admin">Back to dashboard</a>
+            </div>
+          </div>
+
+          <% const feeValue = Number(event.entryFee || 0); %>
+          <% const capacityValue = event.capacity === null || typeof event.capacity === "undefined" ? null : Number(event.capacity || 0); %>
+          <% const paidPaxValue = Number(event.paidPax || 0); %>
+          <% const totalPax = (participants || []).reduce((sum, row) => sum + Number(row.pax || 0), 0); %>
+
+          <div class="admin-menu-meta" style="margin-top: 14px;">
+            <span class="admin-menu-pill">ID <%= event.id %></span>
+            <span class="admin-menu-pill">
+              <%= new Date(event.startDate).toLocaleDateString() %> - <%= new Date(event.endDate).toLocaleDateString() %>
+            </span>
+            <span class="admin-menu-pill"><%= feeValue > 0 ? `Entry $${feeValue.toFixed(2)}` : "Free" %></span>
+            <% if (capacityValue && capacityValue > 0) { %>
+              <span class="admin-menu-pill">Spots <%= paidPaxValue %>/<%= capacityValue %></span>
+              <span class="admin-menu-pill <%= Number(event.spotsLeft || 0) > 0 ? "available" : "unavailable" %>">
+                Left <%= Number(event.spotsLeft ?? 0) %>
+              </span>
+            <% } %>
+            <span class="admin-menu-pill">Signups <%= participants ? participants.length : 0 %> (pax <%= totalPax %>)</span>
+          </div>
+
+          <% if (!participants || !participants.length) { %>
+            <div class="empty-state" style="margin-top: 18px;">
+              <h3>No participants yet.</h3>
+              <p>Once users pay the entry fee at checkout, they will appear here.</p>
+            </div>
+          <% } else { %>
+            <div class="admin-table">
+              <div class="admin-table-row admin-header">
+                <div>ID</div>
+                <div>Name</div>
+                <div>Email</div>
+                <div>Pax</div>
+                <div>Status</div>
+                <div>Actions</div>
+              </div>
+
+              <% participants.forEach(function(row) { %>
+                <div class="admin-table-row">
+                  <div><%= row.signup_id %></div>
+                  <div><%= row.name %></div>
+                  <div><%= row.email %></div>
+                  <div><%= row.pax %></div>
+                  <div>
+                    <span class="admin-menu-pill <%= row.payment_status === 'paid' ? 'available' : 'unavailable' %>">
+                      <%= row.payment_status %>
+                    </span>
+                  </div>
+                  <div class="admin-actions">
+                    <form
+                      action="/admin/events/<%= event.id %>/signups/<%= row.signup_id %>/delete"
+                      method="POST"
+                      onsubmit="return confirm('Remove this participant?');"
+                    >
+                      <button class="btn danger" type="submit">Remove</button>
+                    </form>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </section>
+      </main>
+
+      <%- include("../partials/footer") %>
+    </div>
+  </body>
+</html>
+

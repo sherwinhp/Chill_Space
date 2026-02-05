@@ -1,5 +1,6 @@
 const eventTabs = document.querySelectorAll(".event-tab");
 const eventPanels = document.querySelectorAll(".event-panel");
+const signupForms = document.querySelectorAll("[data-event-signup]");
 
 const CART_KEY = "chill_cart";
 
@@ -63,3 +64,37 @@ eventTabs.forEach((tab) => {
 });
 
 applyPromotions();
+
+async function signupEvent(form) {
+  const eventId = form.dataset.eventId;
+  const paxInput = form.querySelector("input[name='pax']");
+  const pax = paxInput ? paxInput.value : "1";
+
+  try {
+    const response = await fetch(`/events/${encodeURIComponent(eventId)}/signup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ pax }),
+    });
+    const contentType = response.headers.get("content-type") || "";
+    const data = contentType.includes("application/json") ? await response.json() : null;
+    if (!response.ok) {
+      const message = data?.error || "Unable to sign up. Please try again.";
+      if (window.showToast) window.showToast(message, "error");
+      return;
+    }
+    const message = data?.message || "Signed up successfully.";
+    if (window.showToast) window.showToast(message, "success");
+    window.dispatchEvent(new Event("cart:updated"));
+  } catch (error) {
+    if (window.showToast) window.showToast("Unable to sign up. Please try again.", "error");
+  }
+}
+
+signupForms.forEach((form) => {
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    signupEvent(form);
+  });
+});
