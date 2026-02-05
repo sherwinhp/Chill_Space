@@ -70,6 +70,14 @@
                 <span>Contact Number</span>
                 <input type="text" name="contact_number" value="<%= user.contact_number || '' %>" />
               </label>
+              <label class="field">
+                <span>Birth Date (DD/MM/YYYY)</span>
+                <input
+                  type="date"
+                  name="birth_date"
+                  value="<%= user.birth_date ? new Date(user.birth_date).toISOString().slice(0, 10) : '' %>"
+                />
+              </label>
               <% if (message) { %>
                 <p class="auth-status"><%= message %></p>
               <% } %>

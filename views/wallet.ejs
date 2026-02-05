@@ -6,6 +6,7 @@
     <title>Wallet | Cozy Place Gaming Rooms</title>
     <link rel="stylesheet" href="/styles.css" />
     <script src="https://www.paypal.com/sdk/js?client-id=<%= process.env.PAYPAL_CLIENT_ID %>&currency=SGD"></script>
+    <script src="https://js.stripe.com/v3/"></script>
   </head>
   <body>
     <div class="page">
@@ -33,14 +34,29 @@
           <div class="payment-layout">
             <div class="payment-column">
               <div class="summary-card">
+                <div class="summary-row">
+                  <span>Membership Tier</span>
+                  <strong><%= membershipTier || "Bronze" %></strong>
+                </div>
                 <h3>Current balance</h3>
                 <div class="summary-row total">
                   <span>Available</span>
                   <strong id="wallet-balance-label">$<%= (Number(walletBalance || 0) / 100).toFixed(2) %></strong>
                 </div>
+                <div class="summary-row">
+                  <span>Pending Cashback</span>
+                  <strong>$<%= (Number(walletPending || 0) / 100).toFixed(2) %></strong>
+                </div>
               </div>
 
-              <div class="payment-card" data-wallet-root data-balance-cents="<%= Number(walletBalance || 0) %>">
+              <div
+                class="payment-card"
+                data-wallet-root
+                data-balance-cents="<%= Number(walletBalance || 0) %>"
+                data-user-email="<%= session && session.email ? session.email : '' %>"
+                data-user-name="<%= session && session.name ? session.name : '' %>"
+                data-stripe-publishable-key="<%= process.env.STRIPE_PUBLISHABLE_KEY || '' %>"
+              >
                 <div class="payment-block">
                   <h3>Top up balance</h3>
                   <div class="event-tabs">
@@ -59,6 +75,70 @@
                   <div id="wallet-paypal-button"></div>
                   <p id="wallet-status" class="auth-status"></p>
                 </div>
+
+                <div class="payment-block">
+                  <h4>Other top-up methods</h4>
+                  <label class="payment-pill nets">
+                    <input type="radio" name="walletTopupType" value="nets" />
+                    <span class="pill-text">NETS QR</span>
+                    <span class="pill-indicator"></span>
+                  </label>
+                  <label class="payment-pill paynow">
+                    <input type="radio" name="walletTopupType" value="paynow" />
+                    <span class="pill-text">PayNow</span>
+                    <span class="pill-indicator"></span>
+                  </label>
+                  <label class="payment-pill grabpay">
+                    <input type="radio" name="walletTopupType" value="grabpay" />
+                    <span class="pill-text">GrabPay</span>
+                    <span class="pill-indicator"></span>
+                  </label>
+                  <label class="payment-pill stripe">
+                    <input type="radio" name="walletTopupType" value="stripe_card" />
+                    <span class="pill-text">Card (Stripe)</span>
+                    <span class="pill-indicator"></span>
+                  </label>
+                </div>
+
+                <div class="payment-block stripe-card-form is-hidden" data-wallet-stripe-form>
+                  <h4>Card details</h4>
+                  <p class="field-hint">Supported: Visa, Mastercard, American Express, Discover.</p>
+                  <div class="field">
+                    <span>Name on card</span>
+                    <input type="text" data-wallet-card-name placeholder="Full name" />
+                  </div>
+                  <div class="field">
+                    <span>Email</span>
+                    <input type="email" data-wallet-card-email placeholder="you@example.com" />
+                  </div>
+                  <div class="field">
+                    <span>Card number</span>
+                    <div class="stripe-input" id="wallet-card-number"></div>
+                    <small class="field-hint card-brand" data-wallet-card-brand></small>
+                  </div>
+                  <div class="field-group">
+                    <label class="field">
+                      <span>Expiry (MM/YY)</span>
+                      <div class="stripe-input" id="wallet-card-expiry"></div>
+                    </label>
+                    <label class="field">
+                      <span>CVV</span>
+                      <div class="stripe-input" id="wallet-card-cvc"></div>
+                    </label>
+                    <label class="field">
+                      <span>Billing country</span>
+                      <input type="text" data-wallet-card-country placeholder="SG" />
+                    </label>
+                  </div>
+                  <div class="field">
+                    <span>Postal code</span>
+                    <input type="text" data-wallet-card-postal placeholder="Postal code" />
+                  </div>
+                </div>
+
+                <button class="btn primary" type="button" data-wallet-topup-confirm>
+                  Confirm top-up
+                </button>
               </div>
             </div>
 
@@ -76,15 +156,32 @@
                     <p class="empty-note">No wallet transactions yet.</p>
                   <% } else { %>
                     <% transactions.forEach(function(tx) { %>
-                      <% const txLabel = tx.type === 'reward' ? 'Order Cashback' : tx.type; %>
+                      <% let txLabel = tx.type; %>
+                      <% if (tx && tx.metadata && tx.metadata.label) { %>
+                        <% txLabel = tx.metadata.label; %>
+                      <% } else if (tx.provider_ref && tx.provider_ref.startsWith("order_cashback_pending:")) { %>
+                        <% txLabel = "Order Cashback Pending"; %>
+                      <% } else if (tx.provider_ref && tx.provider_ref.startsWith("order_cashback_release:")) { %>
+                        <% txLabel = "Order Cashback Released"; %>
+                      <% } else if (tx.provider_ref && tx.provider_ref.startsWith("booking_cashback_pending:")) { %>
+                        <% txLabel = "Booking Cashback Pending"; %>
+                      <% } else if (tx.provider_ref && tx.provider_ref.startsWith("booking_cashback_release:")) { %>
+                        <% txLabel = "Booking Cashback Released"; %>
+                      <% } else if (tx.type === 'reward') { %>
+                        <% txLabel = "Cashback"; %>
+                      <% } %>
                       <% let orderIdLabel = "-"; %>
-                      <% if (tx.provider_ref && tx.provider_ref.startsWith("order_cashback:")) { %>
+                      <% if (tx.provider_ref && tx.provider_ref.startsWith("order_cashback_pending:")) { %>
+                        <% orderIdLabel = "#" + tx.provider_ref.split(":")[1]; %>
+                      <% } else if (tx.provider_ref && tx.provider_ref.startsWith("order_cashback_release:")) { %>
                         <% orderIdLabel = "#" + tx.provider_ref.split(":")[1]; %>
                       <% } else if (tx.provider_ref && tx.provider_ref.startsWith("order_cashback_reversal:")) { %>
                         <% orderIdLabel = "#" + tx.provider_ref.split(":")[1]; %>
                       <% } else if (tx.provider_ref && tx.provider_ref.startsWith("WALLET-")) { %>
                         <% orderIdLabel = tx.provider_ref; %>
-                      <% } else if (tx.provider_ref && tx.provider_ref.startsWith("booking_cashback:")) { %>
+                      <% } else if (tx.provider_ref && tx.provider_ref.startsWith("booking_cashback_pending:")) { %>
+                        <% orderIdLabel = "Booking #" + tx.provider_ref.split(":")[1]; %>
+                      <% } else if (tx.provider_ref && tx.provider_ref.startsWith("booking_cashback_release:")) { %>
                         <% orderIdLabel = "Booking #" + tx.provider_ref.split(":")[1]; %>
                       <% } else if (tx.provider_ref) { %>
                         <% orderIdLabel = tx.provider_ref; %>
@@ -105,8 +202,30 @@
         </section>
       </main>
 
-      <%- include("partials/footer") %>
+    <%- include("partials/footer") %>
+  </div>
+
+  <div class="nets-modal" hidden data-nets-modal aria-hidden="true">
+    <div class="nets-modal__backdrop"></div>
+    <div class="nets-modal__panel" role="dialog" aria-modal="true" aria-labelledby="nets-modal-title">
+      <div class="nets-modal__header">
+        <h3 id="nets-modal-title">Scan NETS QR</h3>
+        <button class="nets-modal__close" type="button" data-nets-cancel aria-label="Close NETS QR modal">x</button>
+      </div>
+
+      <div class="nets-modal__body">
+        <div class="nets-modal__status" data-nets-status aria-live="polite">Generating QR...</div>
+        <div class="nets-modal__spinner" data-nets-spinner></div>
+        <img class="nets-modal__qr" data-nets-qr alt="NETS QR Code" hidden />
+        <div class="nets-modal__timer" data-nets-timer>Time remaining: 5:00</div>
+        <div class="nets-modal__hint">Do not close this window until payment is completed.</div>
+      </div>
+
+      <div class="nets-modal__footer">
+        <button class="btn ghost" type="button" data-nets-cancel>Cancel payment</button>
+      </div>
     </div>
+  </div>
     <script src="/wallet.js"></script>
   </body>
 </html>

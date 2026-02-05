@@ -127,6 +127,14 @@ app.get("/notifications", accountController.renderNotifications);
 app.post("/notifications/read-all", accountController.markAllRead);
 app.post("/wallet/topup/paypal/create", express.json(), walletController.createPaypalTopup);
 app.post("/wallet/topup/paypal/capture", express.json(), walletController.capturePaypalTopup);
+app.post("/wallet/topup/paynow/create", express.json(), walletController.createHitpayTopup);
+app.get("/wallet/topup/hitpay/return", walletController.handleHitpayTopupReturn);
+app.post("/wallet/topup/grabpay/create", express.json(), walletController.createGrabPayTopupSession);
+app.get("/wallet/topup/stripe/success", walletController.handleGrabPayTopupSuccess);
+app.post("/wallet/topup/nets/qr/create", express.json(), walletController.createNetsTopupQr);
+app.post("/wallet/topup/nets/qr/complete", express.json(), walletController.completeNetsTopup);
+app.post("/wallet/topup/stripe/card/pay", express.json(), walletController.createStripeCardTopup);
+app.post("/wallet/topup/stripe/card/confirm", express.json(), walletController.confirmStripeCardTopup);
 app.get("/cart", (req, res) => res.render("cart"));
 app.get("/checkout", (req, res) => {
   if (!req.session || !req.session.userId) {

@@ -1,12 +1,25 @@
 const { createOrder, captureOrder } = require("../services/paypalService");
+const { createPayNowPaymentRequest, getPaymentRequestStatus } = require("../services/hitpayService");
+const { createNetsQr, getTxnStatus } = require("../services/netService");
+const {
+  createGrabPayCheckoutSession,
+  retrieveCheckoutSession,
+  createCardPaymentIntentWithPaymentMethod,
+  confirmCardPaymentIntent,
+} = require("../services/stripe");
+const { findById } = require("../models/usersModel");
 const {
   listWalletTransactions,
   getWalletBalanceCents,
+  getWalletPendingBalanceCents,
+  syncWalletStateForUser,
   createPendingPaypalTopup,
+  createPendingTopup,
   bindProviderRef,
   markWalletTransactionStatus,
   findWalletTransactionByProviderRef,
   completePaypalTopup,
+  completeTopupByProviderRef,
 } = require("../models/walletModel");
 
 const MIN_TOPUP_CENTS = 100;
@@ -45,13 +58,23 @@ function extractCaptureAmountCents(capture) {
   return parseAmountCents(amount.value);
 }
 
+function buildBaseUrl(req) {
+  return `${req.protocol}://${req.get("host")}`;
+}
+
 async function renderWallet(req, res) {
   const userId = requireUser(req, res);
   if (!userId) return;
   try {
+    await syncWalletStateForUser(userId);
     const transactions = await listWalletTransactions(userId, 20);
+    const availableCents = await getWalletBalanceCents(userId);
+    const pendingCents = await getWalletPendingBalanceCents(userId);
+    const user = await findById(userId);
     res.render("wallet", {
-      walletBalance: Number(res.locals.walletBalance || 0),
+      walletBalance: Number(availableCents || 0),
+      walletPending: Number(pendingCents || 0),
+      membershipTier: user ? user.membership_tier : "Bronze",
       transactions,
     });
   } catch (error) {
@@ -157,8 +180,400 @@ async function capturePaypalTopup(req, res) {
   }
 }
 
+async function createHitpayTopup(req, res) {
+  const userId = requireUser(req, res, { json: true });
+  if (!userId) return;
+
+  const amountCents = parseAmountCents(req.body ? req.body.amount : null);
+  if (!amountCents || amountCents < MIN_TOPUP_CENTS || amountCents > MAX_TOPUP_CENTS) {
+    return res.status(400).json({ error: "Top-up amount must be between $1.00 and $500.00." });
+  }
+
+  let walletTransactionId = null;
+  try {
+    const amount = (amountCents / 100).toFixed(2);
+    walletTransactionId = await createPendingTopup(userId, amountCents, "hitpay", {
+      source: "wallet_topup",
+    });
+    const payment = await createPayNowPaymentRequest({
+      amount,
+      currency: "SGD",
+      email: req.session.email,
+      name: req.session.name || "Customer",
+      referenceNumber: `wallet-topup-${userId}-${Date.now()}`,
+      redirectUrl: `${buildBaseUrl(req)}/wallet/topup/hitpay/return`,
+    });
+    await bindProviderRef(walletTransactionId, userId, payment.id, {
+      source: "wallet_topup",
+      amount,
+      requestId: payment.id,
+    });
+    return res.json({ paymentUrl: payment.url, id: payment.id });
+  } catch (error) {
+    if (walletTransactionId) {
+      await markWalletTransactionStatus({
+        transactionId: walletTransactionId,
+        userId,
+        status: "failed",
+        metadata: { source: "wallet_topup", reason: error.message || "create_failed" },
+      });
+    }
+    return res.status(500).json({ error: error.message || "Unable to start PayNow top-up." });
+  }
+}
+
+async function handleHitpayTopupReturn(req, res) {
+  const userId = requireUser(req, res);
+  if (!userId) return;
+  try {
+    const requestId = req.query.reference || req.query.request_id || req.query.id;
+    if (!requestId) {
+      return res.redirect("/wallet?topup=missing_reference");
+    }
+
+    const linkedTx = await findWalletTransactionByProviderRef(userId, "hitpay", requestId);
+    if (!linkedTx) {
+      return res.redirect("/wallet?topup=not_found");
+    }
+
+    if (linkedTx.status === "completed") {
+      return res.redirect("/wallet?topup=success");
+    }
+
+    const paymentRequest = await getPaymentRequestStatus(requestId);
+    const paid =
+      String(paymentRequest.status || "").toLowerCase() === "completed" ||
+      (Array.isArray(paymentRequest.payments) &&
+        paymentRequest.payments.some(
+          (payment) => String(payment.status || "").toLowerCase() === "succeeded"
+        ));
+
+    if (!paid) {
+      await markWalletTransactionStatus({
+        transactionId: linkedTx.id,
+        userId,
+        status: "failed",
+        metadata: paymentRequest,
+      });
+      return res.redirect("/wallet?topup=failed");
+    }
+
+    const result = await completeTopupByProviderRef({
+      userId,
+      provider: "hitpay",
+      providerRef: requestId,
+      capturedAmountCents: linkedTx.amount_cents,
+      metadata: paymentRequest,
+    });
+
+    return res.redirect(`/wallet?topup=success&balance=${result.balanceCents}`);
+  } catch (error) {
+    return res.redirect(
+      `/wallet?topup=error&message=${encodeURIComponent(
+        error.message || "Unable to verify PayNow top-up."
+      )}`
+    );
+  }
+}
+
+async function createGrabPayTopupSession(req, res) {
+  const userId = requireUser(req, res, { json: true });
+  if (!userId) return;
+
+  const amountCents = parseAmountCents(req.body ? req.body.amount : null);
+  if (!amountCents || amountCents < MIN_TOPUP_CENTS || amountCents > MAX_TOPUP_CENTS) {
+    return res.status(400).json({ error: "Top-up amount must be between $1.00 and $500.00." });
+  }
+
+  let walletTransactionId = null;
+  try {
+    walletTransactionId = await createPendingTopup(userId, amountCents, "grabpay", {
+      source: "wallet_topup",
+    });
+    const lineItems = [
+      {
+        price_data: {
+          currency: "sgd",
+          unit_amount: amountCents,
+          product_data: { name: "Wallet Top-up" },
+        },
+        quantity: 1,
+      },
+    ];
+    const baseUrl = buildBaseUrl(req);
+    const session = await createGrabPayCheckoutSession({
+      lineItems,
+      successUrl: `${baseUrl}/wallet/topup/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${baseUrl}/wallet?topup=cancel`,
+      customerEmail: req.session.email,
+      metadata: {
+        userId: String(userId),
+        walletTopup: "1",
+        amountCents: String(amountCents),
+      },
+    });
+
+    await bindProviderRef(walletTransactionId, userId, session.id, {
+      source: "wallet_topup",
+      amountCents,
+      sessionId: session.id,
+    });
+
+    return res.json({ url: session.url });
+  } catch (error) {
+    if (walletTransactionId) {
+      await markWalletTransactionStatus({
+        transactionId: walletTransactionId,
+        userId,
+        status: "failed",
+        metadata: { source: "wallet_topup", reason: error.message || "create_failed" },
+      });
+    }
+    return res.status(500).json({ error: error.message || "Unable to start GrabPay top-up." });
+  }
+}
+
+async function handleGrabPayTopupSuccess(req, res) {
+  const userId = requireUser(req, res);
+  if (!userId) return;
+  const sessionId = req.query.session_id;
+  if (!sessionId) {
+    return res.redirect("/wallet?topup=missing_intent");
+  }
+  try {
+    const session = await retrieveCheckoutSession(sessionId);
+    if (!session || session.payment_status !== "paid") {
+      return res.redirect("/wallet?topup=failed");
+    }
+    if (session.metadata?.userId && Number(session.metadata.userId) !== Number(userId)) {
+      return res.status(403).send("Not authorized to view this session.");
+    }
+    const linkedTx = await findWalletTransactionByProviderRef(userId, "grabpay", session.id);
+    if (!linkedTx) {
+      return res.redirect("/wallet?topup=not_found");
+    }
+    if (linkedTx.status !== "completed") {
+      await completeTopupByProviderRef({
+        userId,
+        provider: "grabpay",
+        providerRef: session.id,
+        capturedAmountCents: session.amount_total,
+        metadata: session,
+      });
+    }
+    return res.redirect("/wallet?topup=success");
+  } catch (error) {
+    return res.redirect(
+      `/wallet?topup=error&message=${encodeURIComponent(
+        error.message || "Unable to verify GrabPay top-up."
+      )}`
+    );
+  }
+}
+
+async function createNetsTopupQr(req, res) {
+  const userId = requireUser(req, res, { json: true });
+  if (!userId) return;
+
+  const amountCents = parseAmountCents(req.body ? req.body.amount : null);
+  if (!amountCents || amountCents < MIN_TOPUP_CENTS || amountCents > MAX_TOPUP_CENTS) {
+    return res.status(400).json({ error: "Top-up amount must be between $1.00 and $500.00." });
+  }
+
+  let walletTransactionId = null;
+  try {
+    walletTransactionId = await createPendingTopup(userId, amountCents, "nets", {
+      source: "wallet_topup",
+    });
+    const { qrCodeUrl, txnRetrievalRef } = await createNetsQr(amountCents / 100);
+    await bindProviderRef(walletTransactionId, userId, txnRetrievalRef, {
+      source: "wallet_topup",
+      amountCents,
+      txnRetrievalRef,
+    });
+    return res.json({ qrCodeUrl, txnRetrievalRef });
+  } catch (error) {
+    if (walletTransactionId) {
+      await markWalletTransactionStatus({
+        transactionId: walletTransactionId,
+        userId,
+        status: "failed",
+        metadata: { source: "wallet_topup", reason: error.message || "create_failed" },
+      });
+    }
+    return res.status(500).json({ error: error.message || "Unable to create NETS QR." });
+  }
+}
+
+async function completeNetsTopup(req, res) {
+  const userId = requireUser(req, res, { json: true });
+  if (!userId) return;
+  try {
+    const txnRetrievalRef = req.body?.txnRetrievalRef || req.query?.txnRetrievalRef;
+    if (!txnRetrievalRef) {
+      return res.status(400).json({ error: "Missing txnRetrievalRef." });
+    }
+    const linkedTx = await findWalletTransactionByProviderRef(userId, "nets", txnRetrievalRef);
+    if (!linkedTx) {
+      return res.status(404).json({ error: "Top-up request not found." });
+    }
+    if (linkedTx.status === "completed") {
+      const balanceCents = await getWalletBalanceCents(userId);
+      return res.json({ success: true, alreadyProcessed: true, balanceCents });
+    }
+
+    const status = await getTxnStatus(txnRetrievalRef);
+    const responseCode =
+      status?.response_code ?? status?.result?.response_code ?? status?.result?.responseCode;
+    const txnStatus =
+      status?.txn_status ?? status?.result?.txn_status ?? status?.result?.txnStatus;
+    const normalizedTxnStatus =
+      typeof txnStatus === "string" ? txnStatus.trim().toLowerCase() : txnStatus;
+    const success =
+      String(responseCode) === "00" &&
+      (Number(normalizedTxnStatus) === 1 ||
+        normalizedTxnStatus === "success" ||
+        normalizedTxnStatus === "completed");
+
+    if (!success) {
+      await markWalletTransactionStatus({
+        transactionId: linkedTx.id,
+        userId,
+        status: "failed",
+        metadata: status,
+      });
+      return res.status(400).json({ error: "NETS top-up not completed." });
+    }
+
+    const result = await completeTopupByProviderRef({
+      userId,
+      provider: "nets",
+      providerRef: txnRetrievalRef,
+      capturedAmountCents: linkedTx.amount_cents,
+      metadata: status,
+    });
+    return res.json({
+      success: true,
+      alreadyProcessed: result.alreadyProcessed,
+      balanceCents: result.balanceCents,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || "Unable to complete NETS top-up." });
+  }
+}
+
+async function createStripeCardTopup(req, res) {
+  const userId = requireUser(req, res, { json: true });
+  if (!userId) return;
+
+  const amountCents = parseAmountCents(req.body ? req.body.amount : null);
+  if (!amountCents || amountCents < MIN_TOPUP_CENTS || amountCents > MAX_TOPUP_CENTS) {
+    return res.status(400).json({ error: "Top-up amount must be between $1.00 and $500.00." });
+  }
+
+  const paymentMethodId = req.body?.payment_method_id;
+  if (!paymentMethodId) {
+    return res.status(400).json({ error: "Missing Stripe payment method." });
+  }
+
+  let walletTransactionId = null;
+  try {
+    walletTransactionId = await createPendingTopup(userId, amountCents, "stripe", {
+      source: "wallet_topup",
+    });
+    const result = await createCardPaymentIntentWithPaymentMethod({
+      amount: amountCents / 100,
+      currency: "sgd",
+      paymentMethodId,
+      userId,
+      description: "Wallet top-up",
+      metadata: {
+        wallet_topup: "1",
+        wallet_transaction_id: String(walletTransactionId),
+      },
+      returnUrl: `${buildBaseUrl(req)}/wallet?topup=stripe_return`,
+    });
+
+    await bindProviderRef(walletTransactionId, userId, result.paymentIntentId, {
+      source: "wallet_topup",
+      paymentIntentId: result.paymentIntentId,
+    });
+
+    if (result.status === "succeeded") {
+      const completed = await completeTopupByProviderRef({
+        userId,
+        provider: "stripe",
+        providerRef: result.paymentIntentId,
+        capturedAmountCents: amountCents,
+        metadata: result,
+      });
+      return res.json({
+        success: true,
+        transactionId: completed.transactionId,
+        balanceCents: completed.balanceCents,
+      });
+    }
+
+    return res.json({
+      requiresAction: result.requiresAction,
+      clientSecret: result.clientSecret,
+      paymentIntentId: result.paymentIntentId,
+    });
+  } catch (error) {
+    if (walletTransactionId) {
+      await markWalletTransactionStatus({
+        transactionId: walletTransactionId,
+        userId,
+        status: "failed",
+        metadata: { source: "wallet_topup", reason: error.message || "payment_failed" },
+      });
+    }
+    return res.status(500).json({ error: error.message || "Stripe top-up failed." });
+  }
+}
+
+async function confirmStripeCardTopup(req, res) {
+  const userId = requireUser(req, res, { json: true });
+  if (!userId) return;
+  try {
+    const paymentIntentId = req.body?.payment_intent_id;
+    if (!paymentIntentId) {
+      return res.status(400).json({ error: "Missing payment intent." });
+    }
+
+    const intent = await confirmCardPaymentIntent(paymentIntentId);
+    if (!intent || intent.status !== "succeeded") {
+      return res.status(400).json({ error: "Stripe payment was not completed." });
+    }
+
+    const completed = await completeTopupByProviderRef({
+      userId,
+      provider: "stripe",
+      providerRef: paymentIntentId,
+      capturedAmountCents: intent.amount || 0,
+      metadata: intent,
+    });
+
+    return res.json({
+      success: true,
+      transactionId: completed.transactionId,
+      balanceCents: completed.balanceCents,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || "Stripe top-up failed." });
+  }
+}
+
 module.exports = {
   renderWallet,
   createPaypalTopup,
   capturePaypalTopup,
+  createHitpayTopup,
+  handleHitpayTopupReturn,
+  createGrabPayTopupSession,
+  handleGrabPayTopupSuccess,
+  createNetsTopupQr,
+  completeNetsTopup,
+  createStripeCardTopup,
+  confirmStripeCardTopup,
 };

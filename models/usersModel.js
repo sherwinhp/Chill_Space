@@ -11,6 +11,8 @@ function toUser(row) {
     contact_number: row.contact_number,
     avatar_url: row.avatar_url,
     is_active: row.is_active !== undefined ? Boolean(row.is_active) : true,
+    birth_date: row.birth_date || null,
+    membership_tier: row.membership_tier || "Bronze",
     created_at: row.created_at,
   };
 }
@@ -45,14 +47,26 @@ async function createUser({
   contact_number,
   role = "user",
   is_active = true,
+  birth_date = null,
+  membership_tier = "Bronze",
 }) {
   const existing = await findByEmail(email);
   if (existing) {
     throw new Error("Email already registered");
   }
   const result = await db.query(
-    "INSERT INTO users (name, email, password, role, address, contact_number, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    [name, email, password, role, address || null, contact_number || null, is_active ? 1 : 0]
+    "INSERT INTO users (name, email, password, role, address, contact_number, is_active, birth_date, membership_tier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    [
+      name,
+      email,
+      password,
+      role,
+      address || null,
+      contact_number || null,
+      is_active ? 1 : 0,
+      birth_date || null,
+      membership_tier || "Bronze",
+    ]
   );
   return findById(result.insertId);
 }
@@ -70,6 +84,8 @@ async function updateUser(id, updates) {
     "contact_number",
     "avatar_url",
     "is_active",
+    "birth_date",
+    "membership_tier",
   ];
 
   const isSuperAdmin =

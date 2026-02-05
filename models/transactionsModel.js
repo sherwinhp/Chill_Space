@@ -353,6 +353,24 @@ async function getSalesSummary() {
   };
 }
 
+async function getMonthlySpendCents(userId, now = new Date()) {
+  if (!userId) return 0;
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const rows = await db.query(
+    `
+      SELECT COALESCE(SUM(amount), 0) AS total
+      FROM transactions
+      WHERE user_id = ?
+        AND status = 'COMPLETED'
+        AND YEAR(time) = ?
+        AND MONTH(time) = ?
+    `,
+    [userId, year, month]
+  );
+  const total = rows.length ? Number(rows[0].total || 0) : 0;
+  return Math.round(total * 100);
+}
 async function findTransactionByProviderOrderId(orderId, userId) {
   if (!orderId || !userId) return null;
   const rows = await db.query(
@@ -477,6 +495,7 @@ module.exports = {
   listTransactionsWithItems,
   listAllTransactionsWithItems,
   getSalesSummary,
+  getMonthlySpendCents,
   findTransactionByProviderOrderId,
   findTransactionForBooking,
   listBookingItemsForTransaction,

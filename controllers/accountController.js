@@ -1,6 +1,6 @@
 const { findById, updateUser } = require("../models/usersModel");
 const { getTransactionById, listTransactionsWithItems } = require("../models/transactionsModel");
-const { calculateCashbackCents } = require("../models/walletModel");
+const { calculateCashbackCents, getCashbackRateForUser } = require("../models/walletModel");
 const { listNotifications, markNotificationsRead } = require("../models/notificationsModel");
 
 async function renderProfile(req, res) {
@@ -19,14 +19,29 @@ async function updateProfile(req, res) {
     return res.status(401).render("profile", { user: null, message: "Login required." });
   }
 
-  const { name, email, password, address, contact_number, current_avatar_url } = req.body;
+  const {
+    name,
+    email,
+    password,
+    address,
+    contact_number,
+    current_avatar_url,
+    birth_date,
+  } = req.body;
   const avatarUrl = req.file ? `/uploads/${req.file.filename}` : current_avatar_url || "";
+  const normalizedBirthDate = birth_date
+    ? new Date(String(birth_date).trim())
+    : null;
   const updates = {
     name: name ? String(name).trim() : "",
     email: email ? String(email).trim() : "",
     address: address ? String(address).trim() : "",
     contact_number: contact_number ? String(contact_number).trim() : "",
     avatar_url: avatarUrl,
+    birth_date:
+      normalizedBirthDate && !Number.isNaN(normalizedBirthDate.getTime())
+        ? normalizedBirthDate.toISOString().slice(0, 10)
+        : null,
   };
   if (password) updates.password = password;
 
@@ -55,8 +70,10 @@ async function renderInvoice(req, res) {
   if (!invoice) {
     return res.status(404).send("Invoice not found.");
   }
+  const rate = await getCashbackRateForUser(req.session.userId);
   const invoiceCashbackCents = calculateCashbackCents(
-    Math.round(Number(invoice.total_amount || 0) * 100)
+    Math.round(Number(invoice.total_amount || 0) * 100),
+    rate
   );
 
   return res.render("invoice", { invoice, invoiceCashbackCents });
@@ -96,8 +113,10 @@ async function renderPaymentSuccess(req, res) {
   if (!invoice) {
     return res.status(404).send("Invoice not found.");
   }
+  const rate = await getCashbackRateForUser(req.session.userId);
   const invoiceCashbackCents = calculateCashbackCents(
-    Math.round(Number(invoice.total_amount || 0) * 100)
+    Math.round(Number(invoice.total_amount || 0) * 100),
+    rate
   );
 
   return res.render("payment-success", { invoice, invoiceCashbackCents });

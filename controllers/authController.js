@@ -67,8 +67,17 @@ function buildPasswordResetEmail({ name, resetLink }) {
   return { subject, text, html };
 }
 
+function normalizeBirthDate(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+}
+
 async function register(req, res) {
-  const { name, email, password, confirm_password, address, contact_number } = req.body;
+  const { name, email, password, confirm_password, address, contact_number, birth_date } =
+    req.body;
   if (!name || !email || !password || !confirm_password || !address || !contact_number) {
     return res
       .status(400)
@@ -92,6 +101,7 @@ async function register(req, res) {
       address,
       contact_number,
       role: "user",
+      birth_date: normalizeBirthDate(birth_date),
     });
     if (req.setSession) {
       req.setSession(user);
