@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Notifications | Cozy Place Gaming Rooms</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("partials/header", {
+        page: "",
+        roomsLink: "/",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile"
+      }) %>
+
+      <main>
+        <section class="section notifications-page">
+          <div class="section-head split">
+            <div>
+              <h2>Notifications</h2>
+              <p>All successful payments and refunds in one place.</p>
+            </div>
+            <div class="section-head-actions">
+              <form action="/notifications/read-all" method="post">
+                <button class="btn ghost" type="submit">Mark all as read</button>
+              </form>
+              <a class="btn ghost" href="/purchases">View purchases</a>
+            </div>
+          </div>
+
+          <% if (!notifications || !notifications.length) { %>
+            <div class="empty-state wide centered">
+              <h3>No notifications yet.</h3>
+              <p>Successful payments and refunds will show up here.</p>
+              <a class="btn primary" href="/menu">Browse menu</a>
+            </div>
+          <% } else { %>
+            <div class="notification-list">
+              <% notifications.forEach(function(item) { %>
+                <% const isRefund = item.kind === "refund"; %>
+                <% const isTopup = item.kind === "topup"; %>
+                <% const isReward = item.kind === "reward"; %>
+                <% const amountValue = Math.abs(Number(item.amount || 0)); %>
+                <% const title = isRefund
+                  ? "Refund processed"
+                  : isTopup
+                    ? "Wallet top-up"
+                    : isReward
+                      ? "Cashback earned"
+                      : "Payment successful"; %>
+                <% const amountClass = isRefund || isTopup || isReward ? "refund" : "payment"; %>
+                <% const amountSign = isRefund || isTopup || isReward ? "+" : "-"; %>
+                <div class="notification-card">
+                  <div>
+                    <h3><%= title %></h3>
+                    <div class="notification-meta">
+                      <span><%= new Date(item.created_at).toLocaleString() %></span>
+                      <% if (item.provider) { %>
+                        <span class="status-pill secondary"><%= String(item.provider).toUpperCase() %></span>
+                      <% } %>
+                      <% if (item.reference) { %>
+                        <span>Ref: <%= item.reference %></span>
+                      <% } %>
+                    </div>
+                  </div>
+                  <div class="notification-amount">
+                    <strong class="<%= amountClass %>">
+                      <%= amountSign %>$<%= amountValue.toFixed(2) %>
+                    </strong>
+                    <span class="status-pill"><%= String(item.status || "completed").toLowerCase() %></span>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </section>
+      </main>
+
+      <%- include("partials/footer") %>
+    </div>
+  </body>
+</html>

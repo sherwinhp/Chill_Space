@@ -12,13 +12,25 @@ const authController = require("./controllers/authController");
 const paymentsController = require("./controllers/paymentsController");
 const purchasesController = require("./controllers/purchasesController");
 const walletController = require("./controllers/walletController");
+const notificationsController = require("./controllers/notificationsController");
 const reviewsRouter = require("./routes/reviews");
-const { sessionMiddleware, requireAdmin, attachWalletBalance } = require("./middleware");
+const {
+  sessionMiddleware,
+  requireAdmin,
+  attachWalletBalance,
+  attachNotificationCount,
+} = require("./middleware");
 const profileController = require("./controllers/profileController");
 const adminRouter = require("./routes/admin");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+app.post(
+  "/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  paymentsController.handleStripeWebhook
+);
 
 const uploadStorage = multer.diskStorage({
   destination: path.join(__dirname, "public", "uploads"),
@@ -53,6 +65,7 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/images", express.static(path.join(__dirname, "public", "uploads")));
 app.use(attachWalletBalance);
+app.use(attachNotificationCount);
 
 app.use((req, res, next) => {
   if (req.session && req.session.role === "admin") {
@@ -80,6 +93,13 @@ app.post("/payments/paypal/create", express.json(), paymentsController.createPay
 app.post("/api/paypal/create-order", express.json(), paymentsController.createPaypalButtonOrder);
 app.post("/api/paypal/capture-order", express.json(), paymentsController.capturePaypalButtonOrder);
 app.post("/payments/wallet/pay", express.json(), paymentsController.payCheckoutWithWallet);
+app.post("/payments/stripe/card/pay", express.json(), paymentsController.payCheckoutWithStripeCard);
+app.post(
+  "/stripe/grabpay/create-session",
+  express.json(),
+  paymentsController.createStripeGrabPaySession
+);
+app.get("/stripe/success", paymentsController.handleStripeSuccess);
 app.post("/payments/nets/qr/create", express.json(), paymentsController.createNetsQrPayment);
 app.get("/payments/nets/qr/status/:txnRetrievalRef", paymentsController.getNetsTxnStatus);
 app.get("/payments/nets/qr/stream/:txnRetrievalRef", paymentsController.streamNetsTxnStatus);
@@ -91,6 +111,8 @@ app.get("/products", menuController.getMenu);
 app.get("/api/products", menuController.getMenu);
 app.get("/events", eventsPageController.renderEvents);
 app.get("/wallet", walletController.renderWallet);
+app.get("/notifications", notificationsController.renderNotifications);
+app.post("/notifications/read-all", notificationsController.markAllRead);
 app.post("/wallet/topup/paypal/create", express.json(), walletController.createPaypalTopup);
 app.post("/wallet/topup/paypal/capture", express.json(), walletController.capturePaypalTopup);
 app.get("/cart", (req, res) => res.render("cart"));

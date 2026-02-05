@@ -104,6 +104,119 @@
             </div>
           </div>
 
+          <div class="room-addons" data-room-addons data-room-id="<%= room.id %>" data-room-name="<%= room.name %>">
+            <div class="section-head split">
+              <div>
+                <h3>Room Add-ons</h3>
+                <p>Book this room to unlock discounted food & beverages. Themes are optional.</p>
+              </div>
+              <div class="addon-pill">
+                Room booking price: <%= Math.round((addons && addons.discountRate ? addons.discountRate : 0) * 100) %>% off
+              </div>
+            </div>
+            <p class="addon-lock" data-addon-lock>Book a time slot first to unlock add-on pricing.</p>
+
+            <div class="addon-group">
+              <h4>Food &amp; Beverages</h4>
+              <% if (!addons || !addons.foodAndDrinks || !addons.foodAndDrinks.length) { %>
+                <div class="empty-state">
+                  <h3>No add-ons available yet.</h3>
+                  <p>Add menu items to show booking bundles here.</p>
+                </div>
+              <% } else { %>
+                <div class="menu-grid">
+                  <% addons.foodAndDrinks.forEach(function(item) { %>
+                    <article
+                      class="menu-card"
+                      data-addon-card
+                      data-id="<%= item.id %>"
+                      data-available="<%= item.isAvailable ? '1' : '0' %>"
+                    >
+                      <div class="menu-head">
+                        <% if (item.imageUrl) { %>
+                          <div class="menu-media">
+                            <img src="<%= item.imageUrl %>" alt="<%= item.name %>" loading="lazy" />
+                          </div>
+                        <% } else { %>
+                          <div class="menu-icon">
+                            <i class="bi bi-egg-fried"></i>
+                          </div>
+                        <% } %>
+                        <div class="menu-info">
+                          <h3><%= item.name %></h3>
+                          <p><%= item.description %></p>
+                        </div>
+                      </div>
+                      <div class="menu-actions">
+                        <div class="menu-meta">
+                          <% if (item.hasDiscount) { %>
+                            <span class="price addon-price">
+                              <span class="price-discount">$<%= item.discountedPrice.toFixed(2) %></span>
+                              <span class="price-original">$<%= item.basePrice.toFixed(2) %></span>
+                            </span>
+                            <span class="addon-tag">Room booking price</span>
+                          <% } else { %>
+                            <span class="price">$<%= item.basePrice.toFixed(2) %></span>
+                          <% } %>
+                          <span class="availability"><%= item.isAvailable ? "Available" : "Unavailable" %></span>
+                        </div>
+                        <button class="btn primary addon-add" type="button" data-addon-add <%= item.isAvailable ? "" : "disabled" %>>
+                          Add to Cart
+                        </button>
+                      </div>
+                    </article>
+                  <% }) %>
+                </div>
+              <% } %>
+            </div>
+
+            <div class="addon-group">
+              <h4>Room Themes</h4>
+              <% if (!addons || !addons.themes || !addons.themes.length) { %>
+                <div class="empty-state">
+                  <h3>No themes available yet.</h3>
+                  <p>Add theme items in the menu to offer optional room styling.</p>
+                </div>
+              <% } else { %>
+                <div class="menu-grid">
+                  <% addons.themes.forEach(function(item) { %>
+                    <article
+                      class="menu-card"
+                      data-addon-card
+                      data-id="<%= item.id %>"
+                      data-available="<%= item.isAvailable ? '1' : '0' %>"
+                    >
+                      <div class="menu-head">
+                        <% if (item.imageUrl) { %>
+                          <div class="menu-media">
+                            <img src="<%= item.imageUrl %>" alt="<%= item.name %>" loading="lazy" />
+                          </div>
+                        <% } else { %>
+                          <div class="menu-icon">
+                            <i class="bi bi-stars"></i>
+                          </div>
+                        <% } %>
+                        <div class="menu-info">
+                          <h3><%= item.name %></h3>
+                          <p><%= item.description %></p>
+                        </div>
+                      </div>
+                      <div class="menu-actions">
+                        <div class="menu-meta">
+                          <span class="price">$<%= item.basePrice.toFixed(2) %></span>
+                          <span class="availability"><%= item.isAvailable ? "Available" : "Unavailable" %></span>
+                        </div>
+                        <button class="btn primary addon-add" type="button" data-addon-add <%= item.isAvailable ? "" : "disabled" %>>
+                          Add to Cart
+                        </button>
+                      </div>
+                    </article>
+                  <% }) %>
+                </div>
+              <% } %>
+            </div>
+          </div>
+
           <div class="room-reviews">
             <div class="section-head split">
               <div>
@@ -163,5 +276,6 @@
       <%- include("partials/footer") %>
     </div>
     <script src="/booking-widget.js"></script>
+    <script src="/room-addons.js"></script>
   </body>
 </html>

@@ -32,7 +32,12 @@
 
           <div class="payment-layout">
             <div class="payment-column">
-              <div class="payment-card" data-wallet-balance-cents="<%= Number(walletBalance || 0) %>">
+              <div
+                class="payment-card"
+                data-wallet-balance-cents="<%= Number(walletBalance || 0) %>"
+                data-user-email="<%= session && session.email ? session.email : '' %>"
+                data-user-name="<%= session && session.name ? session.name : '' %>"
+              >
                 <div class="payment-block">
                   <h3>Payment options</h3>
                   <label class="payment-pill nets">
@@ -45,6 +50,16 @@
                     <span class="pill-text">PayNow (HitPay)</span>
                     <span class="pill-indicator"></span>
                   </label>
+                  <label class="payment-pill stripe-card">
+                    <input type="radio" name="paymentType" value="stripe_card" />
+                    <span class="pill-text">Card (Stripe)</span>
+                    <span class="pill-indicator"></span>
+                  </label>
+                  <label class="payment-pill grabpay">
+                    <input type="radio" name="paymentType" value="grabpay" />
+                    <span class="pill-text">Stripe (GrabPay)</span>
+                    <span class="pill-indicator"></span>
+                  </label>
                   <label class="payment-pill wallet">
                     <input type="radio" name="paymentType" value="wallet" />
                     <span class="pill-text">Pay with Wallet (Balance: $<%= (Number(walletBalance || 0) / 100).toFixed(2) %>)</span>
@@ -55,6 +70,41 @@
                 <div class="payment-block">
                   <h4>PayPal</h4>
                   <div id="paypal-button-container" class="paypal-button-container"></div>
+                </div>
+
+                <div class="payment-block stripe-card-form is-hidden" data-stripe-card-form>
+                  <h4>Pay with card</h4>
+                  <p class="field-hint">Supported: Visa, Mastercard, American Express, Discover.</p>
+                  <div class="field">
+                    <span>Name on card</span>
+                    <input type="text" data-card-name placeholder="Full name" />
+                  </div>
+                  <div class="field">
+                    <span>Email</span>
+                    <input type="email" data-card-email placeholder="you@example.com" />
+                  </div>
+                  <div class="field">
+                    <span>Card number</span>
+                    <input type="text" inputmode="numeric" data-card-number placeholder="4242 4242 4242 4242" />
+                  </div>
+                  <div class="field-group">
+                    <label class="field">
+                      <span>Expiry (MM/YY)</span>
+                      <input type="text" inputmode="numeric" data-card-expiry placeholder="MM/YY" />
+                    </label>
+                    <label class="field">
+                      <span>CVV</span>
+                      <input type="password" inputmode="numeric" data-card-cvc placeholder="123" />
+                    </label>
+                    <label class="field">
+                      <span>Billing country</span>
+                      <input type="text" data-card-country placeholder="SG" />
+                    </label>
+                  </div>
+                  <div class="field">
+                    <span>Postal code</span>
+                    <input type="text" data-card-postal placeholder="Postal code" />
+                  </div>
                 </div>
 
                 <button class="btn primary payment-confirm" type="button" data-confirm-payment>

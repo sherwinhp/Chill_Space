@@ -96,9 +96,10 @@ async function addCartItem({
   return result.insertId;
 }
 
-async function incrementMenuItem({ userId, sessionId, itemId, qty }) {
-  const params = [qty, itemId];
-  let where = "item_id = ? AND item_type = 'menu'";
+async function incrementMenuItem({ userId, sessionId, itemId, qty, roomId = null, details = "" }) {
+  const params = [itemId];
+  let where = "item_id = ? AND item_type = 'menu' AND room_id <=> ? AND details = ?";
+  params.push(roomId, details);
   if (userId) {
     where += " AND user_id = ?";
     params.push(userId);
@@ -106,7 +107,10 @@ async function incrementMenuItem({ userId, sessionId, itemId, qty }) {
     where += " AND session_id = ?";
     params.push(sessionId);
   }
-  const rows = await db.query(`SELECT cart_item_id, qty FROM cart_items WHERE ${where} LIMIT 1`, params);
+  const rows = await db.query(
+    `SELECT cart_item_id, qty FROM cart_items WHERE ${where} LIMIT 1`,
+    params
+  );
   if (!rows.length) return null;
   const nextQty = Number(rows[0].qty) + qty;
   await db.query("UPDATE cart_items SET qty = ? WHERE cart_item_id = ?", [nextQty, rows[0].cart_item_id]);
@@ -184,6 +188,23 @@ function formatLocalDateTime(value) {
   return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
 }
 
+async function hasRoomBookingInCart({ userId, sessionId, roomId }) {
+  const params = [roomId];
+  let where = "item_type = 'room_booking' AND room_id = ?";
+  if (userId) {
+    where += " AND user_id = ?";
+    params.push(userId);
+  } else {
+    where += " AND session_id = ?";
+    params.push(sessionId);
+  }
+  const rows = await db.query(
+    `SELECT cart_item_id FROM cart_items WHERE ${where} LIMIT 1`,
+    params
+  );
+  return rows.length > 0;
+}
+
 module.exports = {
   listCartItems,
   migrateSessionCartToUser,
@@ -194,4 +215,5 @@ module.exports = {
   deleteCartItem,
   clearCart,
   removeExpiredRoomBookings,
+  hasRoomBookingInCart,
 };

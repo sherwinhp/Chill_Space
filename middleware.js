@@ -2,6 +2,7 @@
 // Tiny middleware helpers to keep app.js tidy.
 const crypto = require("crypto");
 const { getWalletBalanceCents } = require("./models/walletModel");
+const { countUnreadNotifications } = require("./models/notificationsModel");
 
 const sessions = {};
 
@@ -89,6 +90,21 @@ async function attachWalletBalance(req, res, next) {
   return next();
 }
 
+async function attachNotificationCount(req, res, next) {
+  res.locals.notificationsCount = 0;
+  if (!req.session || !req.session.userId) {
+    return next();
+  }
+  try {
+    res.locals.notificationsCount = await countUnreadNotifications(req.session.userId);
+  } catch (error) {
+    if (error.code !== "ER_NO_SUCH_TABLE") {
+      console.error("Notification count middleware failed:", error.message);
+    }
+  }
+  return next();
+}
+
 function notFound(req, res) {
   res.status(404).json({ error: "Not found" });
 }
@@ -104,6 +120,7 @@ module.exports = {
   requireAuth,
   requireAdmin,
   attachWalletBalance,
+  attachNotificationCount,
   notFound,
   errorHandler,
 };

@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const {
   listCartItems,
   removeExpiredRoomBookings,
@@ -14,6 +15,13 @@ const {
   createPayNowPaymentRequest,
   getPaymentRequestStatus,
 } = require("../services/hitpayService");
+const { upsertPaymentMethod } = require("../models/paymentMethodsModel");
+const {
+  createCardPaymentIntent,
+  createGrabPayCheckoutSession,
+  retrieveCheckoutSession,
+  constructWebhookEvent,
+} = require("../services/stripe");
 
 function isNetsPaymentSuccessful(status) {
   const responseCode =
@@ -305,11 +313,350 @@ async function handleHitpayReturn(req, res) {
   }
 }
 
+function parseExpiryInput(expiry) {
+  if (!expiry || typeof expiry !== "string") return { expMonth: null, expYear: null };
+  const match = expiry.trim().match(/^(\d{1,2})\s*\/\s*(\d{2,4})$/);
+  if (!match) return { expMonth: null, expYear: null };
+  return { expMonth: match[1], expYear: match[2] };
+}
+
+async function payCheckoutWithStripeCard(req, res) {
+  try {
+    const { userId, sessionId } = getOwner(req);
+    if (!userId) {
+      return res.status(401).json({ error: "Login required." });
+    }
+
+    const expiredHolds = await removeExpiredRoomBookings({
+      userId,
+      sessionId,
+      now: new Date(),
+    });
+    await Promise.all(expiredHolds.map((holdId) => releaseBookingHold(holdId)));
+
+    const items = await listCartItems({ userId, sessionId });
+    if (!items.length) {
+      return res.status(400).json({ error: "Cart is empty." });
+    }
+
+    const total = items.reduce(
+      (sum, item) => sum + Number(item.price) * Number(item.qty || 1),
+      0
+    );
+    if (!Number.isFinite(total) || total <= 0) {
+      return res.status(400).json({ error: "Invalid cart total." });
+    }
+
+    const body = req.body || {};
+    const expiryParsed = parseExpiryInput(body.card_expiry);
+    const expMonth = body.exp_month || expiryParsed.expMonth;
+    const expYear = body.exp_year || expiryParsed.expYear;
+
+    const result = await createCardPaymentIntent({
+      amount: total.toFixed(2),
+      currency: "sgd",
+      card: {
+        number: body.card_number,
+        expMonth,
+        expYear,
+        cvc: body.cvc,
+      },
+      billing: {
+        name: body.card_name || req.session?.name,
+        email: body.card_email || req.session?.email,
+        country: body.billing_country || null,
+        postalCode: body.postal_code || null,
+      },
+      description: `Chill Space order for user ${userId}`,
+      metadata: { userId: String(userId), sessionId: String(sessionId || "") },
+      userId,
+      ipCountry: req.headers["cf-ipcountry"] || req.headers["x-country-code"] || null,
+      returnUrl: `${req.protocol}://${req.get("host")}/checkout`,
+    });
+
+    if (result.requiresAction) {
+      return res.json({
+        requiresAction: true,
+        redirectUrl: result.nextActionUrl,
+        clientSecret: result.clientSecret,
+        risk: result.risk,
+        card: result.card,
+      });
+    }
+
+    if (result.status !== "succeeded") {
+      return res.status(400).json({
+        error: "Stripe payment was not completed.",
+        risk: result.risk,
+      });
+    }
+
+    const providerOrderId = `STRIPE-CARD-${result.paymentIntentId}`;
+    const existing = await findTransactionByProviderOrderId(providerOrderId, userId);
+    if (existing) {
+      return res.json({
+        success: true,
+        transactionId: existing.transaction_id,
+        risk: result.risk,
+        card: result.card,
+      });
+    }
+
+    const transaction = await createTransactionFromCart({
+      userId,
+      sessionId,
+      providerOrderId,
+      items,
+      payerId: result.paymentMethodId || "stripe_card",
+      payerEmail: body.card_email || req.session?.email || "unknown",
+      status: "COMPLETED",
+    });
+    if (result.paymentMethodId && result.card && result.card.last4 && result.card.brand) {
+      upsertPaymentMethod({
+        userId,
+        provider: "stripe",
+        token: result.paymentMethodId,
+        brand: result.card.brand,
+        last4: result.card.last4,
+        funding: result.card.type,
+      }).catch((error) => {
+        if (error && error.code !== "ER_NO_SUCH_TABLE") {
+          console.error("Payment method storage failed:", error.message);
+        }
+      });
+    }
+    issueTransactionCashbackIfEligible(transaction.transactionId).catch((error) => {
+      console.error("Cashback reward issuance failed:", error.message);
+    });
+
+    return res.json({
+      success: true,
+      transactionId: transaction.transactionId,
+      risk: result.risk,
+      card: result.card,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || "Stripe payment failed." });
+  }
+}
+
+function buildStripeSuccessUrl(req) {
+  const base = process.env.STRIPE_SUCCESS_URL;
+  const fallback = `${req.protocol}://${req.get("host")}/stripe/success?session_id={CHECKOUT_SESSION_ID}`;
+  const url = base || fallback;
+  if (url.includes("{CHECKOUT_SESSION_ID}")) return url;
+  const join = url.includes("?") ? "&" : "?";
+  return `${url}${join}session_id={CHECKOUT_SESSION_ID}`;
+}
+
+function buildStripeCancelUrl(req) {
+  return (
+    process.env.STRIPE_CANCEL_URL ||
+    `${req.protocol}://${req.get("host")}/checkout?stripe=cancel`
+  );
+}
+
+function buildGrabPayLineItems(items) {
+  return items.map((item) => {
+    const unitAmount = Math.round(Number(item.price) * 100);
+    if (!Number.isFinite(unitAmount) || unitAmount <= 0) {
+      throw new Error("Invalid item price.");
+    }
+    return {
+      price_data: {
+        currency: "sgd",
+        unit_amount: unitAmount,
+        product_data: {
+          name: item.name,
+        },
+      },
+      quantity: Number(item.qty || 1),
+    };
+  });
+}
+
+function buildIdempotencyKey({ userId, sessionId, items }) {
+  const payload = JSON.stringify({
+    userId,
+    sessionId,
+    items: items.map((item) => ({
+      id: item.itemId || null,
+      name: item.name,
+      qty: Number(item.qty || 1),
+      price: Number(item.price),
+    })),
+  });
+  return crypto.createHash("sha256").update(payload).digest("hex");
+}
+
+async function createStripeGrabPaySession(req, res) {
+  try {
+    const { userId, sessionId } = getOwner(req);
+    if (!userId) {
+      return res.status(401).json({ error: "Login required." });
+    }
+
+    const expiredHolds = await removeExpiredRoomBookings({
+      userId,
+      sessionId,
+      now: new Date(),
+    });
+    await Promise.all(expiredHolds.map((holdId) => releaseBookingHold(holdId)));
+
+    const items = await listCartItems({ userId, sessionId });
+    if (!items.length) {
+      return res.status(400).json({ error: "Cart is empty." });
+    }
+
+    const lineItems = buildGrabPayLineItems(items);
+    const session = await createGrabPayCheckoutSession({
+      lineItems,
+      successUrl: buildStripeSuccessUrl(req),
+      cancelUrl: buildStripeCancelUrl(req),
+      customerEmail: req.session?.email,
+      metadata: { userId: String(userId), sessionId: String(sessionId || "") },
+      idempotencyKey: buildIdempotencyKey({ userId, sessionId, items }),
+    });
+
+    if (!session || !session.url) {
+      return res.status(500).json({ error: "Unable to start GrabPay payment." });
+    }
+    return res.json({ url: session.url });
+  } catch (error) {
+    console.error("GrabPay session create failed:", error.message);
+    return res.status(500).json({ error: error.message || "GrabPay error." });
+  }
+}
+
+async function finalizeGrabPayCheckout({ session, userIdOverride, sessionIdOverride }) {
+  if (!session || session.payment_status !== "paid") {
+    return { ok: false, reason: "not_paid" };
+  }
+  const userId = Number(userIdOverride || session.metadata?.userId || 0);
+  if (!userId) {
+    return { ok: false, reason: "missing_user" };
+  }
+  const paymentIntentId =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : session.payment_intent?.id || null;
+  const providerOrderId = `STRIPE-GRABPAY-${session.id}`;
+  const existing = await findTransactionByProviderOrderId(providerOrderId, userId);
+  if (existing) {
+    return { ok: true, transactionId: existing.transaction_id, existing: true };
+  }
+
+  const expiredHolds = await removeExpiredRoomBookings({
+    userId,
+    sessionId: sessionIdOverride || session.metadata?.sessionId || null,
+    now: new Date(),
+  });
+  await Promise.all(expiredHolds.map((holdId) => releaseBookingHold(holdId)));
+
+  const items = await listCartItems({
+    userId,
+    sessionId: sessionIdOverride || session.metadata?.sessionId || null,
+  });
+  if (!items.length) {
+    return { ok: false, reason: "empty_cart" };
+  }
+
+  const transaction = await createTransactionFromCart({
+    userId,
+    sessionId: sessionIdOverride || session.metadata?.sessionId || null,
+    providerOrderId,
+    items,
+    payerId: paymentIntentId || session.id || "grabpay",
+    payerEmail: session.customer_details?.email || "unknown",
+    status: "COMPLETED",
+  });
+  issueTransactionCashbackIfEligible(transaction.transactionId).catch((error) => {
+    console.error("Cashback reward issuance failed:", error.message);
+  });
+  return { ok: true, transactionId: transaction.transactionId };
+}
+
+async function handleStripeSuccess(req, res) {
+  const sessionId = req.query.session_id;
+  if (!sessionId) {
+    return res.redirect("/checkout?stripe=missing_intent");
+  }
+  if (!req.session || !req.session.userId) {
+    const redirect = encodeURIComponent(req.originalUrl);
+    return res.redirect(`/login?redirect=${redirect}&reason=checkout`);
+  }
+
+  try {
+    const session = await retrieveCheckoutSession(sessionId);
+    if (!session) {
+      return res.redirect("/checkout?stripe=failed");
+    }
+    if (session.payment_status !== "paid") {
+      return res.redirect("/checkout?stripe=pending");
+    }
+    if (
+      session.metadata?.userId &&
+      Number(session.metadata.userId) !== Number(req.session.userId)
+    ) {
+      return res.status(403).send("Not authorized to view this session.");
+    }
+
+    const result = await finalizeGrabPayCheckout({
+      session,
+      userIdOverride: req.session.userId,
+      sessionIdOverride: req.cartSid,
+    });
+    if (!result.ok) {
+      return res.redirect("/checkout?stripe=empty_cart");
+    }
+    return res.redirect(`/invoice/${result.transactionId}`);
+  } catch (error) {
+    console.error("Stripe success verification failed:", error.message);
+    return res.redirect(
+      `/checkout?stripe=error&message=${encodeURIComponent(
+        error.message || "Unable to verify GrabPay payment."
+      )}`
+    );
+  }
+}
+
+async function handleStripeWebhook(req, res) {
+  const signature = req.headers["stripe-signature"];
+  let event;
+  try {
+    event = constructWebhookEvent(req.body, signature);
+  } catch (error) {
+    console.error("Stripe webhook signature failed:", error.message);
+    return res.status(400).send(`Webhook Error: ${error.message}`);
+  }
+
+  const session = event.data?.object;
+  try {
+    if (
+      event.type === "checkout.session.completed" ||
+      event.type === "checkout.session.async_payment_succeeded"
+    ) {
+      await finalizeGrabPayCheckout({ session });
+    } else if (event.type === "checkout.session.async_payment_failed") {
+      console.warn("GrabPay async payment failed:", session?.id);
+    }
+  } catch (error) {
+    console.error("Stripe webhook handling failed:", error.message);
+    return res.status(500).send("Webhook handling failed.");
+  }
+
+  return res.json({ received: true });
+}
+
 module.exports = {
   createPaypalOrder,
   createPaypalButtonOrder,
   capturePaypalButtonOrder,
   payCheckoutWithWallet,
+  payCheckoutWithStripeCard,
+  createStripeGrabPaySession,
+  handleStripeSuccess,
+  handleStripeWebhook,
   createHitpayPayNowPayment,
   handleHitpayReturn,
   createNetsQrPayment: async (req, res) => {

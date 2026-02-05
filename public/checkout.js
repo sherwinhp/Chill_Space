@@ -5,6 +5,14 @@ const confirmPaymentButton = document.querySelector("[data-confirm-payment]");
 const paypalContainer = document.querySelector("#paypal-button-container");
 const paymentCard = document.querySelector("[data-wallet-balance-cents]");
 const walletOptionInput = document.querySelector('input[name="paymentType"][value="wallet"]');
+const stripeCardForm = document.querySelector("[data-stripe-card-form]");
+const cardNameInput = document.querySelector("[data-card-name]");
+const cardEmailInput = document.querySelector("[data-card-email]");
+const cardNumberInput = document.querySelector("[data-card-number]");
+const cardExpiryInput = document.querySelector("[data-card-expiry]");
+const cardCvcInput = document.querySelector("[data-card-cvc]");
+const cardCountryInput = document.querySelector("[data-card-country]");
+const cardPostalInput = document.querySelector("[data-card-postal]");
 const netsModal = document.querySelector("[data-nets-modal]");
 const netsStatusEl = netsModal ? netsModal.querySelector("[data-nets-status]") : null;
 const netsQrImgEl = netsModal ? netsModal.querySelector("[data-nets-qr]") : null;
@@ -24,6 +32,13 @@ let netsTxnRetrievalRef = null;
 let netsCompleting = false;
 let netsCreatingQr = false;
 
+function toggleStripeCardForm() {
+  if (!stripeCardForm) return;
+  const selected = document.querySelector("input[name='paymentType']:checked");
+  const isCard = selected && selected.value === "stripe_card";
+  stripeCardForm.classList.toggle("is-hidden", !isCard);
+}
+
 async function readJsonOrText(response) {
   const contentType = response.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
@@ -40,6 +55,15 @@ const hitpayStatusMessages = {
   error: "Unable to verify your PayNow payment. Please try again.",
 };
 
+const stripeStatusMessages = {
+  failed: "GrabPay payment was not completed. Please try again.",
+  pending: "GrabPay payment is processing. Please wait a moment and check your notifications.",
+  cancel: "GrabPay payment was canceled.",
+  missing_intent: "Missing Stripe payment reference. Please try again.",
+  empty_cart: "Your cart is empty after payment verification. Please contact support if you were charged.",
+  error: "Unable to verify Stripe payment. Please try again.",
+};
+
 function showHitpayStatusMessage() {
   const params = new URLSearchParams(window.location.search);
   const status = params.get("hitpay");
@@ -50,6 +74,22 @@ function showHitpayStatusMessage() {
     alert(message);
   }
   params.delete("hitpay");
+  params.delete("message");
+  const query = params.toString();
+  const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+  window.history.replaceState({}, "", nextUrl);
+}
+
+function showStripeStatusMessage() {
+  const params = new URLSearchParams(window.location.search);
+  const status = params.get("stripe");
+  if (!status) return;
+  const fromQuery = params.get("message");
+  const message = fromQuery || stripeStatusMessages[status];
+  if (message) {
+    alert(message);
+  }
+  params.delete("stripe");
   params.delete("message");
   const query = params.toString();
   const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
@@ -413,6 +453,17 @@ fetchCart().then(renderCheckout).catch(() => {
   renderCheckout([]);
 });
 showHitpayStatusMessage();
+showStripeStatusMessage();
+toggleStripeCardForm();
+
+if (paymentCard) {
+  if (cardNameInput && paymentCard.dataset.userName) {
+    cardNameInput.value = paymentCard.dataset.userName;
+  }
+  if (cardEmailInput && paymentCard.dataset.userEmail) {
+    cardEmailInput.value = paymentCard.dataset.userEmail;
+  }
+}
 
 function renderPaypalButtons(total) {
   if (!paypalContainer || paypalButtonsRendered) return;
@@ -477,6 +528,11 @@ if (confirmPaymentButton) {
     });
   }
 
+  const paymentTypeInputs = document.querySelectorAll("input[name='paymentType']");
+  paymentTypeInputs.forEach((input) => {
+    input.addEventListener("change", toggleStripeCardForm);
+  });
+
   confirmPaymentButton.addEventListener("click", async () => {
     const selected = document.querySelector(
       "input[name='paymentType']:checked"
@@ -526,6 +582,73 @@ if (confirmPaymentButton) {
         window.location.href = `/invoice/${body.transactionId}`;
       } catch (error) {
         alert(error.message || "Wallet payment failed.");
+      }
+      return;
+    }
+    if (type === "stripe_card") {
+      try {
+        if (!currentTotalCents || currentTotalCents <= 0) {
+          throw new Error("Your cart is empty. Please add items before paying.");
+        }
+        const payload = {
+          card_name: cardNameInput ? cardNameInput.value : "",
+          card_email: cardEmailInput ? cardEmailInput.value : "",
+          card_number: cardNumberInput ? cardNumberInput.value : "",
+          card_expiry: cardExpiryInput ? cardExpiryInput.value : "",
+          cvc: cardCvcInput ? cardCvcInput.value : "",
+          billing_country: cardCountryInput ? cardCountryInput.value : "",
+          postal_code: cardPostalInput ? cardPostalInput.value : "",
+        };
+        setConfirmBusy(true, "Processing card...");
+        const response = await fetch("/payments/stripe/card/pay", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const body = await readJsonOrText(response);
+        if (!response.ok) {
+          throw new Error(body.error || "Stripe card payment failed.");
+        }
+        if (body.requiresAction) {
+          if (body.redirectUrl) {
+            window.location.href = body.redirectUrl;
+            return;
+          }
+          throw new Error(
+            "Additional card authentication required. Please try another payment method."
+          );
+        }
+        if (body.success && body.transactionId) {
+          window.location.href = `/invoice/${body.transactionId}`;
+          return;
+        }
+        throw new Error(body.error || "Stripe card payment failed.");
+      } catch (error) {
+        alert(error.message || "Stripe card payment failed.");
+      } finally {
+        setConfirmBusy(false);
+      }
+      return;
+    }
+    if (type === "grabpay") {
+      try {
+        if (!currentTotalCents || currentTotalCents <= 0) {
+          throw new Error("Your cart is empty. Please add items before paying.");
+        }
+        setConfirmBusy(true, "Starting GrabPay...");
+        const response = await fetch("/stripe/grabpay/create-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        const body = await readJsonOrText(response);
+        if (!response.ok || !body.url) {
+          throw new Error(body.error || "Unable to start GrabPay payment.");
+        }
+        window.location.href = body.url;
+      } catch (error) {
+        alert(error.message || "Unable to start GrabPay payment.");
+        setConfirmBusy(false);
       }
       return;
     }

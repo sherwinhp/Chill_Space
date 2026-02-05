@@ -45,6 +45,27 @@ async function listMenuItems() {
   }
 }
 
+async function findMenuItemById(id) {
+  if (!id) return null;
+  try {
+    const rows = await db.query("SELECT * FROM menu_items WHERE item_id = ? LIMIT 1", [id]);
+    return rows.length ? toMenuItem(rows[0]) : null;
+  } catch (error) {
+    if (error && error.code !== "ER_NO_SUCH_TABLE") {
+      throw error;
+    }
+    try {
+      const legacyRows = await db.query("SELECT * FROM products WHERE id = ? LIMIT 1", [id]);
+      return legacyRows.length ? toMenuItem(legacyRows[0]) : null;
+    } catch (legacyError) {
+      if (legacyError && legacyError.code === "ER_NO_SUCH_TABLE") {
+        return null;
+      }
+      throw legacyError;
+    }
+  }
+}
+
 async function createMenuItem(payload) {
   const { name, category, price, description, image_url, is_available } = payload;
   const result = await db.query(
@@ -78,6 +99,7 @@ async function deleteMenuItem(id) {
 
 module.exports = {
   listMenuItems,
+  findMenuItemById,
   createMenuItem,
   updateMenuItem,
   deleteMenuItem,

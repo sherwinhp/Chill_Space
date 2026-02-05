@@ -4,6 +4,7 @@ const {
   getAllRooms,
   getRoomById,
 } = require("../models/roomsModel");
+const { listMenuItems } = require("../models/menuDbModel");
 const Reviews = require("../models/reviewsModel");
 const {
   isRoomAvailable,
@@ -15,6 +16,42 @@ const {
 const {
   getMaxAllowedDate,
 } = require("../utils/bookingPricing");
+
+const ROOM_ADDON_DISCOUNT_RATE = 0.15;
+
+function normalizeImageUrl(value) {
+  if (!value) return "";
+  if (value.startsWith("http://") || value.startsWith("https://")) {
+    return value;
+  }
+  if (value.startsWith("/")) {
+    return encodeURI(value);
+  }
+  if (value.startsWith("uploads/") || value.startsWith("images/")) {
+    return encodeURI(`/${value}`);
+  }
+  return encodeURI(`/uploads/${value}`);
+}
+
+function buildAddonItem(item) {
+  const rawPrice = Number(item.price || 0);
+  const basePrice = Number.isFinite(rawPrice) ? rawPrice : 0;
+  const discountEligible = item.category === "food" || item.category === "drink";
+  const discountedPrice = discountEligible
+    ? Number((basePrice * (1 - ROOM_ADDON_DISCOUNT_RATE)).toFixed(2))
+    : basePrice;
+  return {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    description: item.description || "",
+    isAvailable: Boolean(item.isAvailable),
+    imageUrl: normalizeImageUrl(item.image),
+    basePrice,
+    discountedPrice,
+    hasDiscount: discountEligible,
+  };
+}
 
 async function listRooms(req, res) {
   const rooms = await getAllRooms();
@@ -44,6 +81,12 @@ async function showRoom(req, res) {
   }
   const [stats] = await Reviews.getRoomStats(roomId);
   const reviews = await Reviews.getVisibleByRoomId(roomId);
+  const menuItems = await listMenuItems();
+  const addons = menuItems.map(buildAddonItem);
+  const foodAndDrinks = addons.filter(
+    (item) => item.category === "food" || item.category === "drink"
+  );
+  const themes = addons.filter((item) => item.category === "addon");
   const avgRating = stats ? Number(stats.avg_rating || 0) : 0;
   const reviewCount = stats ? Number(stats.review_count || 0) : 0;
   res.render("room-book", {
@@ -51,6 +94,11 @@ async function showRoom(req, res) {
     pricing: {
       normalRate: room.normalHourlyRate,
       peakRate: room.peakHourlyRate,
+    },
+    addons: {
+      discountRate: ROOM_ADDON_DISCOUNT_RATE,
+      foodAndDrinks,
+      themes,
     },
     rating: {
       average: avgRating,

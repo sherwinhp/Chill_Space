@@ -4,14 +4,15 @@
     "ejs": "^3.1.10",
     "express": "^5.2.1",
     "multer": "^2.0.2",
-    "mysql2": "^3.11.3"
+    "mysql2": "^3.11.3",
+    "stripe": "^20.3.0"
   },
   "name": "chill_space",
   "version": "1.0.0",
   "description": "",
   "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node tests/cardValidation.test.js"
   },
   "keywords": [],
   "author": "",

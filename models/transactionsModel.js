@@ -149,6 +149,8 @@ async function getTransactionById(transactionId, userId) {
           WHEN t.orderId LIKE 'WALLET-%' THEN 'wallet'
           WHEN t.orderId LIKE 'HITPAY-%' THEN 'paynow'
           WHEN t.orderId LIKE 'NETS-%' THEN 'nets'
+          WHEN t.orderId LIKE 'STRIPE-CARD-%' THEN 'stripe_card'
+          WHEN t.orderId LIKE 'STRIPE-GRABPAY-%' THEN 'grabpay'
           ELSE 'paypal'
         END AS provider,
         t.orderId AS provider_order_id,
@@ -201,6 +203,8 @@ async function listTransactionsWithItems(userId) {
           WHEN orderId LIKE 'WALLET-%' THEN 'wallet'
           WHEN orderId LIKE 'HITPAY-%' THEN 'paynow'
           WHEN orderId LIKE 'NETS-%' THEN 'nets'
+          WHEN orderId LIKE 'STRIPE-CARD-%' THEN 'stripe_card'
+          WHEN orderId LIKE 'STRIPE-GRABPAY-%' THEN 'grabpay'
           ELSE 'paypal'
         END AS provider,
         orderId AS provider_order_id,
@@ -259,6 +263,8 @@ async function listAllTransactionsWithItems(limit = 50) {
           WHEN t.orderId LIKE 'WALLET-%' THEN 'wallet'
           WHEN t.orderId LIKE 'HITPAY-%' THEN 'paynow'
           WHEN t.orderId LIKE 'NETS-%' THEN 'nets'
+          WHEN t.orderId LIKE 'STRIPE-CARD-%' THEN 'stripe_card'
+          WHEN t.orderId LIKE 'STRIPE-GRABPAY-%' THEN 'grabpay'
           ELSE 'paypal'
         END AS provider,
         t.orderId AS provider_order_id,
@@ -339,6 +345,8 @@ async function findTransactionByProviderOrderId(orderId, userId) {
           WHEN orderId LIKE 'WALLET-%' THEN 'wallet'
           WHEN orderId LIKE 'HITPAY-%' THEN 'paynow'
           WHEN orderId LIKE 'NETS-%' THEN 'nets'
+          WHEN orderId LIKE 'STRIPE-CARD-%' THEN 'stripe_card'
+          WHEN orderId LIKE 'STRIPE-GRABPAY-%' THEN 'grabpay'
           ELSE 'paypal'
         END AS provider,
         orderId AS provider_order_id,

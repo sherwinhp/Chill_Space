@@ -8,10 +8,14 @@ const {
   deleteCartItem,
   clearCart,
   removeExpiredRoomBookings,
+  hasRoomBookingInCart,
 } = require("../models/cartModel");
 const { releaseBookingHold } = require("../models/bookingsModel");
 const { findRoomById } = require("../models/roomsModel");
+const { findMenuItemById } = require("../models/menuDbModel");
 const { calculateBookingPrice, getMaxAllowedDate } = require("../utils/bookingPricing");
+
+const ROOM_ADDON_DISCOUNT_RATE = 0.15;
 
 function getOwner(req) {
   const userId = req.session ? req.session.userId : null;
@@ -40,7 +44,6 @@ async function addItem(req, res) {
     item_type,
     item_id,
     name,
-    price,
     qty,
     details,
     room_id,
@@ -49,27 +52,78 @@ async function addItem(req, res) {
     hold_id,
   } = req.body;
 
-  if (!item_type || !name || price == null) {
+  if (!item_type) {
     return res.status(400).json({ error: "Missing item details." });
   }
 
   if (item_type === "menu") {
+    const menuItemId = Number(item_id);
+    if (!menuItemId) {
+      return res.status(400).json({ error: "Missing menu item." });
+    }
+    const menuItem = await findMenuItemById(menuItemId);
+    if (!menuItem) {
+      return res.status(404).json({ error: "Menu item not found." });
+    }
+    if (!menuItem.isAvailable) {
+      return res.status(400).json({ error: "Menu item is unavailable." });
+    }
+
+    const isRoomAddon =
+      req.body?.room_addon === true ||
+      req.body?.room_addon === "true" ||
+      req.body?.room_addon === "1";
+    const qtyValue = Number(qty || 1);
+    const normalizedQty = Number.isFinite(qtyValue) && qtyValue > 0 ? qtyValue : 1;
+    let roomIdValue = null;
+    let detailsValue = details || "";
+    let finalPrice = Number(menuItem.price || 0);
+
+    if (isRoomAddon) {
+      roomIdValue = Number(room_id);
+      if (!roomIdValue) {
+        return res.status(400).json({ error: "Room is required for add-ons." });
+      }
+      const hasBooking = await hasRoomBookingInCart({ userId, sessionId, roomId: roomIdValue });
+      if (!hasBooking) {
+        return res.status(403).json({ error: "Add-ons require a room booking in your cart." });
+      }
+      const room = await findRoomById(roomIdValue);
+      if (!room) {
+        return res.status(404).json({ error: "Room not found." });
+      }
+      const discountEligible = menuItem.category === "food" || menuItem.category === "drink";
+      if (discountEligible) {
+        finalPrice = Number(
+          (finalPrice * (1 - ROOM_ADDON_DISCOUNT_RATE)).toFixed(2)
+        );
+      }
+      detailsValue = `Room add-on for ${room.name}`;
+    }
+
+    if (!Number.isFinite(finalPrice) || finalPrice <= 0) {
+      return res.status(400).json({ error: "Invalid item price." });
+    }
+
     const existingId = await incrementMenuItem({
       userId,
       sessionId,
-      itemId: Number(item_id),
-      qty: Number(qty || 1),
+      itemId: menuItemId,
+      qty: normalizedQty,
+      roomId: roomIdValue,
+      details: detailsValue,
     });
     if (!existingId) {
       await addCartItem({
         userId,
         sessionId,
         type: "menu",
-        itemId: Number(item_id),
-        name,
-        price: Number(price),
-        qty: Number(qty || 1),
-        details,
+        itemId: menuItemId,
+        name: menuItem.name,
+        price: finalPrice,
+        qty: normalizedQty,
+        details: detailsValue,
+        roomId: roomIdValue,
       });
     }
     const items = await listCartItems({ userId, sessionId });
@@ -96,6 +150,7 @@ async function addItem(req, res) {
     if (!room) {
       return res.status(404).json({ error: "Room not found." });
     }
+    const bookingName = name || `${room.name} booking`;
     const serverPrice = calculateBookingPrice(startValue, endValue, {
       normalRate: room.normalHourlyRate,
       peakRate: room.peakHourlyRate,
@@ -119,7 +174,7 @@ async function addItem(req, res) {
       userId,
       sessionId,
       type: "room_booking",
-      name,
+      name: bookingName,
       price: serverPrice,
       qty: 1,
       details,
