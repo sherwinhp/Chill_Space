@@ -6,7 +6,8 @@ const {
 } = require("../models/bookingsModel");
 const { listRooms, findRoomById } = require("../models/roomsModel");
 const { reverseOrderCashbackForBookingIfRefunded } = require("../models/walletModel");
-const { calculateBookingPrice, getMaxAllowedDate } = require("../utils/bookingPricing");
+const { calculateBookingPrice, getMaxAllowedDate } = require("../models/bookingsModel");
+const MIN_LEAD_HOURS = 2;
 
 async function renderBookings(req, res) {
   try {
@@ -66,6 +67,10 @@ async function createBooking(req, res) {
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
       return res.status(400).send("End time must be later than start time.");
     }
+    const minStart = new Date(Date.now() + MIN_LEAD_HOURS * 60 * 60000);
+    if (start < minStart) {
+      return res.status(400).send("Bookings must be at least 2 hours in advance.");
+    }
 
     const maxAllowedDate = getMaxAllowedDate(new Date());
     if (start > maxAllowedDate || end > maxAllowedDate) {
@@ -110,6 +115,10 @@ async function cancelBooking(req, res) {
     const isAdmin = req.session.role === "admin";
     if (!isOwner && !isAdmin) {
       return res.status(403).send("Not authorized.");
+    }
+
+    if (booking.paymentStatus === "paid") {
+      return res.redirect(`/bookings/${req.params.id}/refund`);
     }
 
     await updateBookingDb(req.params.id, {

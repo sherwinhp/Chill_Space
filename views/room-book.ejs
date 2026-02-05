@@ -55,7 +55,7 @@
                 <div class="room-meta">
                   <span>Capacity: <strong><%= room.capacity %> pax</strong></span>
                   <span>Normal Rate: <strong>$<%= Number(pricing.normalRate || 0).toFixed(2) %>/hr</strong></span>
-                  <span>Peak Rate (6PM–11PM): <strong>$<%= Number(pricing.peakRate || 0).toFixed(2) %>/hr</strong></span>
+                  <span>Peak Rate (Weekdays 6pm-11pm, Weekends 1-4pm & 8-11pm): <strong>$<%= Number(pricing.peakRate || 0).toFixed(2) %>/hr</strong></span>
                 </div>
                 <% const featuresList = Array.isArray(room.features)
                   ? room.features
@@ -89,8 +89,8 @@
               </div>
               <div class="booking-legend">
                 <span><i class="legend-dot available"></i>Available</span>
-                <span><i class="legend-dot peak"></i>Peak (6PM–11PM)</span>
-                <span><i class="legend-dot booked"></i>Fully booked</span>
+                <span><i class="legend-dot peak"></i>Peak time (Weekdays 6pm-11pm, Weekends 1-4pm & 8-11pm)</span>
+                <span><i class="legend-dot booked"></i>Blocked / fully booked</span>
                 <span><i class="legend-dot selected"></i>Selected</span>
               </div>
             </div>

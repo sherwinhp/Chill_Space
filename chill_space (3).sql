@@ -213,7 +213,7 @@ CREATE TABLE `bookings` (
   `end_time` datetime NOT NULL,
   `pax` int DEFAULT '1',
   `total_price` decimal(10,2) DEFAULT NULL,
-  `payment_status` enum('pending','paid','cancelled') DEFAULT 'pending',
+  `payment_status` enum('pending','paid','cancelled','refunded','partially_refunded','refund_denied') DEFAULT 'pending',
   `admin_status` enum('pending','approved','declined') DEFAULT 'pending',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`booking_id`),
@@ -266,6 +266,56 @@ LOCK TABLES `booking_holds` WRITE;
 /*!40000 ALTER TABLE `booking_holds` DISABLE KEYS */;
 INSERT INTO `booking_holds` VALUES (2,1,NULL,'2026-01-22 12:00:00','2026-01-22 14:00:00','9999-12-31 23:59:59','2026-01-22 15:31:46');
 /*!40000 ALTER TABLE `booking_holds` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `refund_requests`
+--
+
+DROP TABLE IF EXISTS `refund_requests`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `refund_requests` (
+  `refund_id` int NOT NULL AUTO_INCREMENT,
+  `booking_id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `reason_text` text,
+  `user_message` text,
+  `image_url` varchar(255) DEFAULT NULL,
+  `requested_amount` decimal(10,2) DEFAULT NULL,
+  `approved_amount` decimal(10,2) DEFAULT NULL,
+  `status` enum('pending','approved','denied','failed') NOT NULL DEFAULT 'pending',
+  `admin_note` text,
+  `provider` varchar(32) DEFAULT NULL,
+  `provider_ref` varchar(255) DEFAULT NULL,
+  `refund_provider_ref` varchar(255) DEFAULT NULL,
+  `failure_reason` text,
+  `failure_code` varchar(80) DEFAULT NULL,
+  `approved_by` int DEFAULT NULL,
+  `denied_by` int DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `denied_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`refund_id`),
+  UNIQUE KEY `unique_refund_booking` (`booking_id`),
+  KEY `refund_user_id` (`user_id`),
+  KEY `refund_status` (`status`),
+  KEY `refund_provider` (`provider`),
+  CONSTRAINT `refund_requests_ibfk_1` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`booking_id`) ON DELETE CASCADE,
+  CONSTRAINT `refund_requests_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `refund_requests_ibfk_3` FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `refund_requests_ibfk_4` FOREIGN KEY (`denied_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `refund_requests`
+--
+
+LOCK TABLES `refund_requests` WRITE;
+/*!40000 ALTER TABLE `refund_requests` DISABLE KEYS */;
+/*!40000 ALTER TABLE `refund_requests` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --

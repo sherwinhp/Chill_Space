@@ -5,7 +5,7 @@
   rel="stylesheet"
 />
 <link rel="stylesheet" href="/styles.css" />
-<script src="/notify.js" defer></script>
+<script src="/main.js" defer></script>
 <% const roomsHref = typeof roomsLink !== "undefined" ? roomsLink : "/"; %>
 <% const bookingsHref = typeof bookingsLink !== "undefined" ? bookingsLink : "/bookings"; %>
 <% const menuHref = typeof menuLink !== "undefined" ? menuLink : "/menu"; %>
@@ -86,4 +86,3 @@
       <a class="tab <%= page === 'profile' ? 'active' : '' %>" href="<%= profileHref %>">Profile</a>
     </nav>
   <% } %>
-  <script src="/cart-badge.js" defer></script>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payment Successful | Cozy Place Gaming Rooms</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("partials/header", {
+        page: "",
+        roomsLink: "/",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile"
+      }) %>
+
+      <main>
+        <section class="section payment-page">
+          <div class="payment-hero">
+            <div>
+              <h2>Payment successful</h2>
+              <p>Your invoice has been emailed to <%= invoice.user_email %>.</p>
+            </div>
+            <a class="btn ghost" href="/invoice/<%= invoice.transaction_id %>">View invoice</a>
+          </div>
+
+          <div class="invoice-card">
+            <div class="invoice-meta">
+              <div>
+                <span>Invoice</span>
+                <strong>#<%= invoice.transaction_id %></strong>
+              </div>
+              <div>
+                <span>Date</span>
+                <strong><%= new Date(invoice.created_at).toLocaleString() %></strong>
+              </div>
+              <div>
+                <span>Status</span>
+                <strong class="status-pill"><%= invoice.status %></strong>
+              </div>
+              <div>
+                <span>Payment</span>
+                <strong><%= invoice.provider %></strong>
+              </div>
+            </div>
+
+            <div class="invoice-customer">
+              <div>
+                <span>Guest</span>
+                <strong><%= invoice.user_name %></strong>
+                <small><%= invoice.user_email %></small>
+              </div>
+              <div class="invoice-total">
+                <span>Total Paid</span>
+                <strong>$<%= Number(invoice.total_amount).toFixed(2) %></strong>
+                <% if (Number(invoiceCashbackCents || 0) > 0) { %>
+                  <small>Cashback earned: +$<%= (Number(invoiceCashbackCents) / 100).toFixed(2) %></small>
+                <% } %>
+              </div>
+            </div>
+
+            <div class="invoice-actions">
+              <a class="btn ghost" href="/purchases">View purchases</a>
+              <a class="btn primary" href="/invoice/<%= invoice.transaction_id %>">Open invoice</a>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <%- include("partials/footer") %>
+    </div>
+  </body>
+</html>

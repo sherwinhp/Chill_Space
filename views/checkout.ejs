@@ -41,23 +41,18 @@
                 <div class="payment-block">
                   <h3>Payment options</h3>
                   <label class="payment-pill nets">
-                    <input type="radio" name="paymentType" value="nets" checked />
+                    <input type="radio" name="paymentType" value="nets" />
                     <span class="pill-text">NETS QR</span>
                     <span class="pill-indicator"></span>
                   </label>
                   <label class="payment-pill paynow">
                     <input type="radio" name="paymentType" value="paynow" />
-                    <span class="pill-text">PayNow (HitPay)</span>
-                    <span class="pill-indicator"></span>
-                  </label>
-                  <label class="payment-pill stripe-card">
-                    <input type="radio" name="paymentType" value="stripe_card" />
-                    <span class="pill-text">Card (Stripe)</span>
+                    <span class="pill-text">PayNow</span>
                     <span class="pill-indicator"></span>
                   </label>
                   <label class="payment-pill grabpay">
                     <input type="radio" name="paymentType" value="grabpay" />
-                    <span class="pill-text">Stripe (GrabPay)</span>
+                    <span class="pill-text">GrabPay</span>
                     <span class="pill-indicator"></span>
                   </label>
                   <label class="payment-pill wallet">
@@ -72,7 +67,7 @@
                   <div id="paypal-button-container" class="paypal-button-container"></div>
                 </div>
 
-                <div class="payment-block stripe-card-form is-hidden" data-stripe-card-form>
+                <div class="payment-block stripe-card-form" data-stripe-card-form>
                   <h4>Pay with card</h4>
                   <p class="field-hint">Supported: Visa, Mastercard, American Express, Discover.</p>
                   <div class="field">
@@ -86,6 +81,7 @@
                   <div class="field">
                     <span>Card number</span>
                     <input type="text" inputmode="numeric" data-card-number placeholder="4242 4242 4242 4242" />
+                    <small class="field-hint card-brand" data-card-brand></small>
                   </div>
                   <div class="field-group">
                     <label class="field">
@@ -150,11 +146,11 @@
       <div class="nets-modal__panel" role="dialog" aria-modal="true" aria-labelledby="nets-modal-title">
         <div class="nets-modal__header">
           <h3 id="nets-modal-title">Scan NETS QR</h3>
-          <button class="nets-modal__close" type="button" data-nets-cancel aria-label="Close NETS QR modal">×</button>
+          <button class="nets-modal__close" type="button" data-nets-cancel aria-label="Close NETS QR modal">x</button>
         </div>
 
         <div class="nets-modal__body">
-          <div class="nets-modal__status" data-nets-status aria-live="polite">Generating QR…</div>
+          <div class="nets-modal__status" data-nets-status aria-live="polite">Generating QR...</div>
           <div class="nets-modal__spinner" data-nets-spinner></div>
           <img class="nets-modal__qr" data-nets-qr alt="NETS QR Code" hidden />
           <div class="nets-modal__timer" data-nets-timer>Time remaining: 5:00</div>

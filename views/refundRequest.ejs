@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Request Refund | Chill Space</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("partials/header", {
+        page: "bookings",
+        roomsLink: "/",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile"
+      }) %>
+
+      <main>
+        <section class="section">
+          <div class="section-head split">
+            <div>
+              <h2>Refund Request</h2>
+              <p>Booking #<%= booking.id %> - <%= booking.roomName %></p>
+            </div>
+            <div class="section-actions">
+              <a class="btn" href="/bookings">Back to bookings</a>
+            </div>
+          </div>
+
+          <div class="card refund-card">
+            <div class="card-body refund-layout">
+              <div class="refund-summary">
+                <h3>Booking summary</h3>
+                <div class="meta">
+                  <span><strong>Start:</strong> <%= new Date(booking.startTime).toLocaleString() %></span>
+                  <span><strong>End:</strong> <%= new Date(booking.endTime).toLocaleString() %></span>
+                  <span><strong>Total:</strong> $<%= Number(booking.totalPrice || 0).toFixed(2) %></span>
+                  <span><strong>Pax:</strong> <%= booking.pax || 1 %></span>
+                </div>
+                <p class="muted">Please submit clear details so our team can review quickly.</p>
+              </div>
+
+              <div class="refund-form">
+                <% if (refund) { %>
+                  <div class="status-row">
+                    <span class="status-pill secondary">Refund status: <%= refund.status %></span>
+                    <% if (refund.approvedAmount) { %>
+                      <span class="status-pill">Approved: $<%= Number(refund.approvedAmount).toFixed(2) %></span>
+                    <% } %>
+                  </div>
+                  <div class="admin-booking-refund" style="margin-top: 12px;">
+                    <% if (refund.reasonText) { %>
+                      <div><strong>Reason:</strong> <%= refund.reasonText %></div>
+                    <% } %>
+                    <% if (refund.userMessage) { %>
+                      <div><strong>Message:</strong> <%= refund.userMessage %></div>
+                    <% } %>
+                    <% if (refund.requestedAmount) { %>
+                      <div><strong>Requested amount:</strong> $<%= Number(refund.requestedAmount).toFixed(2) %></div>
+                    <% } %>
+                  </div>
+                  <% if (refund.adminNote) { %>
+                    <p class="muted" style="margin-top: 1rem;">Admin note: <%= refund.adminNote %></p>
+                  <% } %>
+                  <% if (refund.imageUrl) { %>
+                    <div class="refund-proof">
+                      <p class="muted">Uploaded proof:</p>
+                      <img src="<%= refund.imageUrl %>" alt="Refund proof" />
+                    </div>
+                  <% } %>
+                <% } else { %>
+                  <form
+                    class="form refund-form-fields"
+                    action="/bookings/<%= booking.id %>/refund"
+                    method="POST"
+                    enctype="multipart/form-data"
+                  >
+                    <label>
+                      <span>Reason</span>
+                      <select name="reason" required data-refund-reason>
+                        <option value="schedule_change">Schedule change</option>
+                        <option value="booking_mistake">Booking made by mistake</option>
+                        <option value="room_issue">Room or facility issue</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </label>
+                    <p class="muted" data-refund-hint></p>
+                    <label>
+                      <span>Message</span>
+                      <textarea
+                        name="message"
+                        rows="3"
+                        placeholder="Share details for your refund request"
+                        data-refund-message
+                      ></textarea>
+                    </label>
+                    <label class="refund-optional" data-refund-amount>
+                      <span>Custom refund amount (optional)</span>
+                      <input
+                        type="number"
+                        name="requested_amount"
+                        step="0.01"
+                        min="0.01"
+                        max="<%= Number(booking.totalPrice || 0).toFixed(2) %>"
+                      />
+                      <small>Available only when reason is "Other".</small>
+                    </label>
+                    <label class="refund-upload">
+                      <span>Upload image (optional)</span>
+                      <input type="file" name="refund_photo" accept="image/*" />
+                      <small>PNG or JPG, up to 3MB.</small>
+                      <div class="refund-preview is-hidden" data-refund-preview>
+                        <img alt="Refund upload preview" />
+                        <span data-refund-preview-name></span>
+                      </div>
+                      <p class="refund-warning is-hidden" data-refund-warning></p>
+                    </label>
+                    <div class="form-actions">
+                      <button class="btn primary" type="submit">Submit refund request</button>
+                    </div>
+                  </form>
+                <% } %>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <%- include("partials/footer") %>
+    </div>
+    <script>
+      const reasonSelect = document.querySelector("[data-refund-reason]");
+      const amountField = document.querySelector("[data-refund-amount]");
+      const messageField = document.querySelector("[data-refund-message]");
+      const hintEl = document.querySelector("[data-refund-hint]");
+      const amountInput = amountField ? amountField.querySelector("input") : null;
+      const fileInput = document.querySelector("input[name='refund_photo']");
+      const preview = document.querySelector("[data-refund-preview]");
+      const previewImg = preview ? preview.querySelector("img") : null;
+      const previewName = document.querySelector("[data-refund-preview-name]");
+      const warning = document.querySelector("[data-refund-warning]");
+      const MAX_SIZE = 3 * 1024 * 1024;
+
+      function setWarning(message) {
+        if (!warning) return;
+        if (message) {
+          warning.textContent = message;
+          warning.classList.remove("is-hidden");
+        } else {
+          warning.textContent = "";
+          warning.classList.add("is-hidden");
+        }
+      }
+
+      const bookingTotal = Number("<%= Number(booking.totalPrice || 0).toFixed(2) %>");
+      const refundRates = {
+        schedule_change: 0.2,
+        booking_mistake: 0.3,
+        room_issue: 0.8,
+      };
+
+      function setHint(text) {
+        if (!hintEl) return;
+        hintEl.textContent = text || "";
+      }
+
+      function toggleAmount() {
+        if (!reasonSelect || !amountField) return;
+        const isOther = reasonSelect.value === "other";
+        amountField.style.display = isOther ? "block" : "none";
+        if (amountInput) {
+          amountInput.disabled = !isOther;
+          if (!isOther) {
+            amountInput.value = "";
+          }
+        }
+        if (messageField) {
+          messageField.required = isOther;
+        }
+
+        if (!isOther && refundRates[reasonSelect.value]) {
+          const pct = Math.round(refundRates[reasonSelect.value] * 100);
+          const amount = (bookingTotal * refundRates[reasonSelect.value]).toFixed(2);
+          setHint(`Suggested refund for this reason: ${pct}% ($${amount}).`);
+        } else if (isOther) {
+          setHint("Custom refund amount available for 'Other'.");
+        } else {
+          setHint("");
+        }
+      }
+
+      function handlePreview() {
+        if (!fileInput || !preview || !previewImg) return;
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) {
+          preview.classList.add("is-hidden");
+          if (previewName) previewName.textContent = "";
+          setWarning("");
+          return;
+        }
+
+        if (!file.type.startsWith("image/")) {
+          fileInput.value = "";
+          preview.classList.add("is-hidden");
+          setWarning("Only image files are allowed.");
+          return;
+        }
+
+        if (file.size > MAX_SIZE) {
+          fileInput.value = "";
+          preview.classList.add("is-hidden");
+          setWarning("Image is too large. Max 3MB.");
+          return;
+        }
+
+        const url = URL.createObjectURL(file);
+        previewImg.src = url;
+        preview.classList.remove("is-hidden");
+        if (previewName) previewName.textContent = file.name;
+        setWarning("");
+      }
+
+      if (reasonSelect) {
+        reasonSelect.addEventListener("change", toggleAmount);
+        toggleAmount();
+      }
+
+      if (fileInput) {
+        fileInput.addEventListener("change", handlePreview);
+      }
+    </script>
+  </body>
+</html>
+

@@ -90,4 +90,72 @@ async function captureOrder(orderId) {
   return data;
 }
 
-module.exports = { createOrder, captureOrder };
+async function getOrderDetails(orderId) {
+  const accessToken = await getAccessToken();
+  const response = await fetch(`${PAYPAL_API}/v2/checkout/orders/${orderId}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    const detail =
+      data && data.message ? data.message : "Unable to fetch PayPal order details.";
+    throw new Error(detail);
+  }
+  return data;
+}
+
+function extractCaptureId(order) {
+  const units = Array.isArray(order.purchase_units) ? order.purchase_units : [];
+  for (const unit of units) {
+    const captures = unit?.payments?.captures || [];
+    if (captures.length) {
+      return captures[0].id;
+    }
+  }
+  return null;
+}
+
+async function refundOrder(orderId, { amount, currency = "SGD" } = {}) {
+  if (!orderId) {
+    throw new Error("Missing PayPal order ID for refund.");
+  }
+  const order = await getOrderDetails(orderId);
+  const captureId = extractCaptureId(order);
+  if (!captureId) {
+    throw new Error("Unable to locate PayPal capture ID for refund.");
+  }
+
+  const accessToken = await getAccessToken();
+  const payload = {};
+  if (amount) {
+    payload.amount = {
+      value: Number(amount).toFixed(2),
+      currency_code: currency,
+    };
+  }
+
+  const response = await fetch(
+    `${PAYPAL_API}/v2/payments/captures/${captureId}/refund`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  const data = await response.json();
+  if (!response.ok) {
+    const detail = data && data.message ? data.message : "Unable to refund PayPal capture.";
+    throw new Error(detail);
+  }
+  return data;
+}
+
+module.exports = { createOrder, captureOrder, refundOrder };

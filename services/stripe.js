@@ -106,6 +106,28 @@ function normalizeExpiry(expMonth, expYear) {
   return { month: expMonth, year: expYear };
 }
 
+function normalizeCountryCode(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const upper = raw.toUpperCase();
+  if (upper.length === 2) return upper;
+  const normalized = upper.replace(/\s+/g, " ");
+  const map = {
+    SINGAPORE: "SG",
+    "UNITED STATES": "US",
+    USA: "US",
+    "UNITED KINGDOM": "GB",
+    UK: "GB",
+    "GREAT BRITAIN": "GB",
+    MALAYSIA: "MY",
+    INDONESIA: "ID",
+    THAILAND: "TH",
+    VIETNAM: "VN",
+    PHILIPPINES: "PH",
+  };
+  return map[normalized] || null;
+}
+
 function validateExpiry(expMonth, expYear) {
   const normalized = normalizeExpiry(expMonth, expYear);
   const month = Number(normalized.month);
@@ -231,6 +253,21 @@ function safeStripeError(error) {
   return "Stripe payment failed.";
 }
 
+async function refundPaymentIntent({ paymentIntentId, amount }) {
+  if (!stripe) {
+    throw new Error("Stripe is not configured. Check STRIPE_SECRET_KEY and install the stripe package.");
+  }
+  if (!paymentIntentId) {
+    throw new Error("Missing Stripe payment intent for refund.");
+  }
+
+  const params = { payment_intent: paymentIntentId };
+  if (amount) {
+    params.amount = toStripeAmount(amount);
+  }
+  return stripe.refunds.create(params);
+}
+
 async function createCardPaymentIntent({
   amount,
   currency = "sgd",
@@ -271,6 +308,7 @@ async function createCardPaymentIntent({
   }
 
   try {
+    const countryCode = normalizeCountryCode(billing.country);
     const paymentMethod = await stripe.paymentMethods.create({
       type: "card",
       card: {
@@ -283,7 +321,7 @@ async function createCardPaymentIntent({
         name: billing.name || undefined,
         email: billing.email || undefined,
         address: {
-          country: billing.country || undefined,
+          country: countryCode || undefined,
           postal_code: billing.postalCode || undefined,
         },
       },
@@ -323,7 +361,7 @@ async function createCardPaymentIntent({
         last4: paymentMethod.card?.last4 || validation.last4,
         type: paymentMethod.card?.funding || null,
       },
-      risk: extractRiskSummary(intent, velocity, ipCountry, billing.country),
+      risk: extractRiskSummary(intent, velocity, ipCountry, countryCode),
       clientSecret: intent.client_secret,
     };
   } catch (error) {
@@ -442,6 +480,7 @@ module.exports = {
     }
     return stripe.webhooks.constructEvent(payload, signature, STRIPE_WEBHOOK_SECRET);
   },
+  refundPaymentIntent,
   validateCardNumber,
   detectCardBrand,
   validateExpiry,

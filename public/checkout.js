@@ -6,6 +6,10 @@ const paypalContainer = document.querySelector("#paypal-button-container");
 const paymentCard = document.querySelector("[data-wallet-balance-cents]");
 const walletOptionInput = document.querySelector('input[name="paymentType"][value="wallet"]');
 const stripeCardForm = document.querySelector("[data-stripe-card-form]");
+const cardBrandEl = document.querySelector("[data-card-brand]");
+const stripeCardOption = document.querySelector(
+  'input[name="paymentType"][value="stripe_card"]'
+);
 const cardNameInput = document.querySelector("[data-card-name]");
 const cardEmailInput = document.querySelector("[data-card-email]");
 const cardNumberInput = document.querySelector("[data-card-number]");
@@ -34,6 +38,10 @@ let netsCreatingQr = false;
 
 function toggleStripeCardForm() {
   if (!stripeCardForm) return;
+  if (!stripeCardOption) {
+    stripeCardForm.classList.remove("is-hidden");
+    return;
+  }
   const selected = document.querySelector("input[name='paymentType']:checked");
   const isCard = selected && selected.value === "stripe_card";
   stripeCardForm.classList.toggle("is-hidden", !isCard);
@@ -137,7 +145,7 @@ function stopNetsBackgroundWork() {
 }
 
 function resetNetsModalUi() {
-  if (netsStatusEl) netsStatusEl.textContent = "Generating QR…";
+  if (netsStatusEl) netsStatusEl.textContent = "Generating QR...";
   if (netsSpinnerEl) netsSpinnerEl.hidden = false;
   if (netsQrImgEl) {
     netsQrImgEl.hidden = true;
@@ -183,7 +191,7 @@ async function completeNetsPayment(txnRetrievalRef) {
   if (!response.ok || !body || !body.success || !body.transactionId) {
     throw new Error(body?.error || "Unable to finalize NETS payment.");
   }
-  window.location.href = `/invoice/${body.transactionId}`;
+  window.location.href = `/payment-processing/${body.transactionId}`;
 }
 
 function startNetsTimer() {
@@ -238,8 +246,8 @@ function startNetsSse(txnRetrievalRef) {
     if (isNetsSuccessPayload(payload) && !netsCompleting) {
       netsCompleting = true;
       stopNetsBackgroundWork();
-      if (netsStatusEl) netsStatusEl.textContent = "Payment received. Creating invoice…";
-      setConfirmBusy(true, "Finalizing NETS…");
+      if (netsStatusEl) netsStatusEl.textContent = "Payment received. Creating invoice...";
+      setConfirmBusy(true, "Finalizing NETS...");
       try {
         await completeNetsPayment(txnRetrievalRef);
       } catch (error) {
@@ -270,8 +278,8 @@ function startNetsSse(txnRetrievalRef) {
     if (netsCompleting) return;
     netsCompleting = true;
     stopNetsBackgroundWork();
-    if (netsStatusEl) netsStatusEl.textContent = "Payment received. Creating invoice…";
-    setConfirmBusy(true, "Finalizing NETS…");
+    if (netsStatusEl) netsStatusEl.textContent = "Payment received. Creating invoice...";
+    setConfirmBusy(true, "Finalizing NETS...");
     try {
       await completeNetsPayment(txnRetrievalRef);
     } catch (error) {
@@ -290,7 +298,7 @@ async function startNetsQrPopup() {
 
   resetNetsModalUi();
   openNetsModal();
-  setConfirmBusy(true, "Starting NETS…");
+  setConfirmBusy(true, "Starting NETS...");
 
   try {
     const response = await fetch("/payments/nets/qr/create", {
@@ -477,6 +485,7 @@ function renderPaypalButtons(total) {
   paypalButtonsRendered = true;
   window.paypal
     .Buttons({
+      fundingSource: window.paypal.FUNDING.PAYPAL,
       createOrder: () =>
         fetch("/api/paypal/create-order", {
           method: "POST",
@@ -502,7 +511,7 @@ function renderPaypalButtons(total) {
               throw new Error(body.error || "Payment could not be completed.");
             }
             if (body.success && body.transactionId) {
-              window.location.href = `/invoice/${body.transactionId}`;
+              window.location.href = `/payment-processing/${body.transactionId}`;
               return;
             }
             alert(body.error || "Payment not completed.");
@@ -537,7 +546,7 @@ if (confirmPaymentButton) {
     const selected = document.querySelector(
       "input[name='paymentType']:checked"
     );
-    const type = selected ? selected.value : "card";
+    const type = selected ? selected.value : "stripe_card";
     if (type === "paypal") return;
     if (type === "nets") {
       if (!netsModal) {
@@ -579,7 +588,7 @@ if (confirmPaymentButton) {
         if (Number.isFinite(Number(body.balanceCents))) {
           walletBalanceCents = Number(body.balanceCents);
         }
-        window.location.href = `/invoice/${body.transactionId}`;
+        window.location.href = `/payment-processing/${body.transactionId}`;
       } catch (error) {
         alert(error.message || "Wallet payment failed.");
       }
@@ -590,13 +599,19 @@ if (confirmPaymentButton) {
         if (!currentTotalCents || currentTotalCents <= 0) {
           throw new Error("Your cart is empty. Please add items before paying.");
         }
+        const validation = validateCardForm();
+        if (!validation.ok) {
+          throw new Error(validation.message || "Invalid card details.");
+        }
         const payload = {
           card_name: cardNameInput ? cardNameInput.value : "",
           card_email: cardEmailInput ? cardEmailInput.value : "",
           card_number: cardNumberInput ? cardNumberInput.value : "",
           card_expiry: cardExpiryInput ? cardExpiryInput.value : "",
           cvc: cardCvcInput ? cardCvcInput.value : "",
-          billing_country: cardCountryInput ? cardCountryInput.value : "",
+          billing_country: normalizeCountryInput(
+            cardCountryInput ? cardCountryInput.value : ""
+          ),
           postal_code: cardPostalInput ? cardPostalInput.value : "",
         };
         setConfirmBusy(true, "Processing card...");
@@ -619,7 +634,7 @@ if (confirmPaymentButton) {
           );
         }
         if (body.success && body.transactionId) {
-          window.location.href = `/invoice/${body.transactionId}`;
+          window.location.href = `/payment-processing/${body.transactionId}`;
           return;
         }
         throw new Error(body.error || "Stripe card payment failed.");
@@ -652,6 +667,161 @@ if (confirmPaymentButton) {
       }
       return;
     }
-    alert("Select PayNow, Wallet, or use the PayPal button to continue.");
+    alert("Select a payment method or use the PayPal button to continue.");
+  });
+}
+
+function normalizeCardNumber(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function formatCardNumber(value) {
+  const digits = normalizeCardNumber(value).slice(0, 19);
+  const groups = [];
+  for (let i = 0; i < digits.length; i += 4) {
+    groups.push(digits.slice(i, i + 4));
+  }
+  return groups.join(" ");
+}
+
+function luhnCheck(number) {
+  const digits = normalizeCardNumber(number);
+  if (!digits) return false;
+  let sum = 0;
+  let shouldDouble = false;
+  for (let i = digits.length - 1; i >= 0; i -= 1) {
+    let digit = Number(digits[i]);
+    if (shouldDouble) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+    shouldDouble = !shouldDouble;
+  }
+  return sum % 10 === 0;
+}
+
+function detectCardBrand(number) {
+  const digits = normalizeCardNumber(number);
+  if (!digits) return "unknown";
+  if (/^4/.test(digits)) return "visa";
+  if (/^(34|37)/.test(digits)) return "amex";
+  if (/^5[1-5]/.test(digits)) return "mastercard";
+  const first4 = Number(digits.slice(0, 4));
+  if (Number.isFinite(first4) && first4 >= 2221 && first4 <= 2720) {
+    return "mastercard";
+  }
+  if (/^6011/.test(digits) || /^65/.test(digits)) return "discover";
+  const first3 = Number(digits.slice(0, 3));
+  if (Number.isFinite(first3) && first3 >= 644 && first3 <= 649) return "discover";
+  const first6 = Number(digits.slice(0, 6));
+  if (Number.isFinite(first6) && first6 >= 622126 && first6 <= 622925) {
+    return "discover";
+  }
+  return "unknown";
+}
+
+function updateCardBrand() {
+  if (!cardNumberInput || !cardBrandEl) return;
+  const digits = normalizeCardNumber(cardNumberInput.value);
+  const brand = detectCardBrand(digits);
+  if (!digits) {
+    cardBrandEl.textContent = "";
+    cardBrandEl.classList.remove("is-invalid");
+    return;
+  }
+  if (brand === "unknown") {
+    cardBrandEl.textContent = "Card type not recognized";
+    cardBrandEl.classList.add("is-invalid");
+    return;
+  }
+  if (digits.length >= 12 && !luhnCheck(digits)) {
+    cardBrandEl.textContent = `${brand.toUpperCase()} - Invalid card number`;
+    cardBrandEl.classList.add("is-invalid");
+    return;
+  }
+  cardBrandEl.textContent = `${brand.toUpperCase()} detected`;
+  cardBrandEl.classList.remove("is-invalid");
+}
+
+function validateCardForm() {
+  const number = cardNumberInput ? cardNumberInput.value : "";
+  const digits = normalizeCardNumber(number);
+  if (!digits || digits.length < 12) {
+    return { ok: false, message: "Enter a valid card number." };
+  }
+  const brand = detectCardBrand(digits);
+  if (brand === "unknown") {
+    return { ok: false, message: "Card type not recognized." };
+  }
+  if (!luhnCheck(digits)) {
+    return { ok: false, message: "Card number failed validation." };
+  }
+
+  const expiry = cardExpiryInput ? cardExpiryInput.value : "";
+  const expiryMatch = String(expiry).trim().match(/^(\d{2})\/(\d{2})$/);
+  if (!expiryMatch) {
+    return { ok: false, message: "Expiry must be in MM/YY format." };
+  }
+  const expMonth = Number(expiryMatch[1]);
+  const expYear = Number(expiryMatch[2]) + 2000;
+  if (expMonth < 1 || expMonth > 12) {
+    return { ok: false, message: "Expiry month is invalid." };
+  }
+  const now = new Date();
+  const expiryDate = new Date(expYear, expMonth, 0, 23, 59, 59, 999);
+  if (expiryDate < now) {
+    return { ok: false, message: "Card has expired." };
+  }
+
+  const cvv = cardCvcInput ? String(cardCvcInput.value || "") : "";
+  const cvvDigits = cvv.replace(/\D/g, "");
+  const expected = brand === "amex" ? 4 : 3;
+  if (cvvDigits.length !== expected) {
+    return { ok: false, message: "CVV length is invalid." };
+  }
+  return { ok: true };
+}
+
+function autoFormatExpiry(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+function normalizeCountryInput(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const upper = raw.toUpperCase();
+  if (upper.length === 2) return upper;
+  const normalized = upper.replace(/\s+/g, " ");
+  const map = {
+    SINGAPORE: "SG",
+    "UNITED STATES": "US",
+    USA: "US",
+    "UNITED KINGDOM": "GB",
+    UK: "GB",
+    "GREAT BRITAIN": "GB",
+    MALAYSIA: "MY",
+    INDONESIA: "ID",
+    THAILAND: "TH",
+    VIETNAM: "VN",
+    PHILIPPINES: "PH",
+  };
+  return map[normalized] || "";
+}
+
+if (cardNumberInput) {
+  cardNumberInput.addEventListener("input", (event) => {
+    const formatted = formatCardNumber(event.target.value);
+    event.target.value = formatted;
+    updateCardBrand();
+  });
+  cardNumberInput.addEventListener("blur", updateCardBrand);
+}
+
+if (cardExpiryInput) {
+  cardExpiryInput.addEventListener("input", (event) => {
+    event.target.value = autoFormatExpiry(event.target.value);
   });
 }

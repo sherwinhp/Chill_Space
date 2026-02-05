@@ -8,6 +8,8 @@ const { createNetsQr, getTxnStatus } = require("../services/netService");
 const {
   createTransactionFromCart,
   findTransactionByProviderOrderId,
+  listBookingItemsForTransaction,
+  getTransactionById,
 } = require("../models/transactionsModel");
 const { releaseBookingHold } = require("../models/bookingsModel");
 const { payWithWallet, issueTransactionCashbackIfEligible } = require("../models/walletModel");
@@ -21,7 +23,322 @@ const {
   createGrabPayCheckoutSession,
   retrieveCheckoutSession,
   constructWebhookEvent,
+  refundPaymentIntent,
 } = require("../services/stripe");
+const { sendEmail } = require("../models/emailService");
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toISOString().slice(0, 10);
+}
+
+function calculateNights(start, end) {
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    return 0;
+  }
+  const diff = endDate - startDate;
+  if (diff <= 0) return 0;
+  return Math.max(1, Math.ceil(diff / 86400000));
+}
+
+function formatCurrency(amount, currency = "SGD") {
+  const value = Number(amount);
+  const safe = Number.isFinite(value) ? value : 0;
+  return `${currency.toUpperCase()} ${safe.toFixed(2)}`;
+}
+
+function isStripeRiskBlocked(risk) {
+  if (!risk) return false;
+  const flags = Array.isArray(risk.flags) ? risk.flags : [];
+  const blockingFlags = new Set([
+    "cvc_mismatch",
+    "avs_mismatch",
+    "ip_billing_country_mismatch",
+    "velocity_limit_exceeded",
+    "repeated_failed_attempts",
+  ]);
+  if (flags.some((flag) => blockingFlags.has(flag))) return true;
+  const level = String(risk.outcome?.risk_level || "").toLowerCase();
+  if (["highest", "high", "elevated"].includes(level)) return true;
+  const score = Number(risk.outcome?.risk_score);
+  if (Number.isFinite(score) && score >= 70) return true;
+  return false;
+}
+
+function extractEmail(value) {
+  const text = String(value || "").trim();
+  const match = text.match(/<([^>]+)>/);
+  if (match) return match[1];
+  return text;
+}
+
+function getSupportContact() {
+  const supportEmail =
+    process.env.SUPPORT_EMAIL ||
+    extractEmail(process.env.EMAIL_FROM) ||
+    process.env.EMAIL_USER ||
+    "";
+  const supportPhone = process.env.SUPPORT_PHONE || "";
+  return { supportEmail, supportPhone };
+}
+
+function buildBookingConfirmationEmail({ booking }) {
+  const propertyName = process.env.PROPERTY_NAME || "Chill Space";
+  const { supportEmail, supportPhone } = getSupportContact();
+  const checkIn = formatDate(booking.startTime);
+  const checkOut = formatDate(booking.endTime);
+  const nights = calculateNights(booking.startTime, booking.endTime);
+  const guests = booking.pax || 1;
+  const totalPaid = formatCurrency(
+    booking.totalPrice || booking.transactionTotal || 0,
+    booking.currency || "SGD"
+  );
+  const supportLines = [];
+  if (supportEmail) supportLines.push(`Email: ${supportEmail}`);
+  if (supportPhone) supportLines.push(`Phone: ${supportPhone}`);
+
+  const subject = `Booking Confirmed: ${booking.bookingId}`;
+  const textParts = [
+    `Hello ${booking.userName || "Guest"},`,
+    "",
+    `Your booking is confirmed.`,
+    "",
+    `Booking ID: ${booking.bookingId}`,
+    `Property: ${propertyName}`,
+    `Room: ${booking.roomName || "-"}`,
+    `Check-in: ${checkIn}`,
+    `Check-out: ${checkOut}`,
+    `Nights: ${nights}`,
+    `Guests: ${guests}`,
+    `Total paid: ${totalPaid}`,
+    `Booking status: Confirmed`,
+  ];
+
+  if (supportLines.length) {
+    textParts.push("", "Support:", ...supportLines);
+  }
+
+  const html = `
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #111;">
+      <h2 style="margin-bottom: 8px;">Booking Confirmed</h2>
+      <p style="margin-top: 0;">Hello ${escapeHtml(booking.userName || "Guest")},</p>
+      <p>Your booking is confirmed.</p>
+      <table style="border-collapse: collapse; width: 100%; max-width: 520px;">
+        <tr><td style="padding: 6px 0;">Booking ID</td><td style="padding: 6px 0;"><strong>${escapeHtml(
+          booking.bookingId
+        )}</strong></td></tr>
+        <tr><td style="padding: 6px 0;">Property</td><td style="padding: 6px 0;"><strong>${escapeHtml(
+          propertyName
+        )}</strong></td></tr>
+        <tr><td style="padding: 6px 0;">Room</td><td style="padding: 6px 0;"><strong>${escapeHtml(
+          booking.roomName || "-"
+        )}</strong></td></tr>
+        <tr><td style="padding: 6px 0;">Check-in</td><td style="padding: 6px 0;">${escapeHtml(
+          checkIn
+        )}</td></tr>
+        <tr><td style="padding: 6px 0;">Check-out</td><td style="padding: 6px 0;">${escapeHtml(
+          checkOut
+        )}</td></tr>
+        <tr><td style="padding: 6px 0;">Nights</td><td style="padding: 6px 0;">${escapeHtml(
+          nights
+        )}</td></tr>
+        <tr><td style="padding: 6px 0;">Guests</td><td style="padding: 6px 0;">${escapeHtml(
+          guests
+        )}</td></tr>
+        <tr><td style="padding: 6px 0;">Total paid</td><td style="padding: 6px 0;">${escapeHtml(
+          totalPaid
+        )}</td></tr>
+        <tr><td style="padding: 6px 0;">Booking status</td><td style="padding: 6px 0;"><strong>Confirmed</strong></td></tr>
+      </table>
+      ${
+        supportLines.length
+          ? `<p><strong>Support:</strong> ${escapeHtml(supportLines.join(" | "))}</p>`
+          : ""
+      }
+    </div>
+  `;
+
+  return { subject, text: textParts.join("\n"), html };
+}
+
+function formatDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || "-");
+  return date.toISOString().slice(0, 16).replace("T", " ");
+}
+
+function buildInvoiceEmail({ invoice }) {
+  const propertyName = process.env.PROPERTY_NAME || "Chill Space";
+  const { supportEmail, supportPhone } = getSupportContact();
+  const totalPaid = formatCurrency(invoice.total_amount || 0, invoice.currency || "SGD");
+  const issuedOn = formatDate(invoice.created_at);
+  const providerLabel = String(invoice.provider || "payment").replace("_", " ").toUpperCase();
+  const supportLines = [];
+  if (supportEmail) supportLines.push(`Email: ${supportEmail}`);
+  if (supportPhone) supportLines.push(`Phone: ${supportPhone}`);
+
+  const subject = `Invoice #${invoice.transaction_id} - ${propertyName}`;
+  const itemLines = (invoice.items || []).map((item) => {
+    const base = `${item.item_name} x${item.qty} @ ${formatCurrency(
+      item.price,
+      invoice.currency
+    )} = ${formatCurrency(item.subtotal, invoice.currency)}`;
+    if (item.item_type === "room_booking" && item.start_time && item.end_time) {
+      return `${base} (From ${formatDateTime(item.start_time)} to ${formatDateTime(
+        item.end_time
+      )})`;
+    }
+    return base;
+  });
+
+  const textParts = [
+    `Hello ${invoice.user_name || "Guest"},`,
+    "",
+    `Thank you for your purchase at ${propertyName}.`,
+    "",
+    `Invoice ID: ${invoice.transaction_id}`,
+    `Date: ${issuedOn}`,
+    `Status: ${invoice.status || "COMPLETED"}`,
+    `Payment method: ${providerLabel}`,
+    "",
+    "Items:",
+    ...(itemLines.length ? itemLines.map((line) => `- ${line}`) : ["- No items found"]),
+    "",
+    `Total paid: ${totalPaid}`,
+  ];
+
+  if (supportLines.length) {
+    textParts.push("", "Support:", ...supportLines);
+  }
+
+  const htmlItems =
+    itemLines.length > 0
+      ? invoice.items
+          .map((item) => {
+            const detail =
+              item.item_type === "room_booking" && item.start_time && item.end_time
+                ? `<div style="color:#6b7280;font-size:12px;">${escapeHtml(
+                    formatDateTime(item.start_time)
+                  )} to ${escapeHtml(formatDateTime(item.end_time))}</div>`
+                : "";
+            return `
+              <tr>
+                <td style="padding:8px 0;">
+                  <strong>${escapeHtml(item.item_name)}</strong>
+                  ${detail}
+                </td>
+                <td style="padding:8px 0; text-align:center;">${escapeHtml(item.qty)}</td>
+                <td style="padding:8px 0; text-align:right;">${escapeHtml(
+                  formatCurrency(item.price, invoice.currency)
+                )}</td>
+                <td style="padding:8px 0; text-align:right;">${escapeHtml(
+                  formatCurrency(item.subtotal, invoice.currency)
+                )}</td>
+              </tr>
+            `;
+          })
+          .join("")
+      : `
+        <tr>
+          <td colspan="4" style="padding:8px 0; color:#6b7280;">No items found.</td>
+        </tr>
+      `;
+
+  const html = `
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #111;">
+      <h2 style="margin-bottom: 8px;">Invoice</h2>
+      <p style="margin-top: 0;">Hello ${escapeHtml(invoice.user_name || "Guest")},</p>
+      <p>Thank you for your purchase at ${escapeHtml(propertyName)}.</p>
+      <table style="border-collapse: collapse; width: 100%; max-width: 560px;">
+        <tr><td style="padding: 6px 0;">Invoice ID</td><td style="padding: 6px 0;"><strong>${escapeHtml(
+          invoice.transaction_id
+        )}</strong></td></tr>
+        <tr><td style="padding: 6px 0;">Date</td><td style="padding: 6px 0;">${escapeHtml(
+          issuedOn
+        )}</td></tr>
+        <tr><td style="padding: 6px 0;">Status</td><td style="padding: 6px 0;">${escapeHtml(
+          invoice.status || "COMPLETED"
+        )}</td></tr>
+        <tr><td style="padding: 6px 0;">Payment method</td><td style="padding: 6px 0;">${escapeHtml(
+          providerLabel
+        )}</td></tr>
+      </table>
+      <h3 style="margin: 18px 0 8px;">Items</h3>
+      <table style="border-collapse: collapse; width: 100%; max-width: 560px;">
+        <thead>
+          <tr>
+            <th style="text-align:left; padding:6px 0; border-bottom:1px solid #eee;">Item</th>
+            <th style="text-align:center; padding:6px 0; border-bottom:1px solid #eee;">Qty</th>
+            <th style="text-align:right; padding:6px 0; border-bottom:1px solid #eee;">Price</th>
+            <th style="text-align:right; padding:6px 0; border-bottom:1px solid #eee;">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>${htmlItems}</tbody>
+      </table>
+      <p style="margin-top: 16px;"><strong>Total paid:</strong> ${escapeHtml(totalPaid)}</p>
+      ${
+        supportLines.length
+          ? `<p><strong>Support:</strong> ${escapeHtml(supportLines.join(" | "))}</p>`
+          : ""
+      }
+    </div>
+  `;
+
+  return { subject, text: textParts.join("\n"), html };
+}
+
+async function sendBookingConfirmationEmails(transactionId) {
+  if (!transactionId) return;
+  try {
+    const bookings = await listBookingItemsForTransaction(transactionId);
+    if (!bookings.length) return;
+    for (const booking of bookings) {
+      if (!booking.userEmail) continue;
+      const emailContent = buildBookingConfirmationEmail({ booking });
+      try {
+        await sendEmail({
+          to: booking.userEmail,
+          subject: emailContent.subject,
+          text: emailContent.text,
+          html: emailContent.html,
+        });
+      } catch (error) {
+        console.error("Booking confirmation email failed:", error.message);
+      }
+    }
+  } catch (error) {
+    console.error("Booking confirmation email lookup failed:", error.message);
+  }
+}
+
+async function sendInvoiceEmail(transactionId, userId) {
+  if (!transactionId || !userId) return;
+  try {
+    const invoice = await getTransactionById(transactionId, userId);
+    if (!invoice || !invoice.user_email) return;
+    const emailContent = buildInvoiceEmail({ invoice });
+    await sendEmail({
+      to: invoice.user_email,
+      subject: emailContent.subject,
+      text: emailContent.text,
+      html: emailContent.html,
+    });
+  } catch (error) {
+    console.error("Invoice email failed:", error.message);
+  }
+}
 
 function isNetsPaymentSuccessful(status) {
   const responseCode =
@@ -160,6 +477,15 @@ async function capturePaypalButtonOrder(req, res) {
     issueTransactionCashbackIfEligible(transaction.transactionId).catch((error) => {
       console.error("Cashback reward issuance failed:", error.message);
     });
+    sendBookingConfirmationEmails(transaction.transactionId).catch((error) => {
+      console.error("Booking confirmation email failed:", error.message);
+    });
+    sendInvoiceEmail(transaction.transactionId, userId).catch((error) => {
+      console.error("Invoice email failed:", error.message);
+    });
+    sendInvoiceEmail(transaction.transactionId, userId).catch((error) => {
+      console.error("Invoice email failed:", error.message);
+    });
 
     return res.json({
       status: capture.status,
@@ -193,6 +519,12 @@ async function payCheckoutWithWallet(req, res) {
     const result = await payWithWallet({ userId, sessionId, items });
     issueTransactionCashbackIfEligible(result.transactionId).catch((error) => {
       console.error("Cashback reward issuance failed:", error.message);
+    });
+    sendBookingConfirmationEmails(result.transactionId).catch((error) => {
+      console.error("Booking confirmation email failed:", error.message);
+    });
+    sendInvoiceEmail(result.transactionId, userId).catch((error) => {
+      console.error("Invoice email failed:", error.message);
     });
     return res.json({
       success: true,
@@ -262,7 +594,7 @@ async function handleHitpayReturn(req, res) {
     const providerOrderId = `HITPAY-${requestId}`;
     const existing = await findTransactionByProviderOrderId(providerOrderId, userId);
     if (existing) {
-      return res.redirect(`/invoice/${existing.transaction_id}`);
+      return res.redirect(`/payment-processing/${existing.transaction_id}`);
     }
 
     const paymentRequest = await getPaymentRequestStatus(requestId);
@@ -302,8 +634,14 @@ async function handleHitpayReturn(req, res) {
     issueTransactionCashbackIfEligible(transaction.transactionId).catch((error) => {
       console.error("Cashback reward issuance failed:", error.message);
     });
+    sendBookingConfirmationEmails(transaction.transactionId).catch((error) => {
+      console.error("Booking confirmation email failed:", error.message);
+    });
+    sendInvoiceEmail(transaction.transactionId, userId).catch((error) => {
+      console.error("Invoice email failed:", error.message);
+    });
 
-    return res.redirect(`/invoice/${transaction.transactionId}`);
+    return res.redirect(`/payment-processing/${transaction.transactionId}`);
   } catch (error) {
     return res.redirect(
       `/checkout?hitpay=error&message=${encodeURIComponent(
@@ -391,6 +729,27 @@ async function payCheckoutWithStripeCard(req, res) {
       });
     }
 
+    if (isStripeRiskBlocked(result.risk)) {
+      if (result.paymentIntentId) {
+        try {
+          await refundPaymentIntent({ paymentIntentId: result.paymentIntentId });
+        } catch (error) {
+          console.error("Stripe risk refund failed:", error.message);
+        }
+      }
+      console.warn("Stripe payment blocked by risk rules.", {
+        userId,
+        paymentIntentId: result.paymentIntentId,
+        flags: result.risk?.flags || [],
+        riskLevel: result.risk?.outcome?.risk_level || null,
+        riskScore: result.risk?.outcome?.risk_score || null,
+      });
+      return res.status(402).json({
+        error: "Payment was flagged as high risk. Booking not created.",
+        risk: result.risk,
+      });
+    }
+
     const providerOrderId = `STRIPE-CARD-${result.paymentIntentId}`;
     const existing = await findTransactionByProviderOrderId(providerOrderId, userId);
     if (existing) {
@@ -428,6 +787,9 @@ async function payCheckoutWithStripeCard(req, res) {
     issueTransactionCashbackIfEligible(transaction.transactionId).catch((error) => {
       console.error("Cashback reward issuance failed:", error.message);
     });
+    sendBookingConfirmationEmails(transaction.transactionId).catch((error) => {
+      console.error("Booking confirmation email failed:", error.message);
+    });
 
     return res.json({
       success: true,
@@ -436,6 +798,7 @@ async function payCheckoutWithStripeCard(req, res) {
       card: result.card,
     });
   } catch (error) {
+    console.error("Stripe card payment failed:", error.message);
     return res.status(500).json({ error: error.message || "Stripe payment failed." });
   }
 }
@@ -573,7 +936,13 @@ async function finalizeGrabPayCheckout({ session, userIdOverride, sessionIdOverr
   issueTransactionCashbackIfEligible(transaction.transactionId).catch((error) => {
     console.error("Cashback reward issuance failed:", error.message);
   });
-  return { ok: true, transactionId: transaction.transactionId };
+  sendBookingConfirmationEmails(transaction.transactionId).catch((error) => {
+    console.error("Booking confirmation email failed:", error.message);
+  });
+  sendInvoiceEmail(transaction.transactionId, userId).catch((error) => {
+    console.error("Invoice email failed:", error.message);
+  });
+  return { ok: true, transactionId: transaction.transactionId, existing: false };
 }
 
 async function handleStripeSuccess(req, res) {
@@ -609,7 +978,7 @@ async function handleStripeSuccess(req, res) {
     if (!result.ok) {
       return res.redirect("/checkout?stripe=empty_cart");
     }
-    return res.redirect(`/invoice/${result.transactionId}`);
+    return res.redirect(`/payment-processing/${result.transactionId}`);
   } catch (error) {
     console.error("Stripe success verification failed:", error.message);
     return res.redirect(
@@ -826,6 +1195,12 @@ module.exports = {
       });
       issueTransactionCashbackIfEligible(transaction.transactionId).catch((error) => {
         console.error("Cashback reward issuance failed:", error.message);
+      });
+      sendBookingConfirmationEmails(transaction.transactionId).catch((error) => {
+        console.error("Booking confirmation email failed:", error.message);
+      });
+      sendInvoiceEmail(transaction.transactionId, userId).catch((error) => {
+        console.error("Invoice email failed:", error.message);
       });
 
       if (req.session && req.session.nets) {

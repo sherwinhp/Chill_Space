@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Processing Payment | Cozy Place Gaming Rooms</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("partials/header", {
+        page: "",
+        roomsLink: "/",
+        bookingsLink: "/bookings",
+        menuLink: "/menu",
+        reviewsLink: "/reviews",
+        eventsLink: "/events",
+        profileLink: "/profile"
+      }) %>
+
+      <main>
+        <section class="section payment-page">
+          <div class="payment-hero">
+            <div>
+              <h2>Processing your payment</h2>
+              <p>We are finalizing your order. This will take just a few seconds.</p>
+            </div>
+          </div>
+
+          <div class="payment-status-card">
+            <div class="payment-spinner" aria-hidden="true"></div>
+            <div>
+              <h3>Preparing your receipt</h3>
+              <p>Invoice #<%= invoice.transaction_id %> is being generated.</p>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <%- include("partials/footer") %>
+    </div>
+
+    <script>
+      setTimeout(function () {
+        window.location.href = "/payment-success/<%= invoice.transaction_id %>";
+      }, 2500);
+    </script>
+  </body>
+</html>

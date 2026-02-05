@@ -58,6 +58,7 @@ async function createUser({
 }
 
 async function updateUser(id, updates) {
+  const existing = await findById(id);
   const fields = [];
   const params = [];
   const allowed = [
@@ -71,12 +72,28 @@ async function updateUser(id, updates) {
     "is_active",
   ];
 
+  const isSuperAdmin =
+    existing && String(existing.email || "").trim().toLowerCase() === "admin@admin.com";
+
   allowed.forEach((key) => {
-    if (Object.prototype.hasOwnProperty.call(updates, key)) {
-      fields.push(`${key} = ?`);
-      params.push(updates[key]);
+    if (!Object.prototype.hasOwnProperty.call(updates, key)) {
+      return;
     }
+    if (isSuperAdmin && ["email", "role", "is_active"].includes(key)) {
+      return;
+    }
+    fields.push(`${key} = ?`);
+    params.push(updates[key]);
   });
+
+  if (isSuperAdmin) {
+    fields.push("role = ?");
+    params.push("admin");
+    fields.push("is_active = ?");
+    params.push(1);
+    fields.push("email = ?");
+    params.push("admin@admin.com");
+  }
 
   if (!fields.length) return findById(id);
   params.push(id);
@@ -86,7 +103,10 @@ async function updateUser(id, updates) {
 
 async function deleteUser(id) {
   const user = await findById(id);
-  if (user && user.role === "admin") {
+  if (
+    user &&
+    (user.role === "admin" || String(user.email || "").trim().toLowerCase() === "admin@admin.com")
+  ) {
     return false;
   }
   const result = await db.query("DELETE FROM users WHERE user_id = ?", [id]);

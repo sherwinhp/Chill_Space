@@ -13,7 +13,7 @@ const {
 const { releaseBookingHold } = require("../models/bookingsModel");
 const { findRoomById } = require("../models/roomsModel");
 const { findMenuItemById } = require("../models/menuDbModel");
-const { calculateBookingPrice, getMaxAllowedDate } = require("../utils/bookingPricing");
+const { calculateBookingPrice, getMaxAllowedDate } = require("../models/bookingsModel");
 
 const ROOM_ADDON_DISCOUNT_RATE = 0.15;
 
@@ -57,7 +57,7 @@ async function addItem(req, res) {
   }
 
   if (item_type === "menu") {
-    const menuItemId = Number(item_id);
+    const menuItemId = Number(item_id || req.body?.itemId || req.body?.id);
     if (!menuItemId) {
       return res.status(400).json({ error: "Missing menu item." });
     }
@@ -135,8 +135,9 @@ async function addItem(req, res) {
       return res.status(400).json({ error: "Missing booking details." });
     }
     const startValue = parseLocalDateTime(start_time);
-    if (!startValue || Number.isNaN(startValue.getTime()) || startValue <= new Date()) {
-      return res.status(400).json({ error: "Booking time must be in the future." });
+    const minStart = new Date(Date.now() + 2 * 60 * 60000);
+    if (!startValue || Number.isNaN(startValue.getTime()) || startValue < minStart) {
+      return res.status(400).json({ error: "Bookings must be at least 2 hours in advance." });
     }
     const endValue = parseLocalDateTime(end_time);
     if (!endValue || Number.isNaN(endValue.getTime()) || endValue <= startValue) {

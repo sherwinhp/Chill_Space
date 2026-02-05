@@ -4,7 +4,7 @@ const {
   validateCardNumber,
   validateExpiry,
   validateCvv,
-} = require("../services/stripe");
+} = require("../models/stripe");
 
 function expectOk(result, label) {
   assert.ok(result && result.ok, `${label} should be ok`);

@@ -32,26 +32,54 @@ function applyMenuFilter() {
     emptyState.classList.toggle("is-hidden", visibleCount > 0);
   }
 }
-function addToCart(payload) {
-  fetch("/cart/items", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      item_type: "menu",
-      item_id: payload.id,
-      name: payload.name,
-      price: payload.price,
-      qty: 1,
-    }),
-  })
-    .then((res) => res.json())
-    .then(() => {
-      window.dispatchEvent(new Event("cart:updated"));
+async function addToCart(payload) {
+  if (!payload || !payload.id) {
+    if (window.showToast) {
+      window.showToast("Unable to add item. Missing item data.", "error");
+    }
+    return;
+  }
+
+  try {
+    const response = await fetch("/cart/items", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        item_type: "menu",
+        item_id: payload.id,
+        name: payload.name,
+        price: payload.price,
+        qty: 1,
+      }),
+    });
+
+    const contentType = response.headers.get("content-type") || "";
+    const data = contentType.includes("application/json")
+      ? await response.json()
+      : { error: "Unexpected response from server." };
+
+    if (!response.ok) {
+      const message = data && data.error ? data.error : "Unable to add item.";
       if (window.showToast) {
-        window.showToast("Added to cart.", "success");
+        window.showToast(message, "error");
       }
-    })
-    .catch(() => {});
+      return;
+    }
+
+    window.dispatchEvent(new Event("cart:updated"));
+    if (window.showToast) {
+      window.showToast("Added to cart.", "success");
+    }
+  } catch (error) {
+    if (window.showToast) {
+      window.showToast("Unable to add item. Try again.", "error");
+    }
+    console.error("Add to cart failed:", error);
+  }
 }
 
 if (menuGrid) {
@@ -60,9 +88,9 @@ if (menuGrid) {
     if (!button) return;
     const card = button.closest(".menu-card");
     const item = {
-      id: Number(card.dataset.id),
-      name: card.dataset.name,
-      price: Number(card.dataset.price),
+      id: Number(button.dataset.id || card?.dataset.id),
+      name: button.dataset.name || card?.dataset.name,
+      price: Number(button.dataset.price || card?.dataset.price),
     };
     addToCart(item);
   });

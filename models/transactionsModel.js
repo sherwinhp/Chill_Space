@@ -361,6 +361,95 @@ async function findTransactionByProviderOrderId(orderId, userId) {
   return rows.length ? rows[0] : null;
 }
 
+async function findTransactionForBooking(bookingId) {
+  const rows = await db.query(
+    `
+      SELECT
+        t.id AS transaction_id,
+        t.user_id,
+        t.amount AS total_amount,
+        t.currency,
+        CASE
+          WHEN t.orderId LIKE 'WALLET-%' THEN 'wallet'
+          WHEN t.orderId LIKE 'HITPAY-%' THEN 'paynow'
+          WHEN t.orderId LIKE 'NETS-%' THEN 'nets'
+          WHEN t.orderId LIKE 'STRIPE-CARD-%' THEN 'stripe_card'
+          WHEN t.orderId LIKE 'STRIPE-GRABPAY-%' THEN 'grabpay'
+          ELSE 'paypal'
+        END AS provider,
+        t.orderId AS provider_order_id,
+        t.status,
+        t.time AS created_at,
+        ti.room_id,
+        ti.start_time,
+        ti.end_time
+      FROM bookings b
+      JOIN transaction_items ti
+        ON ti.item_type = 'room_booking'
+       AND ti.room_id = b.room_id
+       AND ti.start_time BETWEEN DATE_SUB(b.start_time, INTERVAL 5 MINUTE) AND DATE_ADD(b.start_time, INTERVAL 5 MINUTE)
+       AND ti.end_time BETWEEN DATE_SUB(b.end_time, INTERVAL 5 MINUTE) AND DATE_ADD(b.end_time, INTERVAL 5 MINUTE)
+      JOIN transactions t ON t.id = ti.transaction_id
+      WHERE b.booking_id = ?
+      ORDER BY t.time DESC
+      LIMIT 1
+    `,
+    [bookingId]
+  );
+
+  return rows.length ? rows[0] : null;
+}
+
+async function listBookingItemsForTransaction(transactionId) {
+  const rows = await db.query(
+    `
+      SELECT
+        b.booking_id,
+        b.user_id,
+        b.room_id,
+        b.start_time,
+        b.end_time,
+        b.pax,
+        b.total_price,
+        b.payment_status,
+        r.name AS room_name,
+        u.name AS user_name,
+        u.email AS user_email,
+        t.amount AS transaction_total,
+        t.currency
+      FROM transaction_items ti
+      JOIN transactions t ON t.id = ti.transaction_id
+      JOIN bookings b
+        ON b.user_id = t.user_id
+       AND b.room_id = ti.room_id
+       AND b.start_time = ti.start_time
+       AND b.end_time = ti.end_time
+      JOIN rooms r ON r.room_id = b.room_id
+      JOIN users u ON u.user_id = b.user_id
+      WHERE ti.transaction_id = ?
+        AND ti.item_type = 'room_booking'
+      ORDER BY b.booking_id ASC
+    `,
+    [transactionId]
+  );
+
+  return rows.map((row) => ({
+    bookingId: row.booking_id,
+    userId: row.user_id,
+    roomId: row.room_id,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    pax: row.pax,
+    totalPrice: row.total_price,
+    paymentStatus: row.payment_status,
+    roomName: row.room_name,
+    userName: row.user_name,
+    userEmail: row.user_email,
+    transactionTotal: row.transaction_total,
+    currency: row.currency,
+  }));
+}
+
 module.exports = {
   createTransactionFromCart,
   getTransactionById,
@@ -368,4 +457,6 @@ module.exports = {
   listAllTransactionsWithItems,
   getSalesSummary,
   findTransactionByProviderOrderId,
+  findTransactionForBooking,
+  listBookingItemsForTransaction,
 };

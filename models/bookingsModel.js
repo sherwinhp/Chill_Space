@@ -3,10 +3,25 @@ const db = require("../db");
 const { findRoomById } = require("./roomsModel");
 
 const BOOKING_STATUSES = ["pending", "approved", "rejected", "cancelled"];
-const PAYMENT_STATUSES = ["pending", "paid", "refunded", "void"];
+const PAYMENT_STATUSES = [
+  "pending",
+  "paid",
+  "cancelled",
+  "refunded",
+  "partially_refunded",
+  "refund_denied",
+  "void",
+];
 const ACTIVE_STATUSES = new Set(["pending", "approved"]);
-const PEAK_START_HOUR = 18;
-const PEAK_END_HOUR = 23;
+const NORMAL_RATE_PER_HOUR = 12;
+const PEAK_RATE_PER_HOUR = 15;
+const WEEKDAY_PEAK_START_HOUR = 18;
+const WEEKDAY_PEAK_END_HOUR = 23;
+const WEEKEND_PEAK_START_HOUR = 13;
+const WEEKEND_PEAK_END_HOUR = 16;
+const WEEKEND_PEAK2_START_HOUR = 20;
+const WEEKEND_PEAK2_END_HOUR = 23;
+const MAX_BOOKING_MONTHS_AHEAD = 3;
 
 const bookings = [
   {
@@ -54,6 +69,52 @@ function isRoomAvailable(roomId, date, startTime, endTime, excludeBookingId) {
   );
 }
 
+function isPeakHour(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  const day = date.getDay();
+  const hour = date.getHours();
+  const isWeekend = day === 0 || day === 6;
+  if (isWeekend) {
+    return (
+      (hour >= WEEKEND_PEAK_START_HOUR && hour < WEEKEND_PEAK_END_HOUR) ||
+      (hour >= WEEKEND_PEAK2_START_HOUR && hour < WEEKEND_PEAK2_END_HOUR)
+    );
+  }
+  return hour >= WEEKDAY_PEAK_START_HOUR && hour < WEEKDAY_PEAK_END_HOUR;
+}
+
+function resolveRates(pricing = {}) {
+  const normalRate = Number(pricing.normalRate ?? NORMAL_RATE_PER_HOUR);
+  const peakRate = Number(pricing.peakRate ?? PEAK_RATE_PER_HOUR);
+  return {
+    normalRate: Number.isFinite(normalRate) && normalRate > 0 ? normalRate : NORMAL_RATE_PER_HOUR,
+    peakRate: Number.isFinite(peakRate) && peakRate > 0 ? peakRate : PEAK_RATE_PER_HOUR,
+  };
+}
+
+function getHourlyRateByTime(value, pricing = {}) {
+  const rates = resolveRates(pricing);
+  return isPeakHour(value) ? rates.peakRate : rates.normalRate;
+}
+
+function getMaxAllowedDate(from = new Date()) {
+  const next = new Date(from);
+  next.setMonth(next.getMonth() + MAX_BOOKING_MONTHS_AHEAD);
+  return next;
+}
+
+function calculateBookingPrice(start, end, pricing = {}) {
+  const startDate = start instanceof Date ? start : new Date(start);
+  const endDate = end instanceof Date ? end : new Date(end);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate <= startDate) {
+    return 0;
+  }
+  const hours = (endDate - startDate) / 3600000;
+  const hourlyRate = getHourlyRateByTime(startDate, pricing);
+  return Number((hours * hourlyRate).toFixed(2));
+}
+
 function createBooking(payload) {
   const room = findRoomById(payload.roomId);
   if (!room) {
@@ -82,7 +143,7 @@ function createBooking(payload) {
     toMinutes(payload.endTime) - toMinutes(payload.startTime) > 0
       ? toMinutes(payload.endTime) - toMinutes(payload.startTime)
       : 0;
-  const rateUsed = isPeakHourTime(payload.startTime)
+  const rateUsed = isPeakDateTime(payload.date, payload.startTime)
     ? Number(room.peakHourlyRate)
     : Number(room.normalHourlyRate);
   const safeRate = Number.isFinite(rateUsed) ? rateUsed : 0;
@@ -217,11 +278,13 @@ function toMinutes(value) {
   return hours * 60 + minutes;
 }
 
-function isPeakHourTime(value) {
-  if (!value || typeof value !== "string") return false;
-  const [hours] = value.split(":").map((v) => Number(v));
-  if (!Number.isFinite(hours)) return false;
-  return hours >= PEAK_START_HOUR && hours < PEAK_END_HOUR;
+function isPeakDateTime(dateValue, timeValue) {
+  if (!dateValue || typeof dateValue !== "string") return false;
+  const timePart = timeValue ? String(timeValue).trim() : "00:00:00";
+  const normalizedTime = timePart.length === 5 ? `${timePart}:00` : timePart;
+  const date = new Date(`${dateValue}T${normalizedTime}`);
+  if (Number.isNaN(date.getTime())) return false;
+  return isPeakHour(date);
 }
 
 module.exports = {
@@ -229,13 +292,26 @@ module.exports = {
   getBookingById,
   createBooking,
   isRoomAvailable,
+  calculateBookingPrice,
+  getHourlyRateByTime,
+  getMaxAllowedDate,
+  isPeakHour,
   updateBooking,
   cancelBooking,
   approveBooking,
   rejectBooking,
   updatePaymentStatus,
+  NORMAL_RATE_PER_HOUR,
+  PEAK_RATE_PER_HOUR,
   BOOKING_STATUSES,
   PAYMENT_STATUSES,
+  MAX_BOOKING_MONTHS_AHEAD,
+  WEEKDAY_PEAK_START_HOUR,
+  WEEKDAY_PEAK_END_HOUR,
+  WEEKEND_PEAK_START_HOUR,
+  WEEKEND_PEAK_END_HOUR,
+  WEEKEND_PEAK2_START_HOUR,
+  WEEKEND_PEAK2_END_HOUR,
   listBookingsDb,
   listBookingsByRoomRange,
   listHoldsByRoomRange,
@@ -262,6 +338,14 @@ function toBookingDb(row) {
     roomImage: row.room_image,
     userName: row.user_name,
     userEmail: row.user_email,
+    userContact: row.user_contact,
+    refundStatus: row.refund_status || null,
+    refundRequestedAmount: row.refund_requested_amount || null,
+    refundApprovedAmount: row.refund_approved_amount || null,
+    refundAdminNote: row.refund_admin_note || null,
+    refundReason: row.refund_reason || null,
+    refundMessage: row.refund_message || null,
+    refundImageUrl: row.refund_image_url || null,
   };
 }
 
@@ -293,11 +377,20 @@ async function listBookingsDb(filters = {}) {
         b.total_price,
         b.payment_status,
         b.admin_status,
+        rr.status AS refund_status,
+        rr.requested_amount AS refund_requested_amount,
+        rr.approved_amount AS refund_approved_amount,
+        rr.admin_note AS refund_admin_note,
+        rr.reason_text AS refund_reason,
+        rr.user_message AS refund_message,
+        rr.image_url AS refund_image_url,
         r.name AS room_name,
         r.image_url AS room_image,
         u.name AS user_name,
-        u.email AS user_email
+        u.email AS user_email,
+        u.contact_number AS user_contact
       FROM bookings b
+      LEFT JOIN refund_requests rr ON rr.booking_id = b.booking_id
       JOIN rooms r ON b.room_id = r.room_id
       JOIN users u ON b.user_id = u.user_id
       ${whereClause}
@@ -318,7 +411,7 @@ async function listBookingsByRoomRange(roomId, startDate, endDate) {
         AND start_time < ?
         AND end_time > ?
         AND admin_status <> 'declined'
-        AND payment_status <> 'cancelled'
+        AND payment_status NOT IN ('cancelled','refunded','partially_refunded')
       ORDER BY start_time ASC
     `,
     [roomId, endDate, startDate]
@@ -406,11 +499,20 @@ async function findBookingDbById(id) {
         b.total_price,
         b.payment_status,
         b.admin_status,
+        rr.status AS refund_status,
+        rr.requested_amount AS refund_requested_amount,
+        rr.approved_amount AS refund_approved_amount,
+        rr.admin_note AS refund_admin_note,
+        rr.reason_text AS refund_reason,
+        rr.user_message AS refund_message,
+        rr.image_url AS refund_image_url,
         r.name AS room_name,
         r.image_url AS room_image,
         u.name AS user_name,
-        u.email AS user_email
+        u.email AS user_email,
+        u.contact_number AS user_contact
       FROM bookings b
+      LEFT JOIN refund_requests rr ON rr.booking_id = b.booking_id
       JOIN rooms r ON b.room_id = r.room_id
       JOIN users u ON b.user_id = u.user_id
       WHERE b.booking_id = ?

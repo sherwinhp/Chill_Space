@@ -2,6 +2,7 @@ const { listRooms, createRoom, updateRoom, deleteRoom } = require("../models/roo
 const {
   listBookingsDb,
   createBookingDb,
+  findBookingDbById,
   updateBookingDb,
   deleteBookingDb,
 } = require("../models/bookingsModel");
@@ -30,8 +31,17 @@ const {
   listAllTransactionsWithItems,
   getSalesSummary,
   listTransactionsWithItems,
+  findTransactionForBooking,
 } = require("../models/transactionsModel");
 const { reverseOrderCashbackForBookingIfRefunded } = require("../models/walletModel");
+const { sendEmail } = require("../models/emailService");
+const {
+  listRefundRequests,
+  findRefundById,
+  updateRefundRequest,
+} = require("../models/refundRequestsModel");
+const { refundOrder } = require("../services/paypalService");
+const { refundPaymentIntent, retrieveCheckoutSession } = require("../services/stripe");
 
 async function renderDashboard(req, res) {
   const [bookings, events, salesSummary] = await Promise.all([
@@ -360,18 +370,34 @@ async function addUser(req, res) {
 }
 
 async function editUser(req, res) {
+  const existing = await findById(Number(req.params.id));
+  if (!existing) {
+    return res.status(404).send("User not found.");
+  }
+  const isSuperAdmin =
+    String(existing.email || "").trim().toLowerCase() === "admin@admin.com";
   await updateUser(req.params.id, {
     name: req.body.name,
-    email: req.body.email,
+    email: isSuperAdmin ? existing.email : req.body.email,
     password: req.body.password || undefined,
-    role: req.body.role,
-    is_active: req.body.is_active !== "0",
+    role: isSuperAdmin ? existing.role : req.body.role,
+    is_active: isSuperAdmin ? true : req.body.is_active !== "0",
   });
   res.redirect("/admin/users");
 }
 
 async function removeUser(req, res) {
-  await deleteUser(req.params.id);
+  const existing = await findById(Number(req.params.id));
+  if (!existing) {
+    return res.status(404).send("User not found.");
+  }
+  if (String(existing.email || "").trim().toLowerCase() === "admin@admin.com") {
+    return res.status(403).send("Super admin cannot be deleted.");
+  }
+  const removed = await deleteUser(req.params.id);
+  if (!removed) {
+    return res.status(403).send("Admin accounts cannot be deleted.");
+  }
   res.redirect("/admin/users");
 }
 
@@ -397,6 +423,444 @@ async function renderUserPurchases(req, res) {
     itemsByTransaction,
     user,
   });
+}
+
+async function renderRefunds(req, res) {
+  const refunds = await listRefundRequests();
+  res.render("admin/refunds", { refunds });
+}
+
+async function listRefundsApi(req, res) {
+  const refunds = await listRefundRequests();
+  res.json({ refunds });
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+function calculateNights(start, end) {
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    return 0;
+  }
+  const diff = endDate - startDate;
+  if (diff <= 0) return 0;
+  return Math.max(1, Math.ceil(diff / 86400000));
+}
+
+function formatCurrency(amount, currency = "SGD") {
+  const value = Number(amount);
+  const safe = Number.isFinite(value) ? value : 0;
+  return `${currency.toUpperCase()} ${safe.toFixed(2)}`;
+}
+
+function extractEmail(value) {
+  const text = String(value || "").trim();
+  const match = text.match(/<([^>]+)>/);
+  if (match) return match[1];
+  return text;
+}
+
+function getSupportContact() {
+  const supportEmail =
+    process.env.SUPPORT_EMAIL ||
+    extractEmail(process.env.EMAIL_FROM) ||
+    process.env.EMAIL_USER ||
+    "";
+  const supportPhone = process.env.SUPPORT_PHONE || "";
+  return { supportEmail, supportPhone };
+}
+
+function buildRefundDecisionEmail({
+  booking,
+  refund,
+  decision,
+  approvedAmount,
+  currency,
+  adminNote,
+}) {
+  const propertyName = process.env.PROPERTY_NAME || "Chill Space";
+  const { supportEmail, supportPhone } = getSupportContact();
+  const checkIn = formatDate(booking.startTime);
+  const checkOut = formatDate(booking.endTime);
+  const nights = calculateNights(booking.startTime, booking.endTime);
+  const guests = booking.pax || 1;
+  const totalPaid = formatCurrency(booking.totalPrice || 0, currency);
+  const approvedValue =
+    decision === "Approved" ? formatCurrency(approvedAmount, currency) : null;
+
+  const supportLines = [];
+  if (supportEmail) supportLines.push(`Email: ${supportEmail}`);
+  if (supportPhone) supportLines.push(`Phone: ${supportPhone}`);
+
+  const subject = `Refund ${decision}: Booking ${booking.id}`;
+  const textParts = [
+    `Hello ${booking.userName || "Guest"},`,
+    "",
+    `Your refund request for booking #${booking.id} has been ${decision.toLowerCase()}.`,
+    "",
+    `Property: ${propertyName}`,
+    `Room: ${booking.roomName || "-"}`,
+    `Check-in: ${checkIn}`,
+    `Check-out: ${checkOut}`,
+    `Nights: ${nights}`,
+    `Guests: ${guests}`,
+    `Total paid: ${totalPaid}`,
+    `Refund status: ${decision}`,
+  ];
+
+  if (approvedValue) {
+    textParts.push(`Approved amount: ${approvedValue}`);
+  }
+  if (refund?.reasonText) {
+    textParts.push(`Reason: ${refund.reasonText}`);
+  }
+  if (refund?.userMessage) {
+    textParts.push(`Message: ${refund.userMessage}`);
+  }
+  if (adminNote) {
+    textParts.push(`Admin note: ${adminNote}`);
+  }
+  if (supportLines.length) {
+    textParts.push("", "Support:", ...supportLines);
+  }
+
+  const html = `
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #111;">
+      <h2 style="margin-bottom: 8px;">Refund ${escapeHtml(decision)}</h2>
+      <p style="margin-top: 0;">Hello ${escapeHtml(booking.userName || "Guest")},</p>
+      <p>Your refund request for booking <strong>#${escapeHtml(booking.id)}</strong> has been <strong>${escapeHtml(
+    decision.toLowerCase()
+  )}</strong>.</p>
+      <table style="border-collapse: collapse; width: 100%; max-width: 520px;">
+        <tr><td style="padding: 6px 0;">Property</td><td style="padding: 6px 0;"><strong>${escapeHtml(
+          propertyName
+        )}</strong></td></tr>
+        <tr><td style="padding: 6px 0;">Room</td><td style="padding: 6px 0;"><strong>${escapeHtml(
+          booking.roomName || "-"
+        )}</strong></td></tr>
+        <tr><td style="padding: 6px 0;">Check-in</td><td style="padding: 6px 0;">${escapeHtml(
+          checkIn
+        )}</td></tr>
+        <tr><td style="padding: 6px 0;">Check-out</td><td style="padding: 6px 0;">${escapeHtml(
+          checkOut
+        )}</td></tr>
+        <tr><td style="padding: 6px 0;">Nights</td><td style="padding: 6px 0;">${escapeHtml(
+          nights
+        )}</td></tr>
+        <tr><td style="padding: 6px 0;">Guests</td><td style="padding: 6px 0;">${escapeHtml(
+          guests
+        )}</td></tr>
+        <tr><td style="padding: 6px 0;">Total paid</td><td style="padding: 6px 0;">${escapeHtml(
+          totalPaid
+        )}</td></tr>
+        <tr><td style="padding: 6px 0;">Refund status</td><td style="padding: 6px 0;"><strong>${escapeHtml(
+          decision
+        )}</strong></td></tr>
+        ${
+          approvedValue
+            ? `<tr><td style="padding: 6px 0;">Approved amount</td><td style="padding: 6px 0;"><strong>${escapeHtml(
+                approvedValue
+              )}</strong></td></tr>`
+            : ""
+        }
+      </table>
+      ${
+        refund?.reasonText
+          ? `<p><strong>Reason:</strong> ${escapeHtml(refund.reasonText)}</p>`
+          : ""
+      }
+      ${
+        refund?.userMessage
+          ? `<p><strong>Message:</strong> ${escapeHtml(refund.userMessage)}</p>`
+          : ""
+      }
+      ${adminNote ? `<p><strong>Admin note:</strong> ${escapeHtml(adminNote)}</p>` : ""}
+      ${
+        supportLines.length
+          ? `<p><strong>Support:</strong> ${escapeHtml(supportLines.join(" | "))}</p>`
+          : ""
+      }
+    </div>
+  `;
+
+  return { subject, text: textParts.join("\n"), html };
+}
+
+function formatRefundError(error) {
+  const message = error?.message ? String(error.message) : "Refund failed.";
+  const code = error?.code ? String(error.code) : error?.name ? String(error.name) : null;
+  return {
+    message: message.slice(0, 500),
+    code: code ? code.slice(0, 80) : null,
+  };
+}
+
+function wantsJson(req) {
+  const accepts = req.headers.accept || "";
+  return req.path.startsWith("/api") || accepts.includes("application/json");
+}
+
+function respondOk(req, res, payload, redirectTo) {
+  if (wantsJson(req)) {
+    return res.json(payload || { ok: true });
+  }
+  return res.redirect(redirectTo || "/admin/refunds");
+}
+
+function respondError(req, res, status, message) {
+  if (wantsJson(req)) {
+    return res.status(status).json({ error: message });
+  }
+  return res.status(status).send(message);
+}
+
+async function approveRefund(req, res) {
+  try {
+    const refundId = Number(req.params.id);
+    if (!Number.isFinite(refundId)) {
+      return respondError(req, res, 400, "Invalid refund request.");
+    }
+
+    const refund = await findRefundById(refundId);
+    if (!refund) {
+      return respondError(req, res, 404, "Refund request not found.");
+    }
+    if (!["pending", "failed"].includes(refund.status)) {
+      return respondOk(req, res, { ok: true, status: refund.status }, "/admin/refunds");
+    }
+
+    const booking = await findBookingDbById(refund.bookingId);
+    if (!booking) {
+      return respondError(req, res, 404, "Booking not found.");
+    }
+
+    const total = Number(booking.totalPrice || 0);
+    const requested = Number(refund.requestedAmount || total);
+    let approvedAmount = requested;
+    const approvedRaw = String(req.body.approved_amount || "").trim();
+    const adminNoteInput = String(req.body.admin_note || "").trim() || null;
+    if (approvedRaw) {
+      const parsed = Number(approvedRaw);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        return respondError(req, res, 400, "Invalid approved amount.");
+      }
+      if (parsed > requested) {
+        return respondError(req, res, 400, "Approved amount cannot exceed requested amount.");
+      }
+      approvedAmount = parsed;
+    }
+
+    const transaction = await findTransactionForBooking(refund.bookingId);
+    const currency = transaction?.currency || "SGD";
+    const provider = transaction?.provider || "manual";
+    const providerRef = transaction?.provider_order_id || null;
+    let manualNote = null;
+
+    let refundProviderRef = null;
+    if (!transaction || !transaction.provider_order_id) {
+      manualNote = "Manual refund required. Payment reference not found.";
+    } else if (provider === "paypal") {
+      try {
+        const refundResult = await refundOrder(transaction.provider_order_id, {
+          amount: approvedAmount < total ? approvedAmount : null,
+          currency,
+        });
+        refundProviderRef = refundResult?.id || refundResult?.refund_id || null;
+      } catch (error) {
+        const failure = formatRefundError(error);
+        await updateRefundRequest(refundId, {
+          status: "failed",
+          admin_note: adminNoteInput,
+          approved_by: req.session.userId,
+          approved_at: new Date(),
+          provider,
+          provider_ref: providerRef,
+          refund_provider_ref: null,
+          failure_reason: failure.message,
+          failure_code: failure.code,
+        });
+        return respondError(req, res, 400, failure.message);
+      }
+    } else if (provider === "stripe_card") {
+      try {
+        const intentId = transaction.provider_order_id.replace("STRIPE-CARD-", "");
+        const refundResult = await refundPaymentIntent({
+          paymentIntentId: intentId,
+          amount: approvedAmount < total ? approvedAmount : null,
+        });
+        refundProviderRef = refundResult?.id || null;
+      } catch (error) {
+        const failure = formatRefundError(error);
+        await updateRefundRequest(refundId, {
+          status: "failed",
+          admin_note: adminNoteInput,
+          approved_by: req.session.userId,
+          approved_at: new Date(),
+          provider,
+          provider_ref: providerRef,
+          refund_provider_ref: null,
+          failure_reason: failure.message,
+          failure_code: failure.code,
+        });
+        return respondError(req, res, 400, failure.message);
+      }
+    } else if (provider === "grabpay") {
+      try {
+        const sessionId = transaction.provider_order_id.replace("STRIPE-GRABPAY-", "");
+        const session = await retrieveCheckoutSession(sessionId);
+        const intentId =
+          typeof session.payment_intent === "string"
+            ? session.payment_intent
+            : session.payment_intent?.id;
+        if (!intentId) {
+          throw new Error("Missing Stripe payment intent for GrabPay refund.");
+        }
+        const refundResult = await refundPaymentIntent({
+          paymentIntentId: intentId,
+          amount: approvedAmount < total ? approvedAmount : null,
+        });
+        refundProviderRef = refundResult?.id || null;
+      } catch (error) {
+        const failure = formatRefundError(error);
+        await updateRefundRequest(refundId, {
+          status: "failed",
+          admin_note: adminNoteInput,
+          approved_by: req.session.userId,
+          approved_at: new Date(),
+          provider,
+          provider_ref: providerRef,
+          refund_provider_ref: null,
+          failure_reason: failure.message,
+          failure_code: failure.code,
+        });
+        return respondError(req, res, 400, failure.message);
+      }
+    } else {
+      manualNote = `Manual refund required for provider: ${provider}.`;
+    }
+
+    const isPartial = approvedAmount < total;
+    const combinedNote = [adminNoteInput, manualNote].filter(Boolean).join(" ") || null;
+    await updateRefundRequest(refundId, {
+      status: "approved",
+      approved_amount: approvedAmount,
+      admin_note: combinedNote,
+      approved_by: req.session.userId,
+      approved_at: new Date(),
+      provider,
+      provider_ref: providerRef,
+      refund_provider_ref: refundProviderRef,
+      failure_reason: null,
+      failure_code: null,
+    });
+    await updateBookingDb(refund.bookingId, {
+      payment_status: isPartial ? "partially_refunded" : "refunded",
+    });
+
+    reverseOrderCashbackForBookingIfRefunded(refund.bookingId).catch((error) => {
+      console.error("Cashback reversal failed:", error.message);
+    });
+
+    if (booking.userEmail) {
+      const emailContent = buildRefundDecisionEmail({
+        booking,
+        refund,
+        decision: "Approved",
+        approvedAmount,
+        currency,
+        adminNote: adminNoteInput,
+      });
+      sendEmail({
+        to: booking.userEmail,
+        subject: emailContent.subject,
+        text: emailContent.text,
+        html: emailContent.html,
+      }).catch((error) => {
+        console.error("Refund email failed:", error.message);
+      });
+    }
+
+    if (refundProviderRef) {
+      console.log("Refund processed", {
+        refundId,
+        provider,
+        refundProviderRef,
+      });
+    }
+
+    return respondOk(req, res, { ok: true, status: "approved" }, "/admin/refunds");
+  } catch (error) {
+    console.error("Refund approval failed:", error.message);
+    return respondError(req, res, 500, "Refund approval failed.");
+  }
+}
+
+async function denyRefund(req, res) {
+  try {
+    const refundId = Number(req.params.id);
+    if (!Number.isFinite(refundId)) {
+      return respondError(req, res, 400, "Invalid refund request.");
+    }
+
+    const refund = await findRefundById(refundId);
+    if (!refund) {
+      return respondError(req, res, 404, "Refund request not found.");
+    }
+
+    const adminNote = String(req.body.admin_note || "").trim() || null;
+    await updateRefundRequest(refundId, {
+      status: "denied",
+      admin_note: adminNote,
+      denied_by: req.session.userId,
+      denied_at: new Date(),
+      failure_reason: null,
+      failure_code: null,
+    });
+
+    await updateBookingDb(refund.bookingId, { payment_status: "refund_denied" });
+
+    const booking = await findBookingDbById(refund.bookingId);
+    if (booking && booking.userEmail) {
+      const transaction = await findTransactionForBooking(refund.bookingId);
+      const emailContent = buildRefundDecisionEmail({
+        booking,
+        refund,
+        decision: "Denied",
+        approvedAmount: 0,
+        currency: transaction?.currency || "SGD",
+        adminNote,
+      });
+      sendEmail({
+        to: booking.userEmail,
+        subject: emailContent.subject,
+        text: emailContent.text,
+        html: emailContent.html,
+      }).catch((error) => {
+        console.error("Refund email failed:", error.message);
+      });
+    }
+
+    return respondOk(req, res, { ok: true, status: "denied" }, "/admin/refunds");
+  } catch (error) {
+    console.error("Refund denial failed:", error.message);
+    return respondError(req, res, 500, "Refund denial failed.");
+  }
 }
 
 module.exports = {
@@ -437,4 +901,8 @@ module.exports = {
   removeUser,
   renderPurchases,
   renderUserPurchases,
+  renderRefunds,
+  listRefundsApi,
+  approveRefund,
+  denyRefund,
 };

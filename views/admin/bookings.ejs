@@ -45,7 +45,7 @@
                   action="/admin/bookings/<%= booking.id %>"
                   method="POST"
                   data-search-item="admin-bookings"
-                  data-search-text="<%= [booking.roomName, booking.userName, booking.userEmail, booking.adminStatus, booking.paymentStatus, new Date(booking.startTime).toLocaleString(), new Date(booking.endTime).toLocaleString()].filter(Boolean).join(' ') %>"
+                  data-search-text="<%= [booking.id, booking.roomName, booking.userName, booking.userEmail, booking.userContact, booking.adminStatus, booking.paymentStatus, booking.refundStatus, booking.refundReason, booking.refundMessage, new Date(booking.startTime).toLocaleString(), new Date(booking.endTime).toLocaleString()].filter(Boolean).join(' ') %>"
                 >
                   <div class="admin-booking-media">
                     <% if (booking.roomImage) { %>
@@ -58,7 +58,7 @@
                     <div class="admin-booking-title">
                       <div>
                         <h3><%= booking.roomName %></h3>
-                        <p><%= booking.userName %> · <%= booking.userEmail %></p>
+                        <p>Booking #<%= booking.id %> - <%= booking.userName %> - <%= booking.userEmail %></p>
                       </div>
                       <div class="admin-booking-price">
                         <% if (booking.totalPrice) { %>
@@ -83,7 +83,47 @@
                         <strong>Duration:</strong>
                         <%= ((new Date(booking.endTime) - new Date(booking.startTime)) / 3600000).toFixed(1) %> hrs
                       </span>
+                      <span>
+                        <strong>User Contact:</strong>
+                        <%= booking.userContact || "-" %>
+                      </span>
                     </div>
+                    <div class="admin-booking-tags">
+                      <span class="status-pill">Payment: <%= booking.paymentStatus %></span>
+                      <span class="status-pill secondary">Request: <%= booking.adminStatus %></span>
+                      <% if (booking.refundStatus) { %>
+                        <span class="status-pill secondary">Refund: <%= booking.refundStatus %></span>
+                      <% } %>
+                    </div>
+                    <% if (booking.refundStatus) { %>
+                      <div class="admin-booking-refund">
+                        <div>
+                          <strong>Refund requested:</strong>
+                          $<%= Number(booking.refundRequestedAmount || 0).toFixed(2) %>
+                        </div>
+                        <% if (booking.refundApprovedAmount) { %>
+                          <div>
+                            <strong>Refund approved:</strong>
+                            $<%= Number(booking.refundApprovedAmount).toFixed(2) %>
+                          </div>
+                        <% } %>
+                        <% if (booking.refundReason) { %>
+                          <div><strong>Reason:</strong> <%= booking.refundReason %></div>
+                        <% } %>
+                        <% if (booking.refundMessage) { %>
+                          <div><strong>Message:</strong> <%= booking.refundMessage %></div>
+                        <% } %>
+                        <% if (booking.refundImageUrl) { %>
+                          <div>
+                            <strong>Image:</strong>
+                            <a href="<%= booking.refundImageUrl %>" target="_blank" rel="noopener noreferrer">View</a>
+                          </div>
+                          <div class="refund-proof">
+                            <img src="<%= booking.refundImageUrl %>" alt="Refund proof" />
+                          </div>
+                        <% } %>
+                      </div>
+                    <% } %>
                     <div class="admin-booking-status">
                       <label>
                         <span>Approval</span>
@@ -99,12 +139,39 @@
                           <option value="pending" <%= booking.paymentStatus === 'pending' ? 'selected' : '' %>>Pending</option>
                           <option value="paid" <%= booking.paymentStatus === 'paid' ? 'selected' : '' %>>Paid</option>
                           <option value="cancelled" <%= booking.paymentStatus === 'cancelled' ? 'selected' : '' %>>Cancelled</option>
+                          <option value="refunded" <%= booking.paymentStatus === 'refunded' ? 'selected' : '' %>>Refunded</option>
+                          <option value="partially_refunded" <%= booking.paymentStatus === 'partially_refunded' ? 'selected' : '' %>>Partially refunded</option>
+                          <option value="refund_denied" <%= booking.paymentStatus === 'refund_denied' ? 'selected' : '' %>>Refund denied</option>
                         </select>
                       </label>
                     </div>
                     <div class="admin-actions">
                       <button class="btn" type="submit">Save</button>
                       <button class="btn danger" type="submit" formaction="/admin/bookings/<%= booking.id %>/delete">Delete</button>
+                      <button
+                        class="btn ghost"
+                        type="button"
+                        data-booking-detail
+                        data-booking-id="<%= booking.id %>"
+                        data-booking-room="<%= booking.roomName %>"
+                        data-booking-user="<%= booking.userName %>"
+                        data-booking-email="<%= booking.userEmail %>"
+                        data-booking-contact="<%= booking.userContact || '' %>"
+                        data-booking-start="<%= booking.startTime %>"
+                        data-booking-end="<%= booking.endTime %>"
+                        data-booking-pax="<%= booking.pax || 1 %>"
+                        data-booking-total="<%= booking.totalPrice ? Number(booking.totalPrice).toFixed(2) : '' %>"
+                        data-booking-payment="<%= booking.paymentStatus %>"
+                        data-booking-admin="<%= booking.adminStatus %>"
+                        data-booking-refund-status="<%= booking.refundStatus || '' %>"
+                        data-booking-refund-requested="<%= booking.refundRequestedAmount ? Number(booking.refundRequestedAmount).toFixed(2) : '' %>"
+                        data-booking-refund-approved="<%= booking.refundApprovedAmount ? Number(booking.refundApprovedAmount).toFixed(2) : '' %>"
+                        data-booking-refund-reason="<%= booking.refundReason || '' %>"
+                        data-booking-refund-message="<%= booking.refundMessage || '' %>"
+                        data-booking-refund-image="<%= booking.refundImageUrl || '' %>"
+                      >
+                        View details
+                      </button>
                     </div>
                     <input type="hidden" name="user_id" value="<%= booking.userId %>" />
                     <input type="hidden" name="room_id" value="<%= booking.roomId %>" />
@@ -126,7 +193,150 @@
 
       <%- include("../partials/footer") %>
     </div>
-    <script src="/search.js"></script>
+    <div class="drawer-overlay is-hidden" data-booking-overlay></div>
+    <aside class="drawer is-hidden" data-booking-drawer>
+      <div class="drawer-head">
+        <div>
+          <p class="eyebrow">Booking detail</p>
+          <h3 data-booking-title>Booking</h3>
+        </div>
+        <button class="btn ghost" type="button" data-booking-close>Close</button>
+      </div>
+      <div class="drawer-body">
+        <div class="drawer-section">
+          <h4>Guest & Booking</h4>
+          <p><strong>Guest:</strong> <span data-booking-guest></span></p>
+          <p><strong>Email:</strong> <span data-booking-email></span></p>
+          <p><strong>Contact:</strong> <span data-booking-contact></span></p>
+          <p><strong>Booking:</strong> <span data-booking-id></span></p>
+          <p><strong>Room:</strong> <span data-booking-room></span></p>
+          <p><strong>Start:</strong> <span data-booking-start></span></p>
+          <p><strong>End:</strong> <span data-booking-end></span></p>
+          <p><strong>Pax:</strong> <span data-booking-pax></span></p>
+          <p><strong>Total:</strong> <span data-booking-total></span></p>
+        </div>
+        <div class="drawer-section">
+          <h4>Status</h4>
+          <p><strong>Payment:</strong> <span data-booking-payment></span></p>
+          <p><strong>Admin:</strong> <span data-booking-admin></span></p>
+          <p><strong>Refund:</strong> <span data-booking-refund-status></span></p>
+        </div>
+        <div class="drawer-section">
+          <h4>Refund</h4>
+          <p><strong>Requested:</strong> <span data-booking-refund-requested></span></p>
+          <p><strong>Approved:</strong> <span data-booking-refund-approved></span></p>
+          <p><strong>Reason:</strong> <span data-booking-refund-reason></span></p>
+          <p><strong>Message:</strong> <span data-booking-refund-message></span></p>
+        </div>
+        <div class="drawer-section is-hidden" data-booking-refund-image-wrap>
+          <h4>Refund Image</h4>
+          <img class="drawer-image" alt="Refund proof" data-booking-refund-image />
+        </div>
+      </div>
+    </aside>
+    <script>
+      const overlay = document.querySelector("[data-booking-overlay]");
+      const drawer = document.querySelector("[data-booking-drawer]");
+      const closeBtn = document.querySelector("[data-booking-close]");
+      const triggers = document.querySelectorAll("[data-booking-detail]");
+
+      const formatDateTime = (value) => {
+        if (!value) return "-";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return value;
+        return date.toLocaleString();
+      };
+
+      const formatAmount = (value) => {
+        if (!value) return "-";
+        const num = Number(value);
+        if (!Number.isFinite(num)) return value;
+        return `$${num.toFixed(2)}`;
+      };
+
+      function openDrawer(data) {
+        if (!drawer || !overlay) return;
+        drawer.querySelector("[data-booking-title]").textContent = `Booking #${data.bookingId}`;
+        drawer.querySelector("[data-booking-guest]").textContent = data.bookingUser || "-";
+        drawer.querySelector("[data-booking-email]").textContent = data.bookingEmail || "-";
+        drawer.querySelector("[data-booking-contact]").textContent = data.bookingContact || "-";
+        drawer.querySelector("[data-booking-id]").textContent = `#${data.bookingId}`;
+        drawer.querySelector("[data-booking-room]").textContent = data.bookingRoom || "-";
+        drawer.querySelector("[data-booking-start]").textContent = formatDateTime(data.bookingStart);
+        drawer.querySelector("[data-booking-end]").textContent = formatDateTime(data.bookingEnd);
+        drawer.querySelector("[data-booking-pax]").textContent = data.bookingPax || "-";
+        drawer.querySelector("[data-booking-total]").textContent = data.bookingTotal
+          ? formatAmount(data.bookingTotal)
+          : "-";
+        drawer.querySelector("[data-booking-payment]").textContent = data.bookingPayment || "-";
+        drawer.querySelector("[data-booking-admin]").textContent = data.bookingAdmin || "-";
+        drawer.querySelector("[data-booking-refund-status]").textContent =
+          data.bookingRefundStatus || "-";
+        drawer.querySelector("[data-booking-refund-requested]").textContent = data.bookingRefundRequested
+          ? formatAmount(data.bookingRefundRequested)
+          : "-";
+        drawer.querySelector("[data-booking-refund-approved]").textContent = data.bookingRefundApproved
+          ? formatAmount(data.bookingRefundApproved)
+          : "-";
+        drawer.querySelector("[data-booking-refund-reason]").textContent =
+          data.bookingRefundReason || "-";
+        drawer.querySelector("[data-booking-refund-message]").textContent =
+          data.bookingRefundMessage || "-";
+
+        const imageWrap = drawer.querySelector("[data-booking-refund-image-wrap]");
+        const imageTag = drawer.querySelector("[data-booking-refund-image]");
+        if (data.bookingRefundImage) {
+          imageTag.src = data.bookingRefundImage;
+          imageWrap.classList.remove("is-hidden");
+        } else {
+          imageTag.removeAttribute("src");
+          imageWrap.classList.add("is-hidden");
+        }
+
+        overlay.classList.remove("is-hidden");
+        drawer.classList.remove("is-hidden");
+      }
+
+      function closeDrawer() {
+        if (!drawer || !overlay) return;
+        overlay.classList.add("is-hidden");
+        drawer.classList.add("is-hidden");
+      }
+
+      if (overlay) {
+        overlay.addEventListener("click", closeDrawer);
+      }
+      if (closeBtn) {
+        closeBtn.addEventListener("click", closeDrawer);
+      }
+
+      triggers.forEach((trigger) => {
+        trigger.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openDrawer({
+            bookingId: trigger.dataset.bookingId,
+            bookingRoom: trigger.dataset.bookingRoom,
+            bookingUser: trigger.dataset.bookingUser,
+            bookingEmail: trigger.dataset.bookingEmail,
+            bookingContact: trigger.dataset.bookingContact,
+            bookingStart: trigger.dataset.bookingStart,
+            bookingEnd: trigger.dataset.bookingEnd,
+            bookingPax: trigger.dataset.bookingPax,
+            bookingTotal: trigger.dataset.bookingTotal,
+            bookingPayment: trigger.dataset.bookingPayment,
+            bookingAdmin: trigger.dataset.bookingAdmin,
+            bookingRefundStatus: trigger.dataset.bookingRefundStatus,
+            bookingRefundRequested: trigger.dataset.bookingRefundRequested,
+            bookingRefundApproved: trigger.dataset.bookingRefundApproved,
+            bookingRefundReason: trigger.dataset.bookingRefundReason,
+            bookingRefundMessage: trigger.dataset.bookingRefundMessage,
+            bookingRefundImage: trigger.dataset.bookingRefundImage,
+          });
+        });
+      });
+    </script>
   </body>
 </html>
+
 

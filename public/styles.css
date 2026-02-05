@@ -662,6 +662,7 @@ body {
   gap: 12px;
   font-size: 12px;
   color: var(--muted);
+  flex-wrap: wrap;
 }
 
 .legend-dot {
@@ -772,6 +773,13 @@ body {
   background: rgba(209, 75, 75, 0.18);
 }
 
+.calendar-day.selected {
+  border-color: #111827;
+  background: #111827;
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(17, 24, 39, 0.25);
+}
+
 .booking-slots {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -792,6 +800,12 @@ body {
   border-color: rgba(53, 196, 124, 0.4);
   color: #1f6b49;
   background: rgba(53, 196, 124, 0.12);
+}
+
+.slot-btn.available.peak {
+  border-color: rgba(209, 75, 75, 0.5);
+  color: #8e2222;
+  background: rgba(209, 75, 75, 0.14);
 }
 
 .slot-btn.booked {
@@ -1684,6 +1698,17 @@ body {
   margin-top: -4px;
 }
 
+.card-brand {
+  display: block;
+  margin-top: 6px;
+  color: #1f2430;
+  font-weight: 600;
+}
+
+.card-brand.is-invalid {
+  color: #b03030;
+}
+
 
 .payment-pill.is-disabled {
   opacity: 0.6;
@@ -1697,6 +1722,36 @@ body {
 
 .payment-confirm {
   width: 100%;
+}
+
+.payment-status-card {
+  background: #fff;
+  border: 1px solid var(--stroke);
+  border-radius: 22px;
+  padding: 24px;
+  box-shadow: var(--shadow);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.payment-status-card h3 {
+  margin-bottom: 6px;
+}
+
+.payment-spinner {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 4px solid #e5e7eb;
+  border-top-color: #1f2430;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .paypal-button-container {
@@ -2577,6 +2632,93 @@ body {
   justify-content: flex-end;
 }
 
+.refund-card {
+  overflow: visible;
+}
+
+.refund-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
+.refund-summary h3 {
+  font-size: 18px;
+  margin-bottom: 12px;
+}
+
+.refund-form-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.refund-form-fields input,
+.refund-form-fields textarea,
+.refund-form-fields select {
+  padding: 10px 12px;
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.refund-form-fields textarea {
+  resize: vertical;
+}
+
+.refund-optional small,
+.refund-upload small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.refund-upload input[type="file"] {
+  padding: 8px;
+  background: #f8f9ff;
+}
+
+.refund-preview {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.refund-preview img {
+  width: 100%;
+  max-width: 240px;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.refund-preview span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.refund-warning {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #b42318;
+}
+
+.refund-proof img {
+  margin-top: 8px;
+  max-width: 220px;
+  width: 100%;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+@media (max-width: 900px) {
+  .refund-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 720px) {
   .review-form-section {
     max-width: 100%;
@@ -2777,6 +2919,177 @@ body {
   background: #fff;
   font-size: 12px;
   font-family: inherit;
+}
+
+.admin-booking-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-booking-refund {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px dashed var(--stroke);
+  border-radius: 14px;
+  background: #f9f9ff;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.admin-booking-refund strong {
+  color: var(--ink);
+}
+
+.admin-refund-card {
+  grid-template-columns: 1fr;
+}
+
+.admin-refund-card .admin-booking-body {
+  gap: 16px;
+}
+
+.admin-refund-card .refund-meta {
+  background: #f7f7ff;
+  border: 1px dashed var(--stroke);
+  padding: 12px 14px;
+  border-radius: 14px;
+}
+
+.admin-refund-card .refund-meta span {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.admin-refund-card .refund-status-row {
+  justify-content: space-between;
+}
+
+.admin-refund-card .refund-actions {
+  background: #fff;
+  border: 1px solid var(--stroke);
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.refund-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px 16px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.refund-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.refund-actions {
+  display: grid;
+  grid-template-columns: 1.2fr 1.4fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.refund-actions input {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--stroke);
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .refund-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(9, 11, 20, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 1400;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: min(420px, 92vw);
+  background: #fff;
+  box-shadow: -20px 0 40px rgba(15, 18, 30, 0.2);
+  z-index: 1500;
+  display: flex;
+  flex-direction: column;
+}
+
+.drawer-head {
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--stroke);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.drawer-head h3 {
+  font-size: 18px;
+  margin-top: 4px;
+}
+
+.eyebrow {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.drawer-body {
+  padding: 20px 22px 30px;
+  overflow-y: auto;
+  display: grid;
+  gap: 16px;
+}
+
+.drawer-section {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke);
+  background: #fafbff;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.drawer-section h4 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.drawer-section strong {
+  color: var(--ink);
+}
+
+.drawer-image {
+  width: 100%;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.drawer.is-hidden,
+.drawer-overlay.is-hidden {
+  display: none;
 }
 
 .admin-nav-link {

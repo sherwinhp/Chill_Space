@@ -1,8 +1,8 @@
 const crypto = require("crypto");
 const db = require("../db");
 const { createTransactionFromCart } = require("./transactionsModel");
-const { CASHBACK_RATE } = require("../config/walletRewards");
-const { calculateBookingPrice } = require("../utils/bookingPricing");
+const CASHBACK_RATE = 0.05;
+const { calculateBookingPrice } = require("./bookingsModel");
 
 function toCents(value) {
   const numeric = Number(value);

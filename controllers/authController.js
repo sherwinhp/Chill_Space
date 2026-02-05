@@ -6,11 +6,66 @@ const {
   markPasswordResetUsed,
   markAllPasswordResetsUsedForUser,
 } = require("../models/passwordResetModel");
+const { sendEmail } = require("../models/emailService");
 
-const mock2faChallenges = {};
-const MOCK_2FA_CODE = "123456";
-const MOCK_2FA_EXPIRY_MS = 5 * 60 * 1000;
-const MOCK_PASSWORD_RESET_MODE = true;
+const twoFaChallenges = {};
+const TWO_FA_EXPIRY_MS = 5 * 60 * 1000;
+const SUPER_ADMIN_EMAIL = "admin@admin.com";
+
+function isSuperAdmin(user) {
+  if (!user || !user.email) return false;
+  return String(user.email).trim().toLowerCase() === SUPER_ADMIN_EMAIL;
+}
+
+function generateOtp() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function buildOtpEmail({ name, code }) {
+  const subject = "Your Chill Space verification code";
+  const text = `Hello ${name || "there"},\n\nYour verification code is ${code}. It expires in 5 minutes.\n\nIf you did not request this, please ignore this email.`;
+  const html = `
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #111;">
+      <h2 style="margin-bottom: 8px;">Verification code</h2>
+      <p>Hello ${escapeHtml(name || "there")},</p>
+      <p>Your verification code is:</p>
+      <p style="font-size: 22px; font-weight: 700; letter-spacing: 0.2em;">${escapeHtml(
+        code
+      )}</p>
+      <p>This code expires in 5 minutes.</p>
+      <p>If you did not request this, please ignore this email.</p>
+    </div>
+  `;
+  return { subject, text, html };
+}
+
+function buildPasswordResetEmail({ name, resetLink }) {
+  const subject = "Reset your Chill Space password";
+  const text = `Hello ${name || "there"},\n\nUse this link to reset your password:\n${resetLink}\n\nThis link expires in 30 minutes. If you did not request this, please ignore this email.`;
+  const html = `
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; color: #111;">
+      <h2 style="margin-bottom: 8px;">Reset your password</h2>
+      <p>Hello ${escapeHtml(name || "there")},</p>
+      <p>Click the button below to reset your password. This link expires in 30 minutes.</p>
+      <p>
+        <a href="${escapeHtml(resetLink)}" style="display:inline-block;padding:10px 16px;border-radius:8px;background:#0d0f19;color:#fff;text-decoration:none;">
+          Reset password
+        </a>
+      </p>
+      <p>If you did not request this, please ignore this email.</p>
+    </div>
+  `;
+  return { subject, text, html };
+}
 
 async function register(req, res) {
   const { name, email, password, confirm_password, address, contact_number } = req.body;
@@ -56,18 +111,38 @@ async function login(req, res) {
   if (!user.is_active) {
     return res.status(403).json({ error: "Account is deactivated." });
   }
-  if (user.role === "user") {
-    const challengeId = crypto.randomBytes(16).toString("hex");
-    mock2faChallenges[challengeId] = {
-      userId: user.id,
-      expiresAt: Date.now() + MOCK_2FA_EXPIRY_MS,
-    };
-    return res.json({
-      requires2fa: true,
-      challengeId,
-      message: "Mock 2FA enabled. Use code 123456 to continue.",
-    });
+  if (isSuperAdmin(user)) {
+    if (req.setSession) {
+      req.setSession(user);
+    }
+    return res.json({ user: sanitize(user), requires2fa: false });
   }
+
+  const challengeId = crypto.randomBytes(16).toString("hex");
+  const code = generateOtp();
+  twoFaChallenges[challengeId] = {
+    userId: user.id,
+    code,
+    expiresAt: Date.now() + TWO_FA_EXPIRY_MS,
+  };
+  try {
+    const emailContent = buildOtpEmail({ name: user.name, code });
+    await sendEmail({
+      to: user.email,
+      subject: emailContent.subject,
+      text: emailContent.text,
+      html: emailContent.html,
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ error: "Unable to send verification code. Please try again." });
+  }
+  return res.json({
+    requires2fa: true,
+    challengeId,
+    message: "A verification code was sent to your email.",
+  });
   if (req.setSession) {
     req.setSession(user);
   }
@@ -76,20 +151,20 @@ async function login(req, res) {
 
 async function verifyTwoFactor(req, res) {
   const { challengeId, code } = req.body;
-  const challenge = mock2faChallenges[challengeId];
+  const challenge = twoFaChallenges[challengeId];
   if (!challenge) {
     return res.status(400).json({ error: "2FA challenge not found. Please log in again." });
   }
   if (challenge.expiresAt < Date.now()) {
-    delete mock2faChallenges[challengeId];
+    delete twoFaChallenges[challengeId];
     return res.status(400).json({ error: "2FA challenge expired. Please log in again." });
   }
-  if (String(code || "").trim() !== MOCK_2FA_CODE) {
+  if (String(code || "").trim() !== String(challenge.code)) {
     return res.status(401).json({ error: "Invalid verification code." });
   }
 
   const user = await findById(challenge.userId);
-  delete mock2faChallenges[challengeId];
+  delete twoFaChallenges[challengeId];
   if (!user || !user.is_active) {
     return res.status(401).json({ error: "Unable to complete login." });
   }
@@ -120,23 +195,31 @@ async function forgotPassword(req, res) {
   if (!user || !user.is_active) {
     return res.json({
       ok: true,
-      message: "Demo mode: if account exists, reset link will be shown here.",
+      message: "If an account exists, a reset link has been sent to the email.",
     });
   }
 
   const token = await createPasswordReset(user.id);
   const baseUrl = `${req.protocol}://${req.get("host")}`;
   const resetLink = `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
-  if (MOCK_PASSWORD_RESET_MODE) {
-    console.log(`[MOCK Password Reset] ${user.email}: ${resetLink}`);
+  try {
+    const emailContent = buildPasswordResetEmail({
+      name: user.name,
+      resetLink,
+    });
+    await sendEmail({
+      to: user.email,
+      subject: emailContent.subject,
+      text: emailContent.text,
+      html: emailContent.html,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: "Unable to send reset email. Please try again." });
   }
 
   return res.json({
     ok: true,
-    message: MOCK_PASSWORD_RESET_MODE
-      ? "Mock reset link generated (no email sent)."
-      : "Reset link generated.",
-    resetLink: MOCK_PASSWORD_RESET_MODE ? resetLink : undefined,
+    message: "If an account exists, a reset link has been sent to the email.",
   });
 }
 

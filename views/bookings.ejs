@@ -46,7 +46,7 @@
           <% } else { %>
             <div class="event-tabs booking-tabs">
               <button class="event-tab active" type="button" data-booking-tab="upcoming">
-                Coming Soon
+                Upcoming Bookings
               </button>
               <button class="event-tab" type="button" data-booking-tab="history">
                 History
@@ -66,7 +66,7 @@
                       class="booking-card"
                       data-search-item="bookings"
                       data-search-scope="upcoming"
-                      data-search-text="<%= [booking.roomName, booking.userName, booking.userEmail, booking.adminStatus, booking.paymentStatus, new Date(booking.startTime).toLocaleString(), new Date(booking.endTime).toLocaleString()].filter(Boolean).join(' ') %>"
+                      data-search-text="<%= [booking.id, booking.roomName, booking.userName, booking.userEmail, booking.adminStatus, booking.paymentStatus, booking.refundStatus, new Date(booking.startTime).toLocaleString(), new Date(booking.endTime).toLocaleString()].filter(Boolean).join(' ') %>"
                     >
                       <div class="booking-media">
                         <% if (booking.roomImage) { %>
@@ -77,7 +77,7 @@
                         <div class="booking-title">
                           <div>
                             <h3><%= booking.roomName %></h3>
-                            <p><%= booking.userName %> - <%= booking.userEmail %></p>
+                            <p>Booking #<%= booking.id %> - <%= booking.userName %> - <%= booking.userEmail %></p>
                           </div>
                           <div class="price">
                             <% if (booking.totalPrice) { %>
@@ -106,8 +106,13 @@
                         <div class="status-row">
                           <span class="status-pill">Request: <%= booking.adminStatus %></span>
                           <span class="status-pill secondary">Payment: <%= booking.paymentStatus %></span>
+                          <% if (booking.refundStatus) { %>
+                            <span class="status-pill secondary">Refund: <%= booking.refundStatus %></span>
+                          <% } %>
                         </div>
-                        <% if (booking.paymentStatus !== "cancelled") { %>
+                        <% if (booking.paymentStatus === "paid" && !booking.refundStatus) { %>
+                          <a class="btn danger" href="/bookings/<%= booking.id %>/refund">Request Refund</a>
+                        <% } else if (booking.paymentStatus === "pending") { %>
                           <form class="booking-cancel" action="/bookings/<%= booking.id %>/cancel" method="POST">
                             <button class="btn danger" type="submit">Cancel Booking</button>
                           </form>
@@ -136,7 +141,7 @@
                       class="booking-card"
                       data-search-item="bookings"
                       data-search-scope="history"
-                      data-search-text="<%= [booking.roomName, booking.userName, booking.userEmail, booking.adminStatus, booking.paymentStatus, new Date(booking.startTime).toLocaleString(), new Date(booking.endTime).toLocaleString()].filter(Boolean).join(' ') %>"
+                      data-search-text="<%= [booking.id, booking.roomName, booking.userName, booking.userEmail, booking.adminStatus, booking.paymentStatus, booking.refundStatus, new Date(booking.startTime).toLocaleString(), new Date(booking.endTime).toLocaleString()].filter(Boolean).join(' ') %>"
                     >
                       <div class="booking-media">
                         <% if (booking.roomImage) { %>
@@ -147,7 +152,7 @@
                         <div class="booking-title">
                           <div>
                             <h3><%= booking.roomName %></h3>
-                            <p><%= booking.userName %> - <%= booking.userEmail %></p>
+                            <p>Booking #<%= booking.id %> - <%= booking.userName %> - <%= booking.userEmail %></p>
                           </div>
                           <div class="price">
                             <% if (booking.totalPrice) { %>
@@ -176,7 +181,13 @@
                         <div class="status-row">
                           <span class="status-pill">Request: <%= booking.adminStatus %></span>
                           <span class="status-pill secondary">Payment: <%= booking.paymentStatus %></span>
+                          <% if (booking.refundStatus) { %>
+                            <span class="status-pill secondary">Refund: <%= booking.refundStatus %></span>
+                          <% } %>
                         </div>
+                        <% if (booking.paymentStatus === "paid" && !booking.refundStatus) { %>
+                          <a class="btn danger" href="/bookings/<%= booking.id %>/refund">Request Refund</a>
+                        <% } %>
                       </div>
                     </article>
                   <% }) %>
@@ -209,6 +220,5 @@
         });
       }
     </script>
-    <script src="/search.js"></script>
   </body>
 </html>

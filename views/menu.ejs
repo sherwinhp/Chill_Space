@@ -79,7 +79,14 @@
                       <span class="price">$<%= item.price.toFixed(2) %></span>
                       <span class="availability"><%= item.isAvailable ? "Available" : "Unavailable" %></span>
                     </div>
-                    <button class="btn primary add-to-cart" <%= item.isAvailable ? "" : "disabled" %>>
+                    <button
+                      class="btn primary add-to-cart"
+                      type="button"
+                      data-id="<%= item.id %>"
+                      data-name="<%= item.name %>"
+                      data-price="<%= item.price %>"
+                      <%= item.isAvailable ? "" : "disabled" %>
+                    >
                       Add to Cart
                     </button>
                   </div>
@@ -96,7 +103,6 @@
       </main>
       <%- include("partials/footer") %>
     </div>
-    <script src="/script.js"></script>
     <script src="/menu.js"></script>
   </body>
 </html>

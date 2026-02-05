@@ -5,7 +5,7 @@
   rel="stylesheet"
 />
 <link rel="stylesheet" href="/styles.css" />
-<script src="/notify.js" defer></script>
+<script src="/main.js" defer></script>
 
 <header class="topbar admin-topbar">
   <div class="brand">
@@ -35,6 +35,7 @@
   <a class="tab <%= page === 'admin' ? 'active' : '' %>" href="/admin">Dashboard</a>
   <a class="tab <%= page === 'admin-rooms' ? 'active' : '' %>" href="/admin/rooms">Rooms</a>
   <a class="tab <%= page === 'admin-bookings' ? 'active' : '' %>" href="/admin/bookings">Bookings</a>
+  <a class="tab <%= page === 'admin-refunds' ? 'active' : '' %>" href="/admin/refunds">Refunds</a>
   <a class="tab <%= page === 'admin-menu' ? 'active' : '' %>" href="/admin/menu">Menu</a>
   <a class="tab <%= page === 'admin-events' ? 'active' : '' %>" href="/admin/events">Events</a>
   <a class="tab <%= page === 'admin-promotions' ? 'active' : '' %>" href="/admin/promotions">Promotions</a>

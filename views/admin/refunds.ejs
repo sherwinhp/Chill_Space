@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Refunds</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("../partials/admin-header", { page: "admin-refunds" }) %>
+
+      <main>
+        <section class="section admin-section">
+          <div class="section-head split">
+            <div>
+              <h2>Refund Requests</h2>
+              <p>Approve or deny booking refund requests.</p>
+            </div>
+            <div class="section-actions">
+              <a class="btn" href="/admin">Back to dashboard</a>
+            </div>
+          </div>
+
+          <% if (!refunds || !refunds.length) { %>
+            <div class="empty-state">
+              <h3>No refund requests found.</h3>
+              <p>Refund requests will appear here.</p>
+            </div>
+          <% } else { %>
+            <div class="admin-booking-grid">
+              <% refunds.forEach(function(refund) { %>
+                <div class="admin-booking-card admin-refund-card">
+                  <div class="admin-booking-body">
+                    <div class="admin-booking-title">
+                      <div>
+                        <h3>Booking #<%= refund.bookingId %> - <%= refund.booking.roomName %></h3>
+                        <p><%= refund.user.name %> - <%= refund.user.email %></p>
+                      </div>
+                      <div class="admin-booking-price">
+                        <strong>$<%= Number(refund.booking.totalPrice || 0).toFixed(2) %></strong>
+                        <span>Total</span>
+                      </div>
+                    </div>
+
+                    <div class="refund-meta">
+                      <span><strong>Start:</strong> <%= new Date(refund.booking.startTime).toLocaleString() %></span>
+                      <span><strong>End:</strong> <%= new Date(refund.booking.endTime).toLocaleString() %></span>
+                      <span><strong>Requested:</strong> $<%= Number(refund.requestedAmount || refund.booking.totalPrice || 0).toFixed(2) %></span>
+                      <span><strong>Payment:</strong> <%= refund.paymentProvider || refund.provider || "Unknown" %></span>
+                      <span><strong>Reference:</strong> <%= refund.paymentProviderRef || refund.providerRef || "Not found" %></span>
+                      <span><strong>Refund Ref:</strong> <%= refund.refundProviderRef || "Pending" %></span>
+                    </div>
+
+                    <div class="status-row refund-status-row">
+                      <span class="status-pill">Status: <%= refund.status %></span>
+                      <% if (refund.approvedAmount) { %>
+                        <span class="status-pill secondary">Approved: $<%= Number(refund.approvedAmount).toFixed(2) %></span>
+                      <% } %>
+                      <button
+                        class="btn ghost"
+                        type="button"
+                        data-refund-detail
+                        data-refund-id="<%= refund.id %>"
+                        data-refund-booking-id="<%= refund.bookingId %>"
+                        data-refund-room="<%= refund.booking.roomName %>"
+                        data-refund-user="<%= refund.user.name %>"
+                        data-refund-email="<%= refund.user.email %>"
+                        data-refund-start="<%= refund.booking.startTime %>"
+                        data-refund-end="<%= refund.booking.endTime %>"
+                        data-refund-requested="<%= Number(refund.requestedAmount || refund.booking.totalPrice || 0).toFixed(2) %>"
+                        data-refund-approved="<%= refund.approvedAmount ? Number(refund.approvedAmount).toFixed(2) : '' %>"
+                        data-refund-status="<%= refund.status %>"
+                        data-refund-reason="<%= refund.reasonText || '' %>"
+                        data-refund-message="<%= refund.userMessage || '' %>"
+                        data-refund-admin-note="<%= refund.adminNote || '' %>"
+                        data-refund-image="<%= refund.imageUrl || '' %>"
+                        data-refund-failure="<%= refund.failureReason || '' %>"
+                        data-refund-provider="<%= refund.paymentProvider || refund.provider || '' %>"
+                        data-refund-provider-ref="<%= refund.paymentProviderRef || refund.providerRef || '' %>"
+                        data-refund-refund-ref="<%= refund.refundProviderRef || '' %>"
+                        data-refund-created="<%= refund.createdAt || '' %>"
+                        data-refund-approved-at="<%= refund.approvedAt || '' %>"
+                        data-refund-denied-at="<%= refund.deniedAt || '' %>"
+                      >
+                        View details
+                      </button>
+                    </div>
+
+                    <div class="refund-meta">
+                      <span><strong>Reason:</strong> <%= refund.reasonText || "-" %></span>
+                      <% if (refund.userMessage) { %>
+                        <span><strong>Message:</strong> <%= refund.userMessage %></span>
+                      <% } %>
+                      <% if (refund.adminNote) { %>
+                        <span><strong>Admin note:</strong> <%= refund.adminNote %></span>
+                      <% } %>
+                      <% if (!refund.paymentProviderRef) { %>
+                        <span><strong>Note:</strong> Payment reference not found. This may be a manual booking.</span>
+                      <% } %>
+                    </div>
+
+                    <% if (refund.status === "pending" || refund.status === "failed") { %>
+                      <form class="admin-actions refund-actions" action="/admin/refunds/<%= refund.id %>/approve" method="POST">
+                        <input type="number" name="approved_amount" step="0.01" min="0.01" max="<%= Number(refund.requestedAmount || refund.booking.totalPrice || 0).toFixed(2) %>" placeholder="Approve amount (optional)" />
+                        <input type="text" name="admin_note" placeholder="Admin note (optional)" />
+                        <button class="btn" type="submit">Approve</button>
+                      </form>
+                      <form class="admin-actions refund-actions" action="/admin/refunds/<%= refund.id %>/deny" method="POST">
+                        <input type="text" name="admin_note" placeholder="Admin note (optional)" />
+                        <button class="btn danger" type="submit">Deny</button>
+                      </form>
+                    <% } %>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </section>
+      </main>
+
+      <%- include("../partials/footer") %>
+    </div>
+    <div class="drawer-overlay is-hidden" data-refund-overlay></div>
+    <aside class="drawer is-hidden" data-refund-drawer>
+      <div class="drawer-head">
+        <div>
+          <p class="eyebrow">Refund detail</p>
+          <h3 data-refund-title>Refund</h3>
+        </div>
+        <button class="btn ghost" type="button" data-refund-close>Close</button>
+      </div>
+      <div class="drawer-body">
+        <div class="drawer-section">
+          <h4>Guest & Booking</h4>
+          <p><strong>Guest:</strong> <span data-refund-guest></span></p>
+          <p><strong>Email:</strong> <span data-refund-email></span></p>
+          <p><strong>Booking:</strong> <span data-refund-booking></span></p>
+          <p><strong>Room:</strong> <span data-refund-room></span></p>
+          <p><strong>Start:</strong> <span data-refund-start></span></p>
+          <p><strong>End:</strong> <span data-refund-end></span></p>
+        </div>
+        <div class="drawer-section">
+          <h4>Refund Details</h4>
+          <p><strong>Status:</strong> <span data-refund-status></span></p>
+          <p><strong>Requested:</strong> $<span data-refund-requested></span></p>
+          <p><strong>Approved:</strong> <span data-refund-approved></span></p>
+          <p><strong>Reason:</strong> <span data-refund-reason></span></p>
+          <p><strong>Message:</strong> <span data-refund-message></span></p>
+          <p><strong>Admin note:</strong> <span data-refund-admin-note></span></p>
+          <p><strong>Failure:</strong> <span data-refund-failure></span></p>
+        </div>
+        <div class="drawer-section">
+          <h4>Payment</h4>
+          <p><strong>Provider:</strong> <span data-refund-provider></span></p>
+          <p><strong>Provider ref:</strong> <span data-refund-provider-ref></span></p>
+          <p><strong>Refund ref:</strong> <span data-refund-refund-ref></span></p>
+          <p><strong>Note:</strong> <span data-refund-provider-note></span></p>
+        </div>
+        <div class="drawer-section">
+          <h4>Audit</h4>
+          <p><strong>Created:</strong> <span data-refund-created></span></p>
+          <p><strong>Approved at:</strong> <span data-refund-approved-at></span></p>
+          <p><strong>Denied at:</strong> <span data-refund-denied-at></span></p>
+        </div>
+        <div class="drawer-section is-hidden" data-refund-image-wrap>
+          <h4>Uploaded Image</h4>
+          <img class="drawer-image" alt="Refund proof" data-refund-image />
+        </div>
+      </div>
+    </aside>
+    <script>
+      const overlay = document.querySelector("[data-refund-overlay]");
+      const drawer = document.querySelector("[data-refund-drawer]");
+      const closeBtn = document.querySelector("[data-refund-close]");
+      const triggers = document.querySelectorAll("[data-refund-detail]");
+
+      const formatDateTime = (value) => {
+        if (!value) return "-";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return value;
+        return date.toLocaleString();
+      };
+
+      const formatAmount = (value) => {
+        if (!value) return "-";
+        const num = Number(value);
+        if (!Number.isFinite(num)) return value;
+        return `$${num.toFixed(2)}`;
+      };
+
+      function openDrawer(data) {
+        if (!drawer || !overlay) return;
+        drawer.querySelector("[data-refund-title]").textContent = `Refund #${data.refundId}`;
+        drawer.querySelector("[data-refund-guest]").textContent = data.refundUser || "-";
+        drawer.querySelector("[data-refund-email]").textContent = data.refundEmail || "-";
+        drawer.querySelector("[data-refund-booking]").textContent = `#${data.refundBookingId}`;
+        drawer.querySelector("[data-refund-room]").textContent = data.refundRoom || "-";
+        drawer.querySelector("[data-refund-start]").textContent = formatDateTime(data.refundStart);
+        drawer.querySelector("[data-refund-end]").textContent = formatDateTime(data.refundEnd);
+        drawer.querySelector("[data-refund-status]").textContent = data.refundStatus || "-";
+        drawer.querySelector("[data-refund-requested]").textContent = data.refundRequested || "-";
+        drawer.querySelector("[data-refund-approved]").textContent = data.refundApproved
+          ? formatAmount(data.refundApproved)
+          : "-";
+        drawer.querySelector("[data-refund-reason]").textContent = data.refundReason || "-";
+        drawer.querySelector("[data-refund-message]").textContent = data.refundMessage || "-";
+        drawer.querySelector("[data-refund-admin-note]").textContent = data.refundAdminNote || "-";
+        drawer.querySelector("[data-refund-failure]").textContent = data.refundFailure || "-";
+        drawer.querySelector("[data-refund-provider]").textContent = data.refundProvider || "-";
+        drawer.querySelector("[data-refund-provider-ref]").textContent =
+          data.refundProviderRef || "-";
+        drawer.querySelector("[data-refund-refund-ref]").textContent =
+          data.refundRefundRef || "-";
+        drawer.querySelector("[data-refund-provider-note]").textContent = data.refundProviderRef
+          ? "Provider reference found."
+          : "Payment reference not found. Booking may be manual or not linked.";
+        drawer.querySelector("[data-refund-created]").textContent = formatDateTime(
+          data.refundCreated
+        );
+        drawer.querySelector("[data-refund-approved-at]").textContent = formatDateTime(
+          data.refundApprovedAt
+        );
+        drawer.querySelector("[data-refund-denied-at]").textContent = formatDateTime(
+          data.refundDeniedAt
+        );
+
+        const imageWrap = drawer.querySelector("[data-refund-image-wrap]");
+        const imageTag = drawer.querySelector("[data-refund-image]");
+        if (data.refundImage) {
+          imageTag.src = data.refundImage;
+          imageWrap.classList.remove("is-hidden");
+        } else {
+          imageTag.removeAttribute("src");
+          imageWrap.classList.add("is-hidden");
+        }
+
+        overlay.classList.remove("is-hidden");
+        drawer.classList.remove("is-hidden");
+      }
+
+      function closeDrawer() {
+        if (!drawer || !overlay) return;
+        overlay.classList.add("is-hidden");
+        drawer.classList.add("is-hidden");
+      }
+
+      if (overlay) {
+        overlay.addEventListener("click", closeDrawer);
+      }
+      if (closeBtn) {
+        closeBtn.addEventListener("click", closeDrawer);
+      }
+
+      triggers.forEach((trigger) => {
+        trigger.addEventListener("click", () => {
+          openDrawer({
+            refundId: trigger.dataset.refundId,
+            refundBookingId: trigger.dataset.refundBookingId,
+            refundRoom: trigger.dataset.refundRoom,
+            refundUser: trigger.dataset.refundUser,
+            refundEmail: trigger.dataset.refundEmail,
+            refundStart: trigger.dataset.refundStart,
+            refundEnd: trigger.dataset.refundEnd,
+            refundRequested: trigger.dataset.refundRequested,
+            refundApproved: trigger.dataset.refundApproved,
+            refundStatus: trigger.dataset.refundStatus,
+            refundReason: trigger.dataset.refundReason,
+            refundMessage: trigger.dataset.refundMessage,
+            refundAdminNote: trigger.dataset.refundAdminNote,
+            refundImage: trigger.dataset.refundImage,
+            refundFailure: trigger.dataset.refundFailure,
+            refundProvider: trigger.dataset.refundProvider,
+            refundProviderRef: trigger.dataset.refundProviderRef,
+            refundRefundRef: trigger.dataset.refundRefundRef,
+            refundCreated: trigger.dataset.refundCreated,
+            refundApprovedAt: trigger.dataset.refundApprovedAt,
+            refundDeniedAt: trigger.dataset.refundDeniedAt,
+          });
+        });
+      });
+    </script>
+  </body>
+</html>
+

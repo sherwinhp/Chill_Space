@@ -1,27 +1,23 @@
 const express = require("express");
 const path = require("path");
 const multer = require("multer");
-const homeController = require("./controllers/homeController");
+const siteController = require("./controllers/siteController");
 const bookingsPageController = require("./controllers/bookingsPageController");
-const menuController = require("./controllers/menuController");
-const eventsPageController = require("./controllers/eventsPageController");
 const roomController = require("./controllers/roomController");
-const roomsRouter = require("./routes/rooms");
 const cartController = require("./controllers/cartController");
 const authController = require("./controllers/authController");
 const paymentsController = require("./controllers/paymentsController");
-const purchasesController = require("./controllers/purchasesController");
+const accountController = require("./controllers/accountController");
 const walletController = require("./controllers/walletController");
-const notificationsController = require("./controllers/notificationsController");
-const reviewsRouter = require("./routes/reviews");
+const reviewsController = require("./controllers/reviewsController");
+const adminController = require("./controllers/adminController");
+const refundController = require("./controllers/refundController");
 const {
   sessionMiddleware,
   requireAdmin,
   attachWalletBalance,
   attachNotificationCount,
 } = require("./middleware");
-const profileController = require("./controllers/profileController");
-const adminRouter = require("./routes/admin");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -77,11 +73,21 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get("/", homeController.renderHome);
+app.get("/", siteController.renderHome);
 app.get("/bookings", bookingsPageController.renderBookings);
 app.post("/bookings", bookingsPageController.createBooking);
 app.post("/bookings/:id/cancel", bookingsPageController.cancelBooking);
-app.use("/rooms", roomsRouter);
+app.get("/bookings/:id/refund", refundController.renderRefundForm);
+app.post(
+  "/bookings/:id/refund",
+  uploadImage.single("refund_photo"),
+  refundController.submitRefundRequest
+);
+app.get("/rooms", roomController.listRooms);
+app.get("/rooms/:id", roomController.showRoom);
+app.get("/rooms/:id/book", roomController.showRoom);
+app.get("/rooms/:id/availability", roomController.listAvailability);
+app.post("/rooms/:id/hold", express.json(), roomController.createHold);
 
 app.post("/holds/:id/release", roomController.releaseHold);
 app.get("/cart/items", cartController.listItems);
@@ -106,13 +112,13 @@ app.get("/payments/nets/qr/stream/:txnRetrievalRef", paymentsController.streamNe
 app.post("/payments/nets/qr/complete", express.json(), paymentsController.completeNetsPayment);
 app.post("/payments/hitpay/paynow/create", express.json(), paymentsController.createHitpayPayNowPayment);
 app.get("/payments/hitpay/return", paymentsController.handleHitpayReturn);
-app.get("/menu", menuController.renderMenu);
-app.get("/products", menuController.getMenu);
-app.get("/api/products", menuController.getMenu);
-app.get("/events", eventsPageController.renderEvents);
+app.get("/menu", siteController.renderMenu);
+app.get("/products", siteController.getMenu);
+app.get("/api/products", siteController.getMenu);
+app.get("/events", siteController.renderEvents);
 app.get("/wallet", walletController.renderWallet);
-app.get("/notifications", notificationsController.renderNotifications);
-app.post("/notifications/read-all", notificationsController.markAllRead);
+app.get("/notifications", accountController.renderNotifications);
+app.post("/notifications/read-all", accountController.markAllRead);
 app.post("/wallet/topup/paypal/create", express.json(), walletController.createPaypalTopup);
 app.post("/wallet/topup/paypal/capture", express.json(), walletController.capturePaypalTopup);
 app.get("/cart", (req, res) => res.render("cart"));
@@ -122,10 +128,12 @@ app.get("/checkout", (req, res) => {
   }
   return res.render("checkout");
 });
-app.get("/invoice/:id", purchasesController.renderInvoice);
-app.get("/purchases", purchasesController.renderPurchases);
-app.get("/profile", profileController.renderProfile);
-app.post("/profile", uploadImage.single("avatar"), profileController.updateProfile);
+app.get("/payment-processing/:id", accountController.renderPaymentProcessing);
+app.get("/payment-success/:id", accountController.renderPaymentSuccess);
+app.get("/invoice/:id", accountController.renderInvoice);
+app.get("/purchases", accountController.renderPurchases);
+app.get("/profile", accountController.renderProfile);
+app.post("/profile", uploadImage.single("avatar"), accountController.updateProfile);
 app.get("/login", authController.renderLoginPage);
 app.get("/register", authController.renderRegisterPage);
 app.get("/forgot-password", authController.renderForgotPasswordPage);
@@ -137,9 +145,57 @@ app.post("/auth/forgot-password", authController.forgotPassword);
 app.post("/auth/reset-password", authController.resetPassword);
 app.post("/auth/register", authController.register);
 app.post("/auth/logout", authController.logout);
-app.use("/reviews", reviewsRouter);
+app.get("/reviews", reviewsController.index);
+app.get("/reviews/add", reviewsController.addForm);
+app.post("/reviews/add", uploadImage.single("photo"), reviewsController.create);
+app.get("/reviews/edit/:id", reviewsController.editForm);
+app.post("/reviews/edit/:id", uploadImage.single("photo"), reviewsController.update);
+app.get("/reviews/delete/:id", reviewsController.delete);
 
-app.use("/admin", requireAdmin, adminRouter);
+app.use("/admin", requireAdmin);
+app.get("/admin", adminController.renderDashboard);
+app.get("/admin/rooms", adminController.renderRooms);
+app.get("/admin/rooms/new", adminController.renderRoomCreate);
+app.post("/admin/rooms", uploadImage.single("image"), adminController.addRoom);
+app.post("/admin/rooms/:id", uploadImage.single("image"), adminController.editRoom);
+app.post("/admin/rooms/:id/delete", adminController.removeRoom);
+app.get("/admin/bookings", adminController.renderBookings);
+app.post("/admin/bookings", adminController.addBooking);
+app.post("/admin/bookings/:id", adminController.editBooking);
+app.post("/admin/bookings/:id/delete", adminController.removeBooking);
+app.get("/admin/menu", adminController.renderMenu);
+app.get("/admin/menu/new", adminController.renderMenuCreate);
+app.post("/admin/menu", uploadImage.single("image"), adminController.addMenuItem);
+app.post("/admin/menu/:id", uploadImage.single("image"), adminController.editMenuItem);
+app.post("/admin/menu/:id/delete", adminController.removeMenuItem);
+app.get("/admin/events", adminController.renderEvents);
+app.get("/admin/events/new", adminController.renderEventsCreate);
+app.post("/admin/events", uploadImage.single("image"), adminController.addEvent);
+app.post("/admin/events/:id", uploadImage.single("image"), adminController.editEvent);
+app.post("/admin/events/:id/delete", adminController.removeEvent);
+app.get("/admin/promotions", adminController.renderPromotions);
+app.get("/admin/promotions/new", adminController.renderPromotionsCreate);
+app.post("/admin/promotions", uploadImage.single("image"), adminController.addPromotion);
+app.post("/admin/promotions/:id", uploadImage.single("image"), adminController.editPromotion);
+app.post("/admin/promotions/:id/delete", adminController.removePromotion);
+app.get("/admin/reviews", adminController.renderReviews);
+app.get("/admin/reviews/new", adminController.renderReviewsCreate);
+app.post("/admin/reviews", adminController.addReview);
+app.post("/admin/reviews/:id", adminController.editReview);
+app.post("/admin/reviews/:id/delete", adminController.removeReview);
+app.get("/admin/users", adminController.renderUsers);
+app.get("/admin/users/new", adminController.renderUsersCreate);
+app.get("/admin/users/:id/purchases", adminController.renderUserPurchases);
+app.post("/admin/users", adminController.addUser);
+app.post("/admin/users/:id", adminController.editUser);
+app.post("/admin/users/:id/delete", adminController.removeUser);
+app.get("/admin/purchases", adminController.renderPurchases);
+app.get("/api/refunds", requireAdmin, adminController.listRefundsApi);
+app.post("/api/refunds/:id/approve", requireAdmin, adminController.approveRefund);
+app.post("/api/refunds/:id/deny", requireAdmin, adminController.denyRefund);
+app.get("/admin/refunds", adminController.renderRefunds);
+app.post("/admin/refunds/:id/approve", adminController.approveRefund);
+app.post("/admin/refunds/:id/deny", adminController.denyRefund);
 
 app.listen(PORT, () => {
   console.log(`Chill Space running on http://localhost:${PORT}`);

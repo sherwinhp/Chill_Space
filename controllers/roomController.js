@@ -15,9 +15,10 @@ const {
 } = require("../models/bookingsModel");
 const {
   getMaxAllowedDate,
-} = require("../utils/bookingPricing");
+} = require("../models/bookingsModel");
 
 const ROOM_ADDON_DISCOUNT_RATE = 0.15;
+const MIN_LEAD_HOURS = 2;
 
 function normalizeImageUrl(value) {
   if (!value) return "";
@@ -171,8 +172,9 @@ async function createHold(req, res) {
   if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
     return res.status(400).json({ error: "Invalid booking time." });
   }
-  if (start <= new Date()) {
-    return res.status(400).json({ error: "Booking time must be in the future." });
+  const minStart = new Date(Date.now() + MIN_LEAD_HOURS * 60 * 60000);
+  if (start < minStart) {
+    return res.status(400).json({ error: "Bookings must be at least 2 hours in advance." });
   }
   const maxAllowedDate = getMaxAllowedDate(new Date());
   if (start > maxAllowedDate || end > maxAllowedDate) {

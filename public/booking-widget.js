@@ -2,8 +2,13 @@ const OPEN_HOUR = 10;
 const CLOSE_HOUR = 22;
 const SLOT_MINUTES = 60;
 const MONTHS_AHEAD = 3;
-const PEAK_START_HOUR = 18;
-const PEAK_END_HOUR = 23;
+const MIN_LEAD_HOURS = 2;
+const WEEKDAY_PEAK_START_HOUR = 18;
+const WEEKDAY_PEAK_END_HOUR = 23;
+const WEEKEND_PEAK_START_HOUR = 13;
+const WEEKEND_PEAK_END_HOUR = 16;
+const WEEKEND_PEAK2_START_HOUR = 20;
+const WEEKEND_PEAK2_END_HOUR = 23;
 
 const widget = document.querySelector("[data-booking-widget]");
 const calendarEl = document.querySelector("[data-booking-calendar]");
@@ -23,6 +28,8 @@ const state = {
   selectedRange: null,
   viewMonthIndex: 0,
   calendarBaseMonth: null,
+  calendarStart: null,
+  calendarEnd: null,
 };
 
 function dispatchCartUpdate() {
@@ -31,6 +38,15 @@ function dispatchCartUpdate() {
 
 function toDateOnly(value) {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+}
+
+function isSameDay(a, b) {
+  if (!a || !b) return false;
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
 }
 
 function formatDate(value) {
@@ -69,13 +85,21 @@ function monthDiff(from, to) {
   return (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
 }
 
-function isPeakHour(value) {
+function isPeakTime(value) {
+  const day = value.getDay();
   const hour = value.getHours();
-  return hour >= PEAK_START_HOUR && hour < PEAK_END_HOUR;
+  const isWeekend = day === 0 || day === 6;
+  if (isWeekend) {
+    return (
+      (hour >= WEEKEND_PEAK_START_HOUR && hour < WEEKEND_PEAK_END_HOUR) ||
+      (hour >= WEEKEND_PEAK2_START_HOUR && hour < WEEKEND_PEAK2_END_HOUR)
+    );
+  }
+  return hour >= WEEKDAY_PEAK_START_HOUR && hour < WEEKDAY_PEAK_END_HOUR;
 }
 
 function getRateForTime(value) {
-  return isPeakHour(value) ? state.peakRate : state.normalRate;
+  return isPeakTime(value) ? state.peakRate : state.normalRate;
 }
 
 function listDays(start, end) {
@@ -111,7 +135,8 @@ function overlaps(aStart, aEnd, bStart, bEnd) {
 
 function isSlotAvailable(slot) {
   const now = new Date();
-  if (slot.start <= now) return false;
+  const minStart = new Date(now.getTime() + MIN_LEAD_HOURS * 60 * 60000);
+  if (slot.start < minStart) return false;
   return !state.bookings.some((booking) => {
     const start = new Date(booking.startTime);
     const end = new Date(booking.endTime);
@@ -171,6 +196,9 @@ function renderCalendar(start, end) {
     if (!hasAvailability) {
       cell.classList.add("fully-booked");
     }
+    if (state.selectedDate && isSameDay(state.selectedDate, day)) {
+      cell.classList.add("selected");
+    }
     cell.textContent = day.getDate();
     cell.dataset.date = day.toISOString();
     cell.addEventListener("click", () => selectDay(day));
@@ -206,6 +234,9 @@ function renderSlots(day) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = `slot-btn ${available ? "available" : "booked"}`;
+    if (available && isPeakTime(slot.start)) {
+      btn.classList.add("peak");
+    }
     btn.textContent = `${formatTime(slot.start)} - ${formatTime(slot.end)}`;
     btn.disabled = !available;
     btn.dataset.index = String(index);
@@ -221,6 +252,9 @@ function selectDay(day) {
   state.selectedDate = day;
   state.selectedSlot = null;
   state.selectedRange = null;
+  if (state.calendarStart && state.calendarEnd) {
+    renderCalendar(state.calendarStart, state.calendarEnd);
+  }
   renderSlots(day);
   updateSummary();
   if (slotsEl) {
@@ -262,7 +296,9 @@ function updateSummary() {
   const endTime = new Date(startTime.getTime() + slotCount * SLOT_MINUTES * 60000);
   const hourlyRate = getRateForTime(startTime);
   const total = Number((slotCount * hourlyRate).toFixed(2));
-  const rateLabel = isPeakHour(startTime) ? "Peak" : "Normal";
+  const rateLabel = isPeakTime(startTime)
+    ? "Peak (Weekdays 6pm-11pm, Weekends 1-4pm & 8-11pm)"
+    : "Normal";
   summaryEl.textContent = `${state.roomName} - ${formatDate(state.selectedDate)} (${formatTime(
     startTime
   )} to ${formatTime(endTime)}) - ${rateLabel} $${hourlyRate.toFixed(2)}/hr - Total $${total.toFixed(2)}`;
@@ -276,6 +312,8 @@ async function loadAvailability() {
   const start = toDateOnly(new Date());
   const end = addMonths(start, MONTHS_AHEAD);
   state.calendarBaseMonth = startOfMonth(start);
+  state.calendarStart = start;
+  state.calendarEnd = end;
   try {
     const res = await fetch(
       `/rooms/${state.roomId}/availability?start=${start.toISOString()}&end=${end.toISOString()}`
