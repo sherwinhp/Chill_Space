@@ -18,6 +18,7 @@ const {
   getPaymentRequestStatus,
 } = require("../services/hitpayService");
 const { upsertPaymentMethod } = require("../models/paymentMethodsModel");
+const { createComplianceFlag } = require("../models/complianceModel");
 const {
   createCardPaymentIntent,
   createCardPaymentIntentWithPaymentMethod,
@@ -63,6 +64,25 @@ function formatCurrency(amount, currency = "SGD") {
   return `${currency.toUpperCase()} ${safe.toFixed(2)}`;
 }
 
+function resolveHitpayRequestId(req) {
+  const direct = req.query.request_id || req.query.id;
+  if (direct) return String(direct);
+  if (req.session?.hitpay?.requestId) {
+    return String(req.session.hitpay.requestId);
+  }
+  const reference = req.query.reference;
+  return reference ? String(reference) : null;
+}
+
+function resolveHitpayPaymentId(paymentRequest) {
+  if (!paymentRequest || !Array.isArray(paymentRequest.payments)) return null;
+  const succeeded = paymentRequest.payments.find(
+    (payment) => String(payment.status || "").toLowerCase() === "succeeded"
+  );
+  const target = succeeded || paymentRequest.payments[0];
+  return target?.id || null;
+}
+
 function isStripeRiskBlocked(risk) {
   if (!risk) return false;
   const flags = Array.isArray(risk.flags) ? risk.flags : [];
@@ -79,6 +99,36 @@ function isStripeRiskBlocked(risk) {
   const score = Number(risk.outcome?.risk_score);
   if (Number.isFinite(score) && score >= 70) return true;
   return false;
+}
+
+async function recordStripeRiskFlag({ userId, paymentIntentId, risk, amount, context }) {
+  const flags = Array.isArray(risk?.flags) ? risk.flags : [];
+  const level = String(risk?.outcome?.risk_level || "unknown").toLowerCase();
+  const score = Number(risk?.outcome?.risk_score);
+  const details = [
+    `intent=${paymentIntentId || "n/a"}`,
+    `level=${level || "n/a"}`,
+    Number.isFinite(score) ? `score=${score}` : "score=n/a",
+    flags.length ? `flags=${flags.join(",")}` : "flags=none",
+    Number.isFinite(Number(amount)) ? `amount=${Number(amount).toFixed(2)}` : null,
+    context ? `context=${context}` : null,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+  try {
+    await createComplianceFlag({
+      userId: userId || null,
+      relatedType: "payment",
+      relatedId: null,
+      severity: "high",
+      reason: "Stripe risk blocked",
+      details,
+    });
+  } catch (error) {
+    if (error && error.code !== "ER_NO_SUCH_TABLE") {
+      throw error;
+    }
+  }
 }
 
 function calculateCartTotal(items) {
@@ -647,12 +697,13 @@ async function createHitpayPayNowPayment(req, res) {
     }
 
     const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const referenceNumber = `user-${userId}-${Date.now()}`;
     const payment = await createPayNowPaymentRequest({
       amount: total.toFixed(2),
       currency: "SGD",
       email: req.session.email,
       name: req.session.name || "Customer",
-      referenceNumber: `user-${userId}-${Date.now()}`,
+      referenceNumber,
       redirectUrl: `${baseUrl}/payments/hitpay/return`,
     });
 
@@ -660,6 +711,7 @@ async function createHitpayPayNowPayment(req, res) {
       req.session.hitpay = {
         requestId: payment.id,
         amount: total.toFixed(2),
+        reference: referenceNumber,
         createdAt: Date.now(),
       };
     }
@@ -681,9 +733,12 @@ async function handleHitpayReturn(req, res) {
       return res.redirect("/login?redirect=/checkout&reason=checkout");
     }
 
-    const requestId = req.query.reference || req.query.request_id || req.query.id;
+    let requestId = resolveHitpayRequestId(req);
     if (!requestId) {
       return res.redirect("/checkout?hitpay=missing_reference");
+    }
+    if (req.session?.hitpay?.requestId && requestId !== req.session.hitpay.requestId) {
+      requestId = req.session.hitpay.requestId;
     }
 
     const providerOrderId = `HITPAY-${requestId}`;
@@ -693,6 +748,7 @@ async function handleHitpayReturn(req, res) {
     }
 
     const paymentRequest = await getPaymentRequestStatus(requestId);
+    const paymentId = resolveHitpayPaymentId(paymentRequest);
     const paid =
       String(paymentRequest.status || "").toLowerCase() === "completed" ||
       (Array.isArray(paymentRequest.payments) &&
@@ -743,7 +799,7 @@ async function handleHitpayReturn(req, res) {
       sessionId,
       providerOrderId,
       items,
-      payerId: paymentRequest.id || requestId,
+      payerId: paymentId || paymentRequest.id || requestId,
       payerEmail: paymentRequest.email || req.session.email,
       status: "COMPLETED",
     });
@@ -886,6 +942,13 @@ async function payCheckoutWithStripeCard(req, res) {
     }
 
     if (isStripeRiskBlocked(result.risk)) {
+      await recordStripeRiskFlag({
+        userId,
+        paymentIntentId: result.paymentIntentId,
+        risk: result.risk,
+        amount: total,
+        context: "checkout",
+      });
       if (result.paymentIntentId) {
         try {
           await refundPaymentIntent({ paymentIntentId: result.paymentIntentId });
@@ -983,6 +1046,13 @@ async function confirmStripeCardPayment(req, res) {
 
     const risk = buildStripeRiskFromIntent(intent);
     if (isStripeRiskBlocked(risk)) {
+      await recordStripeRiskFlag({
+        userId,
+        paymentIntentId,
+        risk,
+        amount: intent.amount ? Number(intent.amount) / 100 : null,
+        context: "checkout_confirm",
+      });
       try {
         await refundPaymentIntent({ paymentIntentId });
       } catch (error) {

@@ -7,6 +7,7 @@ const paymentCard = document.querySelector("[data-wallet-balance-cents]");
 const walletOptionInput = document.querySelector('input[name="paymentType"][value="wallet"]');
 const stripeCardForm = document.querySelector("[data-stripe-card-form]");
 const cardBrandEl = document.querySelector("[data-card-brand]");
+const cardBrandPill = document.querySelector("[data-card-brand-pill]");
 const stripeCardOption = document.querySelector(
   'input[name="paymentType"][value="stripe_card"]'
 );
@@ -24,27 +25,54 @@ const stripeElementStyle = {
     color: "#111827",
     fontFamily: '"Space Grotesk", "Segoe UI", sans-serif',
     fontSize: "14px",
+    fontSmoothing: "antialiased",
+    backgroundColor: "transparent",
+    iconColor: "#1f2937",
     "::placeholder": { color: "#9aa1b1" },
   },
   invalid: {
     color: "#b42318",
+    iconColor: "#b42318",
   },
 };
-const stripeElements = stripe ? stripe.elements({ appearance: { theme: "stripe" } }) : null;
+const stripeElements = stripe
+  ? stripe.elements({
+      appearance: {
+        theme: "flat",
+        variables: {
+          colorText: "#111827",
+          colorTextPlaceholder: "#9aa1b1",
+          colorBackground: "#ffffff",
+          colorDanger: "#b42318",
+          fontFamily: '"Space Grotesk", "Segoe UI", sans-serif',
+          fontSizeBase: "14px",
+        },
+      },
+    })
+  : null;
 const cardNumberMount = document.getElementById("card-number-element");
 const cardExpiryMount = document.getElementById("card-expiry-element");
 const cardCvcMount = document.getElementById("card-cvc-element");
 const cardNumberElement =
   stripeElements && cardNumberMount
-    ? stripeElements.create("cardNumber", { style: stripeElementStyle })
+    ? stripeElements.create("cardNumber", {
+        style: stripeElementStyle,
+        placeholder: "1234 5678 9012 3456",
+      })
     : null;
 const cardExpiryElement =
   stripeElements && cardExpiryMount
-    ? stripeElements.create("cardExpiry", { style: stripeElementStyle })
+    ? stripeElements.create("cardExpiry", {
+        style: stripeElementStyle,
+        placeholder: "MM / YY",
+      })
     : null;
 const cardCvcElement =
   stripeElements && cardCvcMount
-    ? stripeElements.create("cardCvc", { style: stripeElementStyle })
+    ? stripeElements.create("cardCvc", {
+        style: stripeElementStyle,
+        placeholder: "CVC",
+      })
     : null;
 let cardInputError = null;
 const netsModal = document.querySelector("[data-nets-modal]");
@@ -86,6 +114,31 @@ function setCardBrandMessage(message, isError = false) {
   cardBrandEl.classList.toggle("is-invalid", Boolean(isError && message));
 }
 
+function formatBrandLabel(brand) {
+  const labels = {
+    visa: "Visa",
+    mastercard: "Mastercard",
+    amex: "Amex",
+    discover: "Discover",
+    jcb: "JCB",
+    diners: "Diners",
+    unionpay: "UnionPay",
+  };
+  return labels[brand] || "";
+}
+
+function setCardBrandPill(brand) {
+  if (!cardBrandPill) return;
+  const label = formatBrandLabel(brand);
+  if (brand) {
+    cardBrandPill.dataset.brand = brand;
+  } else {
+    delete cardBrandPill.dataset.brand;
+  }
+  cardBrandPill.textContent = label;
+  cardBrandPill.classList.toggle("is-hidden", !label);
+}
+
 if (cardNumberElement && cardNumberMount) {
   cardNumberElement.mount(cardNumberMount);
 }
@@ -100,13 +153,16 @@ if (cardNumberElement) {
   cardNumberElement.on("change", (event) => {
     if (event.error) {
       setCardBrandMessage(event.error.message, true);
+      setCardBrandPill("");
       return;
     }
     if (event.brand && event.brand !== "unknown") {
-      setCardBrandMessage(`${event.brand.toUpperCase()} detected`);
+      setCardBrandMessage("");
+      setCardBrandPill(event.brand);
       return;
     }
     setCardBrandMessage("");
+    setCardBrandPill("");
   });
 }
 
@@ -755,7 +811,14 @@ if (confirmPaymentButton) {
         const billingCountry = normalizeCountryInput(
           cardCountryInput ? cardCountryInput.value : ""
         );
-        const billingPostal = cardPostalInput ? cardPostalInput.value : "";
+        const postalCheck = validatePostalCode(
+          billingCountry,
+          cardPostalInput ? cardPostalInput.value : ""
+        );
+        if (!postalCheck.ok) {
+          throw new Error(postalCheck.message);
+        }
+        const billingPostal = postalCheck.value;
         const paymentMethodResult = await stripe.createPaymentMethod({
           type: "card",
           card: cardNumberElement,
@@ -927,20 +990,20 @@ function setCardInputError(message) {
 }
 
 function updateCardBrand() {
-  if (!cardBrandEl) return;
+  if (!cardBrandEl && !cardBrandPill) return;
   if (cardInputError) {
-    cardBrandEl.textContent = cardInputError;
-    cardBrandEl.classList.add("is-invalid");
+    setCardBrandMessage(cardInputError, true);
+    setCardBrandPill("");
     return;
   }
   const brand = detectCardBrand(cardNumberInput ? cardNumberInput.value : "");
   if (brand && brand !== "unknown") {
-    cardBrandEl.textContent = `${brand.toUpperCase()} detected`;
-    cardBrandEl.classList.remove("is-invalid");
+    setCardBrandMessage("");
+    setCardBrandPill(brand);
     return;
   }
-  cardBrandEl.textContent = "";
-  cardBrandEl.classList.remove("is-invalid");
+  setCardBrandMessage("");
+  setCardBrandPill("");
 }
 
 function validateCardForm() {
@@ -1017,8 +1080,12 @@ function normalizeCountryInput(value) {
   const raw = String(value || "").trim();
   if (!raw) return "";
   const upper = raw.toUpperCase();
-  if (upper.length === 2) return upper;
-  const normalized = upper.replace(/\s+/g, " ");
+  const normalized = upper.replace(/\s+/g, " ").trim();
+  if (normalized.length === 2) return normalized;
+  const codeMatch = normalized.match(/\b([A-Z]{2})\b/);
+  if (codeMatch) {
+    return codeMatch[1];
+  }
   const map = {
     SINGAPORE: "SG",
     "UNITED STATES": "US",
@@ -1033,4 +1100,53 @@ function normalizeCountryInput(value) {
     PHILIPPINES: "PH",
   };
   return map[normalized] || "";
+}
+
+function formatPostalForCountry(countryCode, value) {
+  const raw = String(value || "");
+  if (countryCode === "SG") {
+    return raw.replace(/\D/g, "").slice(0, 6);
+  }
+  return raw.trim();
+}
+
+function validatePostalCode(countryCode, value) {
+  const raw = String(value || "").trim();
+  if (!raw) return { ok: true, value: "" };
+  if (countryCode === "SG") {
+    const digits = raw.replace(/\D/g, "");
+    if (digits.length !== 6) {
+      return { ok: false, message: "Singapore postal code must be 6 digits." };
+    }
+    return { ok: true, value: digits };
+  }
+  return { ok: true, value: raw };
+}
+
+function updatePostalRules() {
+  if (!cardPostalInput) return;
+  const countryCode = normalizeCountryInput(cardCountryInput ? cardCountryInput.value : "");
+  if (countryCode === "SG") {
+    cardPostalInput.inputMode = "numeric";
+    cardPostalInput.pattern = "\\d{6}";
+    cardPostalInput.placeholder = "e.g. 123456";
+  } else {
+    cardPostalInput.removeAttribute("inputmode");
+    cardPostalInput.removeAttribute("pattern");
+    cardPostalInput.placeholder = "Postal code";
+  }
+}
+
+if (cardCountryInput) {
+  cardCountryInput.addEventListener("input", updatePostalRules);
+}
+if (cardPostalInput) {
+  cardPostalInput.addEventListener("input", () => {
+    const countryCode = normalizeCountryInput(cardCountryInput ? cardCountryInput.value : "");
+    const formatted = formatPostalForCountry(countryCode, cardPostalInput.value);
+    if (formatted !== cardPostalInput.value) {
+      cardPostalInput.value = formatted;
+    }
+  });
+  updatePostalRules();
 }

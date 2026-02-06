@@ -64,7 +64,7 @@
                       </div>
                       <div class="price room-price">
                         <strong>Normal: $<%= Number(room.normalHourlyRate || 0).toFixed(2) %>/hr</strong>
-                        <span> | Peak (Weekdays 6pm-11pm, Weekends 1-4pm & 8-11pm): $<%= Number(room.peakHourlyRate || 0).toFixed(2) %>/hr</span>
+                        <span> | Peak (+10%) (Weekdays 6pm-11pm, Weekends 1-4pm & 8-11pm): $<%= Number(room.peakHourlyRateDisplay || room.peakHourlyRate || 0).toFixed(2) %>/hr</span>
                       </div>
                     </div>
                     <div class="meta">Capacity: <%= room.capacity %> people</div>

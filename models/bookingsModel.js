@@ -15,6 +15,7 @@ const PAYMENT_STATUSES = [
 const ACTIVE_STATUSES = new Set(["pending", "approved"]);
 const NORMAL_RATE_PER_HOUR = 12;
 const PEAK_RATE_PER_HOUR = 15;
+const PEAK_SURCHARGE_RATE = 0.1;
 const WEEKDAY_PEAK_START_HOUR = 18;
 const WEEKDAY_PEAK_END_HOUR = 23;
 const WEEKEND_PEAK_START_HOUR = 13;
@@ -93,9 +94,21 @@ function resolveRates(pricing = {}) {
   };
 }
 
+function applyPeakSurcharge(rate) {
+  const base = Number(rate);
+  if (!Number.isFinite(base) || base <= 0) return 0;
+  return Number((base * (1 + PEAK_SURCHARGE_RATE)).toFixed(2));
+}
+
 function getHourlyRateByTime(value, pricing = {}) {
   const rates = resolveRates(pricing);
-  return isPeakHour(value) ? rates.peakRate : rates.normalRate;
+  if (!isPeakHour(value)) {
+    return rates.normalRate;
+  }
+  const surchargedPeak = Number((rates.peakRate * (1 + PEAK_SURCHARGE_RATE)).toFixed(2));
+  return Number.isFinite(surchargedPeak) && surchargedPeak > 0
+    ? surchargedPeak
+    : rates.peakRate;
 }
 
 function getMaxAllowedDate(from = new Date()) {
@@ -296,6 +309,7 @@ module.exports = {
   getHourlyRateByTime,
   getMaxAllowedDate,
   isPeakHour,
+  applyPeakSurcharge,
   updateBooking,
   cancelBooking,
   approveBooking,
@@ -303,6 +317,7 @@ module.exports = {
   updatePaymentStatus,
   NORMAL_RATE_PER_HOUR,
   PEAK_RATE_PER_HOUR,
+  PEAK_SURCHARGE_RATE,
   BOOKING_STATUSES,
   PAYMENT_STATUSES,
   MAX_BOOKING_MONTHS_AHEAD,
@@ -334,6 +349,7 @@ function toBookingDb(row) {
     totalPrice: row.total_price,
     paymentStatus: row.payment_status,
     adminStatus: row.admin_status,
+    createdAt: row.created_at,
     roomName: row.room_name,
     roomImage: row.room_image,
     userName: row.user_name,
@@ -377,6 +393,7 @@ async function listBookingsDb(filters = {}) {
         b.total_price,
         b.payment_status,
         b.admin_status,
+        b.created_at,
         rr.status AS refund_status,
         rr.requested_amount AS refund_requested_amount,
         rr.approved_amount AS refund_approved_amount,
@@ -394,7 +411,7 @@ async function listBookingsDb(filters = {}) {
       JOIN rooms r ON b.room_id = r.room_id
       JOIN users u ON b.user_id = u.user_id
       ${whereClause}
-      ORDER BY b.start_time DESC
+      ORDER BY b.created_at DESC, b.booking_id DESC
     `,
     params
   );
@@ -450,20 +467,77 @@ async function createBookingHold({ room_id, start_time, end_time, user_id }) {
     const result = await db.query(
       `
         INSERT INTO booking_holds (room_id, user_id, start_time, end_time, expires_at)
-        VALUES (?, ?, ?, ?, ?)
+        SELECT ?, ?, ?, ?, ?
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM bookings
+          WHERE room_id = ?
+            AND start_time < ?
+            AND end_time > ?
+            AND admin_status <> 'declined'
+            AND payment_status NOT IN ('cancelled','refunded','partially_refunded')
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM booking_holds
+          WHERE room_id = ?
+            AND start_time < ?
+            AND end_time > ?
+        )
       `,
-      [room_id, user_id || null, startValue, endValue, "9999-12-31 23:59:59"]
+      [
+        room_id,
+        user_id || null,
+        startValue,
+        endValue,
+        "9999-12-31 23:59:59",
+        room_id,
+        endValue,
+        startValue,
+        room_id,
+        endValue,
+        startValue,
+      ]
     );
+    if (!result || result.affectedRows === 0) return null;
     return result.insertId;
   } catch (error) {
     if (error && error.code === "ER_BAD_FIELD_ERROR") {
       const fallback = await db.query(
         `
           INSERT INTO booking_holds (room_id, user_id, start_time, end_time)
-          VALUES (?, ?, ?, ?)
+          SELECT ?, ?, ?, ?
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM bookings
+            WHERE room_id = ?
+              AND start_time < ?
+              AND end_time > ?
+              AND admin_status <> 'declined'
+              AND payment_status NOT IN ('cancelled','refunded','partially_refunded')
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM booking_holds
+            WHERE room_id = ?
+              AND start_time < ?
+              AND end_time > ?
+          )
         `,
-        [room_id, user_id || null, startValue, endValue]
+        [
+          room_id,
+          user_id || null,
+          startValue,
+          endValue,
+          room_id,
+          endValue,
+          startValue,
+          room_id,
+          endValue,
+          startValue,
+        ]
       );
+      if (!fallback || fallback.affectedRows === 0) return null;
       return fallback.insertId;
     }
     throw error;

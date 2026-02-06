@@ -107,8 +107,9 @@ searchInputs.forEach((input) => {
       const scope = item.dataset.searchScope || "default";
       const text = normalizeQuery(item.dataset.searchText || item.textContent);
       const isMatch = !hasQuery || text.includes(query);
+      const isFiltered = item.classList.contains("is-filtered");
       item.classList.toggle("is-hidden", !isMatch);
-      if (isMatch) {
+      if (isMatch && !isFiltered) {
         visibleByScope.set(scope, (visibleByScope.get(scope) || 0) + 1);
       }
     });

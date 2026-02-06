@@ -92,7 +92,44 @@ async function getPaymentRequestStatus(requestId) {
   return data;
 }
 
+async function refundPaymentRequest({ paymentId, amount, webhook, sendEmail, email } = {}) {
+  ensureConfig();
+  if (!paymentId) {
+    throw new Error("Missing HitPay payment id.");
+  }
+  const refundAmount = Number(amount);
+  if (!Number.isFinite(refundAmount) || refundAmount <= 0) {
+    throw new Error("Invalid refund amount.");
+  }
+
+  const response = await fetch(`${HITPAY_BASE_URL}/refund`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-BUSINESS-API-KEY": HITPAY_API_KEY,
+      "X-API-KEY": HITPAY_API_KEY,
+    },
+    body: JSON.stringify({
+      amount: refundAmount,
+      payment_id: paymentId,
+      webhook: webhook || undefined,
+      send_email: typeof sendEmail === "boolean" ? String(sendEmail) : undefined,
+      email: email || undefined,
+    }),
+  });
+
+  const { data, detail } = await parseHitpayResponse(
+    response,
+    "Unable to refund HitPay payment."
+  );
+  if (!response.ok || !data || !data.id) {
+    throw new Error(detail || "Unable to refund HitPay payment.");
+  }
+  return data;
+}
+
 module.exports = {
   createPayNowPaymentRequest,
   getPaymentRequestStatus,
+  refundPaymentRequest,
 };

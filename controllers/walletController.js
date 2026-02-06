@@ -7,8 +7,10 @@ const {
   createCardPaymentIntent,
   createCardPaymentIntentWithPaymentMethod,
   confirmCardPaymentIntent,
+  refundPaymentIntent,
 } = require("../services/stripe");
 const { findById } = require("../models/usersModel");
+const { createComplianceFlag } = require("../models/complianceModel");
 const { getTotalSpendCents } = require("../models/transactionsModel");
 const {
   listWalletTransactions,
@@ -31,6 +33,69 @@ const CASHBACK_RATE_BY_TIER = {
   Silver: 0.03,
   Gold: 0.05,
 };
+
+function isStripeRiskBlocked(risk) {
+  if (!risk) return false;
+  const flags = Array.isArray(risk.flags) ? risk.flags : [];
+  const blockingFlags = new Set([
+    "cvc_mismatch",
+    "avs_mismatch",
+    "ip_billing_country_mismatch",
+    "velocity_limit_exceeded",
+    "repeated_failed_attempts",
+  ]);
+  if (flags.some((flag) => blockingFlags.has(flag))) return true;
+  const level = String(risk.outcome?.risk_level || "").toLowerCase();
+  if (["highest", "high", "elevated"].includes(level)) return true;
+  const score = Number(risk.outcome?.risk_score);
+  if (Number.isFinite(score) && score >= 70) return true;
+  return false;
+}
+
+function buildStripeRiskFromIntent(intent) {
+  const charge = intent?.charges?.data?.length ? intent.charges.data[0] : null;
+  const checks = charge?.payment_method_details?.card?.checks || {};
+  const flags = [];
+  if (checks.cvc_check === "fail") flags.push("cvc_mismatch");
+  if (checks.address_line1_check === "fail" || checks.address_postal_code_check === "fail") {
+    flags.push("avs_mismatch");
+  }
+  return {
+    flags,
+    checks,
+    outcome: charge?.outcome || {},
+  };
+}
+
+async function recordStripeRiskFlag({ userId, paymentIntentId, risk, amount, context }) {
+  const flags = Array.isArray(risk?.flags) ? risk.flags : [];
+  const level = String(risk?.outcome?.risk_level || "unknown").toLowerCase();
+  const score = Number(risk?.outcome?.risk_score);
+  const details = [
+    `intent=${paymentIntentId || "n/a"}`,
+    `level=${level || "n/a"}`,
+    Number.isFinite(score) ? `score=${score}` : "score=n/a",
+    flags.length ? `flags=${flags.join(",")}` : "flags=none",
+    Number.isFinite(Number(amount)) ? `amount=${Number(amount).toFixed(2)}` : null,
+    context ? `context=${context}` : null,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+  try {
+    await createComplianceFlag({
+      userId: userId || null,
+      relatedType: "payment",
+      relatedId: null,
+      severity: "high",
+      reason: "Stripe risk blocked",
+      details,
+    });
+  } catch (error) {
+    if (error && error.code !== "ER_NO_SUCH_TABLE") {
+      throw error;
+    }
+  }
+}
 
 function parseExpiryInput(expiry) {
   if (!expiry || typeof expiry !== "string") return { expMonth: null, expYear: null };
@@ -557,6 +622,37 @@ async function createStripeCardTopup(req, res) {
       paymentIntentId: result.paymentIntentId,
     });
 
+    if (isStripeRiskBlocked(result.risk)) {
+      await recordStripeRiskFlag({
+        userId,
+        paymentIntentId: result.paymentIntentId,
+        risk: result.risk,
+        amount: amountCents / 100,
+        context: "wallet_topup",
+      });
+      if (result.paymentIntentId) {
+        try {
+          await refundPaymentIntent({ paymentIntentId: result.paymentIntentId });
+        } catch (error) {
+          console.error("Stripe risk refund failed:", error.message);
+        }
+      }
+      await markWalletTransactionStatus({
+        transactionId: walletTransactionId,
+        userId,
+        status: "failed",
+        metadata: {
+          source: "wallet_topup",
+          reason: "stripe_risk_blocked",
+          risk: result.risk,
+        },
+      });
+      return res.status(402).json({
+        error: "Top-up was flagged as high risk. Please use another card.",
+        risk: result.risk,
+      });
+    }
+
     if (result.status === "succeeded") {
       const completed = await completeTopupByProviderRef({
         userId,
@@ -602,6 +698,35 @@ async function confirmStripeCardTopup(req, res) {
     const intent = await confirmCardPaymentIntent(paymentIntentId);
     if (!intent || intent.status !== "succeeded") {
       return res.status(400).json({ error: "Stripe payment was not completed." });
+    }
+
+    const risk = buildStripeRiskFromIntent(intent);
+    if (isStripeRiskBlocked(risk)) {
+      await recordStripeRiskFlag({
+        userId,
+        paymentIntentId,
+        risk,
+        amount: intent.amount ? Number(intent.amount) / 100 : null,
+        context: "wallet_topup_confirm",
+      });
+      try {
+        await refundPaymentIntent({ paymentIntentId });
+      } catch (error) {
+        console.error("Stripe risk refund failed:", error.message);
+      }
+      const tx = await findWalletTransactionByProviderRef(userId, "stripe", paymentIntentId);
+      if (tx && tx.id) {
+        await markWalletTransactionStatus({
+          transactionId: tx.id,
+          userId,
+          status: "failed",
+          metadata: { source: "wallet_topup", reason: "stripe_risk_blocked", risk },
+        });
+      }
+      return res.status(402).json({
+        error: "Top-up was flagged as high risk. Please use another card.",
+        risk,
+      });
     }
 
     const completed = await completeTopupByProviderRef({

@@ -113,23 +113,57 @@ async function createTransactionFromCart({
       }
 
       if (item.type === "room_booking" && item.roomId && item.startTime && item.endTime) {
-        await connection.execute(
+        const bookingStart = normalizeDateTime(item.startTime);
+        const bookingEnd = normalizeDateTime(item.endTime);
+        const holdId = item.holdId ? Number(item.holdId) : null;
+        const holdExclusion = holdId ? "AND hold_id <> ?" : "";
+        const params = [
+          userId,
+          item.roomId,
+          bookingStart,
+          bookingEnd,
+          item.pax || 1,
+          subtotal.toFixed(2),
+          "paid",
+          "pending",
+          item.roomId,
+          bookingEnd,
+          bookingStart,
+          item.roomId,
+          bookingEnd,
+          bookingStart,
+        ];
+        if (holdId) {
+          params.push(holdId);
+        }
+        const [bookingResult] = await connection.execute(
           `
             INSERT INTO bookings
               (user_id, room_id, start_time, end_time, pax, total_price, payment_status, admin_status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?
+            WHERE NOT EXISTS (
+              SELECT 1
+              FROM bookings
+              WHERE room_id = ?
+                AND start_time < ?
+                AND end_time > ?
+                AND admin_status <> 'declined'
+                AND payment_status NOT IN ('cancelled','refunded','partially_refunded')
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM booking_holds
+              WHERE room_id = ?
+                AND start_time < ?
+                AND end_time > ?
+                ${holdExclusion}
+            )
           `,
-          [
-            userId,
-            item.roomId,
-            normalizeDateTime(item.startTime),
-            normalizeDateTime(item.endTime),
-            item.pax || 1,
-            subtotal.toFixed(2),
-            "paid",
-            "pending",
-          ]
+          params
         );
+        if (!bookingResult || bookingResult.affectedRows === 0) {
+          throw new Error("Slot not available.");
+        }
       }
 
       if (item.type === "event" && item.itemId) {
@@ -189,6 +223,7 @@ async function getTransactionById(transactionId, userId) {
         t.user_id,
         t.amount AS total_amount,
         t.currency,
+        t.payerId AS payer_id,
         CASE
           WHEN t.orderId LIKE 'WALLET-%' THEN 'wallet'
           WHEN t.orderId LIKE 'HITPAY-%' THEN 'paynow'
@@ -244,6 +279,7 @@ async function getTransactionByIdForAdmin(transactionId) {
         t.user_id,
         t.amount AS total_amount,
         t.currency,
+        t.payerId AS payer_id,
         CASE
           WHEN t.orderId LIKE 'WALLET-%' THEN 'wallet'
           WHEN t.orderId LIKE 'HITPAY-%' THEN 'paynow'
@@ -599,6 +635,7 @@ async function findTransactionByProviderOrderId(orderId, userId) {
         user_id,
         amount AS total_amount,
         currency,
+        payerId AS payer_id,
         CASE
           WHEN orderId LIKE 'WALLET-%' THEN 'wallet'
           WHEN orderId LIKE 'HITPAY-%' THEN 'paynow'
@@ -627,6 +664,7 @@ async function findTransactionForBooking(bookingId) {
         t.user_id,
         t.amount AS total_amount,
         t.currency,
+        t.payerId AS payer_id,
         CASE
           WHEN t.orderId LIKE 'WALLET-%' THEN 'wallet'
           WHEN t.orderId LIKE 'HITPAY-%' THEN 'paynow'

@@ -64,6 +64,7 @@ const {
 } = require("../models/complianceModel");
 const { listAuditLogs } = require("../models/auditLogModel");
 const { refundOrder } = require("../services/paypalService");
+const { refundPaymentRequest, getPaymentRequestStatus } = require("../services/hitpayService");
 const { refundPaymentIntent, retrieveCheckoutSession } = require("../services/stripe");
 const { logAdminAction } = require("../services/auditService");
 
@@ -129,6 +130,37 @@ function csvEscape(value) {
     return `"${safe.replace(/"/g, '""')}"`;
   }
   return safe;
+}
+
+function resolveRefundAmount(total, approvedAmount, approvedProvided) {
+  const totalValue = Number(total);
+  const approvedValue = Number(approvedAmount);
+  if (!Number.isFinite(approvedValue) || approvedValue <= 0) return null;
+  if (approvedProvided) return approvedValue;
+  if (!Number.isFinite(totalValue) || totalValue <= 0) return approvedValue;
+  return approvedValue < totalValue ? approvedValue : null;
+}
+
+async function resolveHitpayRefundPaymentId(transaction) {
+  if (!transaction) return null;
+  const providerRef = transaction.provider_order_id || "";
+  const requestId = providerRef.startsWith("HITPAY-")
+    ? providerRef.replace("HITPAY-", "")
+    : providerRef;
+  const storedPaymentId = transaction.payer_id ? String(transaction.payer_id) : null;
+  if (storedPaymentId && storedPaymentId !== requestId) return storedPaymentId;
+  if (!requestId) return storedPaymentId;
+  try {
+    const paymentRequest = await getPaymentRequestStatus(requestId);
+    const payments = Array.isArray(paymentRequest.payments) ? paymentRequest.payments : [];
+    const succeeded = payments.find(
+      (payment) => String(payment.status || "").toLowerCase() === "succeeded"
+    );
+    const target = succeeded || payments[0];
+    return target?.id || storedPaymentId || null;
+  } catch (error) {
+    return storedPaymentId || null;
+  }
 }
 
 async function renderDashboard(req, res) {
@@ -228,8 +260,8 @@ async function removeRoom(req, res) {
 }
 
 async function renderBookings(req, res) {
-  const bookings = await listBookingsDb();
-  res.render("admin/bookings", { bookings });
+  const [bookings, rooms] = await Promise.all([listBookingsDb(), listRooms()]);
+  res.render("admin/bookings", { bookings, rooms });
 }
 
 async function addBooking(req, res) {
@@ -872,8 +904,8 @@ async function renderUserPurchases(req, res) {
 }
 
 async function renderRefunds(req, res) {
-  const refunds = await listRefundRequests();
-  res.render("admin/refunds", { refunds });
+  const [refunds, rooms] = await Promise.all([listRefundRequests(), listRooms()]);
+  res.render("admin/refunds", { refunds, rooms });
 }
 
 async function listRefundsApi(req, res) {
@@ -1327,6 +1359,7 @@ async function approveRefund(req, res) {
       const requested = Number(refund.requestedAmount || total);
       let approvedAmount = requested;
       const approvedRaw = String(req.body.approved_amount || "").trim();
+      const approvedProvided = Boolean(approvedRaw);
       const adminNoteInput = String(req.body.admin_note || "").trim() || null;
       if (approvedRaw) {
         const parsed = Number(approvedRaw);
@@ -1372,9 +1405,10 @@ async function approveRefund(req, res) {
       } else if (provider === "stripe_card") {
         try {
           const intentId = providerRef.replace("STRIPE-CARD-", "");
+          const refundAmount = resolveRefundAmount(total, approvedAmount, approvedProvided);
           const refundResult = await refundPaymentIntent({
             paymentIntentId: intentId,
-            amount: approvedAmount < total ? approvedAmount : null,
+            amount: refundAmount,
           });
           refundProviderRef = refundResult?.id || null;
         } catch (error) {
@@ -1403,9 +1437,38 @@ async function approveRefund(req, res) {
           if (!intentId) {
             throw new Error("Missing Stripe payment intent for GrabPay refund.");
           }
+          const refundAmount = resolveRefundAmount(total, approvedAmount, approvedProvided);
           const refundResult = await refundPaymentIntent({
             paymentIntentId: intentId,
-            amount: approvedAmount < total ? approvedAmount : null,
+            amount: refundAmount,
+          });
+          refundProviderRef = refundResult?.id || null;
+        } catch (error) {
+          const failure = formatRefundError(error);
+          await updateRefundRequest(refundId, {
+            status: "failed",
+            admin_note: adminNoteInput,
+            approved_by: req.session.userId,
+            approved_at: new Date(),
+            provider,
+            provider_ref: providerRef,
+            refund_provider_ref: null,
+            failure_reason: failure.message,
+            failure_code: failure.code,
+          });
+          return respondError(req, res, 400, failure.message);
+        }
+      } else if (provider === "paynow") {
+        try {
+          const paymentId = await resolveHitpayRefundPaymentId(transaction);
+          if (!paymentId) {
+            throw new Error("Missing HitPay payment id for refund.");
+          }
+          const refundResult = await refundPaymentRequest({
+            paymentId,
+            amount: approvedAmount,
+            sendEmail: true,
+            email: transaction.user_email || undefined,
           });
           refundProviderRef = refundResult?.id || null;
         } catch (error) {
@@ -1510,6 +1573,7 @@ async function approveRefund(req, res) {
     const requested = Number(refund.requestedAmount || total);
     let approvedAmount = requested;
     const approvedRaw = String(req.body.approved_amount || "").trim();
+    const approvedProvided = Boolean(approvedRaw);
     const adminNoteInput = String(req.body.admin_note || "").trim() || null;
     if (approvedRaw) {
       const parsed = Number(approvedRaw);
@@ -1556,9 +1620,10 @@ async function approveRefund(req, res) {
     } else if (provider === "stripe_card") {
       try {
         const intentId = transaction.provider_order_id.replace("STRIPE-CARD-", "");
+        const refundAmount = resolveRefundAmount(total, approvedAmount, approvedProvided);
         const refundResult = await refundPaymentIntent({
           paymentIntentId: intentId,
-          amount: approvedAmount < total ? approvedAmount : null,
+          amount: refundAmount,
         });
         refundProviderRef = refundResult?.id || null;
       } catch (error) {
@@ -1587,9 +1652,38 @@ async function approveRefund(req, res) {
         if (!intentId) {
           throw new Error("Missing Stripe payment intent for GrabPay refund.");
         }
+        const refundAmount = resolveRefundAmount(total, approvedAmount, approvedProvided);
         const refundResult = await refundPaymentIntent({
           paymentIntentId: intentId,
-          amount: approvedAmount < total ? approvedAmount : null,
+          amount: refundAmount,
+        });
+        refundProviderRef = refundResult?.id || null;
+      } catch (error) {
+        const failure = formatRefundError(error);
+        await updateRefundRequest(refundId, {
+          status: "failed",
+          admin_note: adminNoteInput,
+          approved_by: req.session.userId,
+          approved_at: new Date(),
+          provider,
+          provider_ref: providerRef,
+          refund_provider_ref: null,
+          failure_reason: failure.message,
+          failure_code: failure.code,
+        });
+        return respondError(req, res, 400, failure.message);
+      }
+    } else if (provider === "paynow") {
+      try {
+        const paymentId = await resolveHitpayRefundPaymentId(transaction);
+        if (!paymentId) {
+          throw new Error("Missing HitPay payment id for refund.");
+        }
+        const refundResult = await refundPaymentRequest({
+          paymentId,
+          amount: approvedAmount,
+          sendEmail: true,
+          email: booking.userEmail || undefined,
         });
         refundProviderRef = refundResult?.id || null;
       } catch (error) {

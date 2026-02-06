@@ -13,12 +13,49 @@
 
       <main>
         <section class="section admin-section">
+          <% const roomsList = Array.isArray(rooms) ? rooms : []; %>
           <div class="section-head split">
             <div>
               <h2>Refund Requests</h2>
               <p>Approve or deny order and booking refund requests.</p>
             </div>
             <div class="section-actions">
+              <div class="search-field">
+                <input
+                  class="search-input"
+                  type="search"
+                  placeholder="Search refunds"
+                  aria-label="Search refunds"
+                  data-search-input="admin-refunds"
+                />
+              </div>
+              <div class="filter-group">
+                <label class="filter-label" for="refund-room-filter">Room</label>
+                <select
+                  class="filter-select"
+                  id="refund-room-filter"
+                  data-room-filter="admin-refunds"
+                >
+                  <option value="all">All rooms</option>
+                  <% roomsList.forEach(function(room) { %>
+                    <option value="<%= room.id %>"><%= room.name %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="filter-group">
+                <label class="filter-label" for="refund-status-filter">Refund Status</label>
+                <select
+                  class="filter-select"
+                  id="refund-status-filter"
+                  data-status-filter="admin-refunds"
+                >
+                  <option value="all">All statuses</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="denied">Denied</option>
+                  <option value="failed">Failed</option>
+                </select>
+              </div>
               <a class="btn" href="/admin">Back to dashboard</a>
             </div>
           </div>
@@ -34,7 +71,18 @@
                 <% const isBooking = !!refund.bookingId; %>
                 <% const refundTitle = isBooking ? `Booking #${refund.bookingId} - ${refund.booking.roomName}` : `Order #${refund.transaction ? refund.transaction.id : refund.transactionId}`; %>
                 <% const refundTotal = isBooking ? Number(refund.booking.totalPrice || 0) : Number(refund.transaction ? refund.transaction.totalAmount : (refund.requestedAmount || 0)); %>
-                <div class="admin-booking-card admin-refund-card">
+                <% const approvedAmount = Number(refund.approvedAmount); %>
+                <% const hasApproved = Number.isFinite(approvedAmount) && approvedAmount > 0; %>
+                <% const refundPercent = hasApproved && refundTotal > 0 ? (approvedAmount / refundTotal) * 100 : null; %>
+                <% const isPartial = refundPercent !== null && approvedAmount < refundTotal; %>
+                <div
+                  class="admin-booking-card admin-refund-card"
+                  data-search-item="admin-refunds"
+                  data-room-id="<%= refund.booking ? refund.booking.roomId : '' %>"
+                  data-room-name="<%= refund.booking ? refund.booking.roomName : '' %>"
+                  data-refund-status="<%= refund.status %>"
+                  data-search-text="<%= [refund.id, refundTitle, refund.user.name, refund.user.email, refund.status, refund.reasonText, refund.userMessage, refund.paymentProvider, refund.paymentProviderRef, refund.refundProviderRef, refund.provider, refund.providerRef].filter(Boolean).join(' ') %>"
+                >
                   <div class="admin-booking-body">
                     <div class="admin-booking-title">
                       <div>
@@ -65,6 +113,9 @@
                       <% if (refund.approvedAmount) { %>
                         <span class="status-pill secondary">Approved: $<%= Number(refund.approvedAmount).toFixed(2) %></span>
                       <% } %>
+                      <% if (isPartial) { %>
+                        <span class="status-pill warning">Partial: <%= refundPercent.toFixed(1) %>%</span>
+                      <% } %>
                       <button
                         class="btn ghost"
                         type="button"
@@ -78,6 +129,7 @@
                         data-refund-end="<%= refund.booking ? refund.booking.endTime : '' %>"
                         data-refund-requested="<%= Number(refund.requestedAmount || refundTotal || 0).toFixed(2) %>"
                         data-refund-approved="<%= refund.approvedAmount ? Number(refund.approvedAmount).toFixed(2) : '' %>"
+                        data-refund-total="<%= refundTotal.toFixed(2) %>"
                         data-refund-status="<%= refund.status %>"
                         data-refund-reason="<%= refund.reasonText || '' %>"
                         data-refund-message="<%= refund.userMessage || '' %>"
@@ -126,6 +178,14 @@
                 </div>
               <% }) %>
             </div>
+            <div class="empty-state search-empty is-hidden" data-search-empty="admin-refunds">
+              <h3>No refunds match your search.</h3>
+              <p>Try another keyword or clear the search.</p>
+            </div>
+            <div class="empty-state filter-empty is-hidden" data-filter-empty="admin-refunds">
+              <h3>No refunds match this room filter.</h3>
+              <p>Try another room or clear the filter.</p>
+            </div>
           <% } %>
         </section>
       </main>
@@ -161,6 +221,7 @@
           <p><strong>Status:</strong> <span data-refund-status></span></p>
           <p><strong>Requested:</strong> $<span data-refund-requested></span></p>
           <p><strong>Approved:</strong> <span data-refund-approved></span></p>
+          <p><strong>Refund %:</strong> <span data-refund-percent></span></p>
           <p><strong>Reason:</strong> <span data-refund-reason></span></p>
           <p><strong>Message:</strong> <span data-refund-message></span></p>
           <p><strong>Admin note:</strong> <span data-refund-admin-note></span></p>
@@ -235,6 +296,12 @@
         drawer.querySelector("[data-refund-approved]").textContent = data.refundApproved
           ? formatAmount(data.refundApproved)
           : "-";
+        const totalAmount = Number(data.refundTotal || 0);
+        const approvedAmount = Number(data.refundApproved || 0);
+        const hasApproved = Number.isFinite(approvedAmount) && approvedAmount > 0;
+        const refundPercent = hasApproved && totalAmount > 0 ? (approvedAmount / totalAmount) * 100 : null;
+        drawer.querySelector("[data-refund-percent]").textContent =
+          refundPercent !== null ? `${refundPercent.toFixed(1)}%` : "-";
         drawer.querySelector("[data-refund-reason]").textContent = data.refundReason || "-";
         drawer.querySelector("[data-refund-message]").textContent = data.refundMessage || "-";
         drawer.querySelector("[data-refund-admin-note]").textContent = data.refundAdminNote || "-";
@@ -296,6 +363,7 @@
             refundEnd: trigger.dataset.refundEnd,
             refundRequested: trigger.dataset.refundRequested,
             refundApproved: trigger.dataset.refundApproved,
+            refundTotal: trigger.dataset.refundTotal,
             refundStatus: trigger.dataset.refundStatus,
             refundReason: trigger.dataset.refundReason,
             refundMessage: trigger.dataset.refundMessage,
@@ -314,6 +382,57 @@
           });
         });
       });
+
+      const refundSearchInput = document.querySelector('[data-search-input="admin-refunds"]');
+      const refundRoomFilter = document.querySelector('[data-room-filter="admin-refunds"]');
+      const refundStatusFilter = document.querySelector('[data-status-filter="admin-refunds"]');
+      const refundItems = Array.from(
+        document.querySelectorAll('[data-search-item="admin-refunds"]')
+      );
+      const refundFilterEmpty = document.querySelector('[data-filter-empty="admin-refunds"]');
+
+      const updateRefundFilterEmpty = () => {
+        if (!refundFilterEmpty) return;
+        const query = refundSearchInput ? refundSearchInput.value.trim() : "";
+        if (query) {
+          refundFilterEmpty.classList.add("is-hidden");
+          return;
+        }
+        const visible = refundItems.some(
+          (item) =>
+            !item.classList.contains("is-hidden") && !item.classList.contains("is-filtered")
+        );
+        refundFilterEmpty.classList.toggle("is-hidden", visible);
+      };
+
+      const applyRefundFilters = () => {
+        const roomValue = refundRoomFilter ? refundRoomFilter.value : "all";
+        const statusValue = refundStatusFilter ? refundStatusFilter.value : "all";
+        refundItems.forEach((item) => {
+          const roomId = item.dataset.roomId || "";
+          const refundStatus = item.dataset.refundStatus || "";
+          const matchesRoom = roomValue === "all" || roomValue === roomId;
+          const matchesStatus = statusValue === "all" || statusValue === refundStatus;
+          item.classList.toggle("is-filtered", !(matchesRoom && matchesStatus));
+        });
+        updateRefundFilterEmpty();
+      };
+
+      if (refundRoomFilter) {
+        refundRoomFilter.addEventListener("change", applyRefundFilters);
+      }
+
+      if (refundStatusFilter) {
+        refundStatusFilter.addEventListener("change", applyRefundFilters);
+      }
+
+      applyRefundFilters();
+
+      if (refundSearchInput) {
+        refundSearchInput.addEventListener("input", () => {
+          requestAnimationFrame(updateRefundFilterEmpty);
+        });
+      }
     </script>
   </body>
 </html>

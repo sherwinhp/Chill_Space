@@ -3,6 +3,9 @@ const db = require("../db");
 async function listComplianceFlags({ status = "open", limit = 100, from, to } = {}) {
   const where = [];
   const params = [];
+  const limitValue = Number(limit);
+  const safeLimit =
+    Number.isFinite(limitValue) && limitValue > 0 ? Math.min(limitValue, 500) : 100;
   if (status === "open") {
     where.push("cf.resolved_at IS NULL");
   } else if (status === "resolved") {
@@ -37,9 +40,9 @@ async function listComplianceFlags({ status = "open", limit = 100, from, to } = 
       LEFT JOIN users u ON u.user_id = cf.user_id
       ${whereSql}
       ORDER BY cf.created_at DESC
-      LIMIT ?
+      LIMIT ${safeLimit}
     `,
-    [...params, Number(limit) || 100]
+    params
   );
   return Array.isArray(rows) ? rows : [];
 }

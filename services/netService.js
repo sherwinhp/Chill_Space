@@ -17,32 +17,42 @@ const NETS_TXN_STATUS_URL =
   process.env.NETS_TXN_STATUS_URL ||
   "https://sandbox.nets.openapipaas.com/api/v1/common/payments/nets-qr/query";
 
+const IS_SANDBOX_ENV = /sandbox/i.test(NETS_QR_CREATE_URL || "");
+
+function normalizeConfigValue(value) {
+  return String(value || "").trim();
+}
+
 function ensureConfig() {
-  if (!NETS_API_KEY) {
+  const apiKey = normalizeConfigValue(NETS_API_KEY);
+  const projectId = normalizeConfigValue(NETS_PROJECT_ID);
+  if (!apiKey) {
     throw new Error("Missing NETS API key (set NETS_API_KEY or API_KEY).");
   }
-  if (!NETS_PROJECT_ID) {
+  if (!projectId) {
     throw new Error(
       "Missing NETS project id (set NETS_PROJECT_ID or PROJECT_ID)."
     );
   }
+  return { apiKey, projectId };
 }
 
 function buildHeaders() {
-  const headers = {
-    "api-key": NETS_API_KEY,
+  const { apiKey, projectId } = ensureConfig();
+  return {
+    "api-key": apiKey,
     // Some docs/slides use `project-id`; others use `projectid-key`.
-    "project-id": NETS_PROJECT_ID,
-    "projectid-key": NETS_PROJECT_ID,
+    "project-id": projectId,
+    "projectid-key": projectId,
     "Content-Type": "application/json",
   };
-  return headers;
 }
 
 function buildTxnId() {
-  const mode = NETS_TXN_ID_MODE || "random";
+  const fallbackMode = IS_SANDBOX_ENV ? "static" : "random";
+  const mode = NETS_TXN_ID_MODE || fallbackMode;
   if (mode === "static") {
-    return SANDBOX_TXN_ID;
+    return normalizeConfigValue(SANDBOX_TXN_ID);
   }
   const rand = Math.random().toString(16).slice(2, 10);
   return `nets_${Date.now()}_${rand}`;
@@ -76,15 +86,20 @@ async function createNetsQr(cartTotal) {
     throw new Error("Invalid cart total");
   }
 
-  const response = await fetch(NETS_QR_CREATE_URL, {
-    method: "POST",
-    headers: buildHeaders(),
-    body: JSON.stringify({
-      txn_id: buildTxnId(),
-      amt_in_dollars: Number(amount.toFixed(2)),
-      notify_mobile: 0,
-    }),
-  });
+  let response;
+  try {
+    response = await fetch(NETS_QR_CREATE_URL, {
+      method: "POST",
+      headers: buildHeaders(),
+      body: JSON.stringify({
+        txn_id: buildTxnId(),
+        amt_in_dollars: Number(amount.toFixed(2)).toFixed(2),
+        notify_mobile: 0,
+      }),
+    });
+  } catch (error) {
+    throw new Error(error?.message || "Unable to reach NETS QR service.");
+  }
 
   const { data, detail } = await parseNetsResponse(
     response,
@@ -92,12 +107,26 @@ async function createNetsQr(cartTotal) {
   );
 
   const resultData = data?.result?.data;
-  if (!response.ok || !resultData?.qr_code || !resultData?.txn_retrieval_ref) {
+  const qrValue =
+    typeof resultData?.qr_code === "string"
+      ? resultData.qr_code
+      : typeof resultData?.qr_code_url === "string"
+        ? resultData.qr_code_url
+        : typeof resultData?.qr_code_link === "string"
+          ? resultData.qr_code_link
+          : null;
+  const qrCodeUrl =
+    qrValue && qrValue.startsWith("data:image")
+      ? qrValue
+      : qrValue
+        ? `data:image/png;base64,${qrValue}`
+        : null;
+  if (!response.ok || !qrCodeUrl || !resultData?.txn_retrieval_ref) {
     throw new Error(detail || "Failed to generate NETS QR");
   }
 
   return {
-    qrCodeUrl: `data:image/png;base64,${resultData.qr_code}`,
+    qrCodeUrl,
     txnRetrievalRef: resultData.txn_retrieval_ref,
   };
 }
@@ -106,14 +135,19 @@ async function getTxnStatus(txnRetrievalRef) {
   ensureConfig();
   if (!txnRetrievalRef) throw new Error("Missing txnRetrievalRef");
 
-  const response = await fetch(NETS_TXN_STATUS_URL, {
-    method: "POST",
-    headers: buildHeaders(),
-    body: JSON.stringify({
-      txn_retrieval_ref: txnRetrievalRef,
-      frontend_timeout_status: 0,
-    }),
-  });
+  let response;
+  try {
+    response = await fetch(NETS_TXN_STATUS_URL, {
+      method: "POST",
+      headers: buildHeaders(),
+      body: JSON.stringify({
+        txn_retrieval_ref: txnRetrievalRef,
+        frontend_timeout_status: 0,
+      }),
+    });
+  } catch (error) {
+    throw new Error(error?.message || "Unable to reach NETS status service.");
+  }
 
   const { data, detail } = await parseNetsResponse(
     response,

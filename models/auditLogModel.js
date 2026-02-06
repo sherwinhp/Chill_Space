@@ -22,6 +22,9 @@ async function addAuditLog({
 }
 
 async function listAuditLogs({ limit = 100 } = {}) {
+  const limitValue = Number(limit);
+  const safeLimit =
+    Number.isFinite(limitValue) && limitValue > 0 ? Math.min(limitValue, 500) : 100;
   const rows = await db.query(
     `
       SELECT
@@ -39,9 +42,9 @@ async function listAuditLogs({ limit = 100 } = {}) {
       FROM audit_logs al
       LEFT JOIN users u ON u.user_id = al.actor_id
       ORDER BY al.created_at DESC
-      LIMIT ?
+      LIMIT ${safeLimit}
     `,
-    [Number(limit) || 100]
+    []
   );
   return Array.isArray(rows) ? rows : [];
 }

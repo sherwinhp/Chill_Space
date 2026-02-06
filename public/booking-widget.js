@@ -9,6 +9,7 @@ const WEEKEND_PEAK_START_HOUR = 13;
 const WEEKEND_PEAK_END_HOUR = 16;
 const WEEKEND_PEAK2_START_HOUR = 20;
 const WEEKEND_PEAK2_END_HOUR = 23;
+const PEAK_SURCHARGE_RATE = 0.1;
 
 const widget = document.querySelector("[data-booking-widget]");
 const calendarEl = document.querySelector("[data-booking-calendar]");
@@ -189,7 +190,9 @@ function isPeakTime(value) {
 }
 
 function getRateForTime(value) {
-  return isPeakTime(value) ? state.peakRate : state.normalRate;
+  if (!isPeakTime(value)) return state.normalRate;
+  const surcharged = Number((state.peakRate * (1 + PEAK_SURCHARGE_RATE)).toFixed(2));
+  return Number.isFinite(surcharged) && surcharged > 0 ? surcharged : state.peakRate;
 }
 
 function listDays(start, end) {
@@ -387,7 +390,7 @@ function updateSummary() {
   const hourlyRate = getRateForTime(startTime);
   const total = Number((slotCount * hourlyRate).toFixed(2));
   const rateLabel = isPeakTime(startTime)
-    ? "Peak (Weekdays 6pm-11pm, Weekends 1-4pm & 8-11pm)"
+    ? `Peak (+${Math.round(PEAK_SURCHARGE_RATE * 100)}%) (Weekdays 6pm-11pm, Weekends 1-4pm & 8-11pm)`
     : "Normal";
   summaryEl.textContent = `${state.roomName} - ${formatDate(state.selectedDate)} (${formatTime(
     startTime

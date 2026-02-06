@@ -132,6 +132,7 @@ async function listRefundRequests() {
         b.total_price,
         b.payment_status,
         b.admin_status,
+        r.room_id AS room_id,
         r.name AS room_name,
         r.image_url AS room_image,
         u.name AS user_name,
@@ -174,6 +175,7 @@ async function listRefundRequests() {
     booking: row.booking_id
       ? {
           id: row.booking_id,
+          roomId: row.room_id,
           roomName: row.room_name,
           roomImage: row.room_image,
           startTime: row.start_time,

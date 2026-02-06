@@ -15,6 +15,7 @@ const {
 } = require("../models/bookingsModel");
 const {
   getMaxAllowedDate,
+  applyPeakSurcharge,
 } = require("../models/bookingsModel");
 
 const ROOM_ADDON_DISCOUNT_RATE = 0.15;
@@ -62,8 +63,12 @@ function buildAddonItem(item) {
 
 async function listRooms(req, res) {
   const rooms = await getAllRooms();
-  console.log("[ROOMS]", rooms.map((room) => ({ id: room.id, name: room.name, image_url: room.image_url })));
-  res.render("home", { rooms });
+  const roomsWithDisplayRates = rooms.map((room) => ({
+    ...room,
+    peakHourlyRateDisplay: applyPeakSurcharge(room.peakHourlyRate),
+  }));
+  console.log("[ROOMS]", roomsWithDisplayRates.map((room) => ({ id: room.id, name: room.name, image_url: room.image_url })));
+  res.render("home", { rooms: roomsWithDisplayRates });
 }
 
 async function listRoomsApi(req, res) {
@@ -103,6 +108,7 @@ async function showRoom(req, res) {
     pricing: {
       normalRate: room.normalHourlyRate,
       peakRate: room.peakHourlyRate,
+      peakRateDisplay: applyPeakSurcharge(room.peakHourlyRate),
     },
     addons: {
       discountRate: ROOM_ADDON_DISCOUNT_RATE,
@@ -208,6 +214,9 @@ async function createHold(req, res) {
     start_time: normalizedStart,
     end_time: normalizedEnd,
   });
+  if (!holdId) {
+    return res.status(409).json({ error: "Slot not available." });
+  }
   res.status(201).json({ holdId });
 }
 

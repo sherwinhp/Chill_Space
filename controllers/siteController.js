@@ -1,4 +1,5 @@
 const { listRooms } = require("../models/roomsModel");
+const { applyPeakSurcharge } = require("../models/bookingsModel");
 const { listEvents } = require("../models/eventsDbModel");
 const { listPromotions } = require("../models/promotionsDbModel");
 const { listMenuItems } = require("../models/menuDbModel");
@@ -44,7 +45,11 @@ function resolveMenuImage(item) {
 async function renderHome(req, res) {
   try {
     const rooms = await listRooms();
-    res.render("home", { rooms });
+    const roomsWithDisplayRates = rooms.map((room) => ({
+      ...room,
+      peakHourlyRateDisplay: applyPeakSurcharge(room.peakHourlyRate),
+    }));
+    res.render("home", { rooms: roomsWithDisplayRates });
   } catch (error) {
     console.error(error);
     res.status(500).send("Unable to load rooms.");

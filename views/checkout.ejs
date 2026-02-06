@@ -88,7 +88,7 @@
 
                 <div class="payment-block stripe-card-form" data-stripe-card-form>
                   <h4>Pay with card</h4>
-                  <p class="field-hint">Supported: Visa, Mastercard, American Express, Discover.</p>
+                  <p class="field-hint">Supported: Visa, Mastercard, Amex, Discover, JCB, Diners, UnionPay.</p>
                   <div class="field">
                     <span>Name on card</span>
                     <input type="text" data-card-name placeholder="Full name" />
@@ -99,7 +99,10 @@
                   </div>
                   <div class="field">
                     <span>Card number</span>
-                    <div id="card-number-element" class="stripe-input"></div>
+                    <div class="stripe-input stripe-input--brand">
+                      <div id="card-number-element"></div>
+                      <span class="card-brand-pill is-hidden" data-card-brand-pill></span>
+                    </div>
                     <small class="field-hint card-brand" data-card-brand></small>
                   </div>
                   <div class="field-group">
@@ -113,13 +116,50 @@
                     </label>
                     <label class="field">
                       <span>Billing country</span>
-                      <input type="text" data-card-country placeholder="SG" />
+                      <input
+                        type="text"
+                        data-card-country
+                        placeholder="SG"
+                        list="country-list"
+                        autocomplete="country"
+                      />
                     </label>
                   </div>
                   <div class="field">
                     <span>Postal code</span>
                     <input type="text" data-card-postal placeholder="Postal code" />
+                    <small class="field-hint">Singapore (SG): 6 digits.</small>
                   </div>
+                  <datalist id="country-list">
+                    <option value="SG">Singapore</option>
+                    <option value="MY">Malaysia</option>
+                    <option value="ID">Indonesia</option>
+                    <option value="TH">Thailand</option>
+                    <option value="VN">Vietnam</option>
+                    <option value="PH">Philippines</option>
+                    <option value="BN">Brunei</option>
+                    <option value="US">United States</option>
+                    <option value="GB">United Kingdom</option>
+                    <option value="AU">Australia</option>
+                    <option value="NZ">New Zealand</option>
+                    <option value="CA">Canada</option>
+                    <option value="CN">China</option>
+                    <option value="HK">Hong Kong</option>
+                    <option value="TW">Taiwan</option>
+                    <option value="JP">Japan</option>
+                    <option value="KR">South Korea</option>
+                    <option value="IN">India</option>
+                    <option value="AE">United Arab Emirates</option>
+                    <option value="DE">Germany</option>
+                    <option value="FR">France</option>
+                    <option value="IT">Italy</option>
+                    <option value="ES">Spain</option>
+                    <option value="NL">Netherlands</option>
+                    <option value="SE">Sweden</option>
+                    <option value="NO">Norway</option>
+                    <option value="DK">Denmark</option>
+                    <option value="CH">Switzerland</option>
+                  </datalist>
                 </div>
 
                 <button class="btn primary payment-confirm" type="button" data-confirm-payment>

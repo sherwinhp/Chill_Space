@@ -13,6 +13,24 @@
 
       <main>
         <section class="section admin-section admin-bookings-page">
+          <%
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            function formatDateTime(value) {
+              if (!value) return "-";
+              const date = new Date(value);
+              if (Number.isNaN(date.getTime())) return value;
+              const day = date.getDate();
+              const month = months[date.getMonth()];
+              const year = date.getFullYear();
+              let hour = date.getHours();
+              const minute = String(date.getMinutes()).padStart(2, "0");
+              const ampm = hour >= 12 ? "PM" : "AM";
+              hour = hour % 12;
+              if (hour === 0) hour = 12;
+              return `${day} ${month} ${year}, ${hour}:${minute} ${ampm}`;
+            }
+          %>
+          <% const roomsList = Array.isArray(rooms) ? rooms : []; %>
           <div class="section-head split">
             <div>
               <h2>Manage Bookings</h2>
@@ -27,6 +45,48 @@
                   aria-label="Search bookings"
                   data-search-input="admin-bookings"
                 />
+              </div>
+              <div class="filter-group">
+                <label class="filter-label" for="booking-room-filter">Room</label>
+                <select
+                  class="filter-select"
+                  id="booking-room-filter"
+                  data-room-filter="admin-bookings"
+                >
+                  <option value="all">All rooms</option>
+                  <% roomsList.forEach(function(room) { %>
+                    <option value="<%= room.id %>"><%= room.name %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="filter-group">
+                <label class="filter-label" for="booking-status-filter">Payment Status</label>
+                <select
+                  class="filter-select"
+                  id="booking-status-filter"
+                  data-status-filter="admin-bookings"
+                >
+                  <option value="all">All statuses</option>
+                  <option value="pending">Pending</option>
+                  <option value="paid">Paid</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="refunded">Refunded</option>
+                  <option value="partially_refunded">Partially refunded</option>
+                  <option value="refund_denied">Refund denied</option>
+                </select>
+              </div>
+              <div class="filter-group">
+                <label class="filter-label" for="booking-admin-filter">Admin Status</label>
+                <select
+                  class="filter-select"
+                  id="booking-admin-filter"
+                  data-admin-filter="admin-bookings"
+                >
+                  <option value="all">All approvals</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="declined">Declined</option>
+                </select>
               </div>
               <a class="btn" href="/admin">Back to dashboard</a>
             </div>
@@ -45,6 +105,10 @@
                   action="/admin/bookings/<%= booking.id %>"
                   method="POST"
                   data-search-item="admin-bookings"
+                  data-room-id="<%= booking.roomId %>"
+                  data-room-name="<%= booking.roomName %>"
+                  data-payment-status="<%= booking.paymentStatus %>"
+                  data-admin-status="<%= booking.adminStatus %>"
                   data-search-text="<%= [booking.id, booking.roomName, booking.userName, booking.userEmail, booking.adminStatus, booking.paymentStatus, booking.refundStatus, booking.refundReason, booking.refundMessage, new Date(booking.startTime).toLocaleString(), new Date(booking.endTime).toLocaleString()].filter(Boolean).join(' ') %>"
                 >
                   <% const maskedContact = booking.userContact ? String(booking.userContact).replace(/.(?=.{4})/g, "*") : "-"; %>
@@ -83,6 +147,10 @@
                       <span>
                         <strong>Duration:</strong>
                         <%= ((new Date(booking.endTime) - new Date(booking.startTime)) / 3600000).toFixed(1) %> hrs
+                      </span>
+                      <span>
+                        <strong>Created:</strong>
+                        <%= formatDateTime(booking.createdAt) %>
                       </span>
                       <span>
                         <strong>User Contact:</strong>
@@ -125,29 +193,7 @@
                         <% } %>
                       </div>
                     <% } %>
-                    <div class="admin-booking-status">
-                      <label>
-                        <span>Approval</span>
-                        <select name="admin_status">
-                          <option value="pending" <%= booking.adminStatus === 'pending' ? 'selected' : '' %>>Pending</option>
-                          <option value="approved" <%= booking.adminStatus === 'approved' ? 'selected' : '' %>>Approved</option>
-                          <option value="declined" <%= booking.adminStatus === 'declined' ? 'selected' : '' %>>Declined</option>
-                        </select>
-                      </label>
-                      <label>
-                        <span>Payment</span>
-                        <select name="payment_status">
-                          <option value="pending" <%= booking.paymentStatus === 'pending' ? 'selected' : '' %>>Pending</option>
-                          <option value="paid" <%= booking.paymentStatus === 'paid' ? 'selected' : '' %>>Paid</option>
-                          <option value="cancelled" <%= booking.paymentStatus === 'cancelled' ? 'selected' : '' %>>Cancelled</option>
-                          <option value="refunded" <%= booking.paymentStatus === 'refunded' ? 'selected' : '' %>>Refunded</option>
-                          <option value="partially_refunded" <%= booking.paymentStatus === 'partially_refunded' ? 'selected' : '' %>>Partially refunded</option>
-                          <option value="refund_denied" <%= booking.paymentStatus === 'refund_denied' ? 'selected' : '' %>>Refund denied</option>
-                        </select>
-                      </label>
-                    </div>
                     <div class="admin-actions">
-                      <button class="btn" type="submit">Save</button>
                       <button class="btn danger" type="submit" formaction="/admin/bookings/<%= booking.id %>/delete">Delete</button>
                       <button
                         class="btn ghost"
@@ -164,6 +210,7 @@
                         data-booking-total="<%= booking.totalPrice ? Number(booking.totalPrice).toFixed(2) : '' %>"
                         data-booking-payment="<%= booking.paymentStatus %>"
                         data-booking-admin="<%= booking.adminStatus %>"
+                        data-booking-created="<%= booking.createdAt || '' %>"
                         data-booking-refund-status="<%= booking.refundStatus || '' %>"
                         data-booking-refund-requested="<%= booking.refundRequestedAmount ? Number(booking.refundRequestedAmount).toFixed(2) : '' %>"
                         data-booking-refund-approved="<%= booking.refundApprovedAmount ? Number(booking.refundApprovedAmount).toFixed(2) : '' %>"
@@ -174,12 +221,6 @@
                         View details
                       </button>
                     </div>
-                    <input type="hidden" name="user_id" value="<%= booking.userId %>" />
-                    <input type="hidden" name="room_id" value="<%= booking.roomId %>" />
-                    <input type="hidden" name="start_time" value="<%= booking.startTime.toISOString ? booking.startTime.toISOString().slice(0,16) : booking.startTime %>" />
-                    <input type="hidden" name="end_time" value="<%= booking.endTime.toISOString ? booking.endTime.toISOString().slice(0,16) : booking.endTime %>" />
-                    <input type="hidden" name="pax" value="<%= booking.pax %>" />
-                    <input type="hidden" name="total_price" value="<%= booking.totalPrice %>" />
                   </div>
                 </form>
               <% }) %>
@@ -187,6 +228,10 @@
             <div class="empty-state search-empty is-hidden" data-search-empty="admin-bookings">
               <h3>No bookings match your search.</h3>
               <p>Try another keyword or clear the search.</p>
+            </div>
+            <div class="empty-state filter-empty is-hidden" data-filter-empty="admin-bookings">
+              <h3>No bookings match this room filter.</h3>
+              <p>Try another room or clear the filter.</p>
             </div>
           <% } %>
         </section>
@@ -215,6 +260,7 @@
           <p><strong>End:</strong> <span data-booking-end></span></p>
           <p><strong>Pax:</strong> <span data-booking-pax></span></p>
           <p><strong>Total:</strong> <span data-booking-total></span></p>
+          <p><strong>Created:</strong> <span data-booking-created></span></p>
         </div>
         <div class="drawer-section">
           <h4>Status</h4>
@@ -245,7 +291,16 @@
         if (!value) return "-";
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return value;
-        return date.toLocaleString();
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const day = date.getDate();
+        const month = months[date.getMonth()];
+        const year = date.getFullYear();
+        let hour = date.getHours();
+        const minute = String(date.getMinutes()).padStart(2, "0");
+        const ampm = hour >= 12 ? "PM" : "AM";
+        hour = hour % 12;
+        if (hour === 0) hour = 12;
+        return `${day} ${month} ${year}, ${hour}:${minute} ${ampm}`;
       };
 
       const formatAmount = (value) => {
@@ -269,6 +324,9 @@
         drawer.querySelector("[data-booking-total]").textContent = data.bookingTotal
           ? formatAmount(data.bookingTotal)
           : "-";
+        drawer.querySelector("[data-booking-created]").textContent = formatDateTime(
+          data.bookingCreated
+        );
         drawer.querySelector("[data-booking-payment]").textContent = data.bookingPayment || "-";
         drawer.querySelector("[data-booking-admin]").textContent = data.bookingAdmin || "-";
         drawer.querySelector("[data-booking-refund-status]").textContent =
@@ -327,6 +385,7 @@
             bookingTotal: trigger.dataset.bookingTotal,
             bookingPayment: trigger.dataset.bookingPayment,
             bookingAdmin: trigger.dataset.bookingAdmin,
+            bookingCreated: trigger.dataset.bookingCreated,
             bookingRefundStatus: trigger.dataset.bookingRefundStatus,
             bookingRefundRequested: trigger.dataset.bookingRefundRequested,
             bookingRefundApproved: trigger.dataset.bookingRefundApproved,
@@ -336,6 +395,65 @@
           });
         });
       });
+
+      const roomFilter = document.querySelector('[data-room-filter="admin-bookings"]');
+      const statusFilter = document.querySelector('[data-status-filter="admin-bookings"]');
+      const adminFilter = document.querySelector('[data-admin-filter="admin-bookings"]');
+      const filterEmpty = document.querySelector('[data-filter-empty="admin-bookings"]');
+      const searchInput = document.querySelector('[data-search-input="admin-bookings"]');
+      const searchItems = Array.from(
+        document.querySelectorAll('[data-search-item="admin-bookings"]')
+      );
+
+      const updateFilterEmpty = () => {
+        if (!filterEmpty) return;
+        const query = searchInput ? searchInput.value.trim() : "";
+        if (query) {
+          filterEmpty.classList.add("is-hidden");
+          return;
+        }
+        const visible = searchItems.some(
+          (item) =>
+            !item.classList.contains("is-hidden") && !item.classList.contains("is-filtered")
+        );
+        filterEmpty.classList.toggle("is-hidden", visible);
+      };
+
+      const applyBookingFilters = () => {
+        const roomValue = roomFilter ? roomFilter.value : "all";
+        const statusValue = statusFilter ? statusFilter.value : "all";
+        const adminValue = adminFilter ? adminFilter.value : "all";
+        searchItems.forEach((item) => {
+          const roomId = item.dataset.roomId || "";
+          const paymentStatus = item.dataset.paymentStatus || "";
+          const adminStatus = item.dataset.adminStatus || "";
+          const matchesRoom = roomValue === "all" || roomValue === roomId;
+          const matchesStatus = statusValue === "all" || statusValue === paymentStatus;
+          const matchesAdmin = adminValue === "all" || adminValue === adminStatus;
+          item.classList.toggle("is-filtered", !(matchesRoom && matchesStatus && matchesAdmin));
+        });
+        updateFilterEmpty();
+      };
+
+      if (roomFilter) {
+        roomFilter.addEventListener("change", applyBookingFilters);
+      }
+
+      if (statusFilter) {
+        statusFilter.addEventListener("change", applyBookingFilters);
+      }
+
+      if (adminFilter) {
+        adminFilter.addEventListener("change", applyBookingFilters);
+      }
+
+      applyBookingFilters();
+
+      if (searchInput) {
+        searchInput.addEventListener("input", () => {
+          requestAnimationFrame(updateFilterEmpty);
+        });
+      }
     </script>
   </body>
 </html>
