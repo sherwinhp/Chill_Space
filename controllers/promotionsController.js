@@ -127,6 +127,41 @@ async function listVisiblePromotions() {
   return (promos || []).filter((promo) => !promo.isHidden && isPromoEligibleNow(promo));
 }
 
+async function isWelcomePromoEligibleForUser(userId, codeRaw) {
+  if (!userId) return false;
+  const code = normalizeCode(codeRaw);
+  if (!code.includes("FIRST") && !code.includes("WELCOME")) return true;
+
+  const [hasHistory, createdAt] = await Promise.all([
+    userHasCompletedPurchase(userId),
+    getUserCreatedAt(userId),
+  ]);
+  if (hasHistory) return false;
+
+  const welcomeDays = Number(process.env.WELCOME_DAYS || 7);
+  const ageDays = daysSinceSingapore(createdAt);
+  if (!Number.isFinite(welcomeDays) || welcomeDays <= 0) return false;
+  if (ageDays === null) return false;
+  if (ageDays < 0) return false;
+  return ageDays <= welcomeDays;
+}
+
+async function listVisiblePromotionsForRequest({ userId } = {}) {
+  const promos = await listPromotions();
+  const eligible = (promos || []).filter((promo) => !promo.isHidden && isPromoEligibleNow(promo));
+
+  const filtered = [];
+  for (const promo of eligible) {
+    const code = normalizeCode(promo.code);
+    if (code.includes("FIRST") || code.includes("WELCOME")) {
+      const ok = await isWelcomePromoEligibleForUser(userId, promo.code);
+      if (!ok) continue;
+    }
+    filtered.push(promo);
+  }
+  return filtered;
+}
+
 async function getPromoRedemptions() {
   // Redemptions are stored as transaction_items lines with details 'promo:CODE'
   // and are considered "redeemed" only when the transaction is COMPLETED.
@@ -411,7 +446,7 @@ async function remove(req, res) {
 }
 
 module.exports = {
-  listVisiblePromotions,
+  listVisiblePromotions: listVisiblePromotionsForRequest,
   apply,
   remove,
   adminList,

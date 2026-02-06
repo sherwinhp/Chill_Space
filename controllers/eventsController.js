@@ -50,8 +50,19 @@ async function renderEvents(req, res) {
       return endYmd >= todayIsoDate();
     });
 
+    // Show soonest events first (closest date at the top).
+    upcomingOnly.sort((a, b) => {
+      const aYmd = toLocalIsoDate(a.startDate) || "9999-12-31";
+      const bYmd = toLocalIsoDate(b.startDate) || "9999-12-31";
+      if (aYmd < bYmd) return -1;
+      if (aYmd > bYmd) return 1;
+      const aTitle = String(a.title || "");
+      const bTitle = String(b.title || "");
+      return aTitle.localeCompare(bTitle);
+    });
+
     const { listVisiblePromotions } = require("./promotionsController");
-    const promotions = await listVisiblePromotions();
+    const promotions = await listVisiblePromotions({ userId: req.session ? req.session.userId : null });
     res.render("events", { events: upcomingOnly, promotions });
   } catch (error) {
     console.error(error);

@@ -85,9 +85,9 @@
                       <% if (promo.isHidden) { %>
                         <span class="admin-menu-pill unavailable">Admin hidden</span>
                       <% } else { %>
-                        <span class="admin-menu-pill <%= promo.eligibleNow ? 'available' : 'unavailable' %>">
-                          <%= promo.eligibleNow ? 'Visible now' : 'Hidden now' %>
-                        </span>
+                        <% if (promo.eligibleNow) { %>
+                          <span class="admin-menu-pill available">Visible now</span>
+                        <% } %>
                       <% } %>
                       <span class="admin-menu-pill">Redeemed <%= Number(promo.redeemedCount || 0) %></span>
                       <span class="admin-menu-pill <%= status === "expired" ? "unavailable" : "available" %>">

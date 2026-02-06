@@ -24,13 +24,11 @@ async function listPromotions() {
   } catch (error) {
     if (error && error.code === "ER_BAD_FIELD_ERROR") {
       const rows = await db.query(
-        "SELECT promo_id, title, description, discount_percent, start_date, end_date, image_url FROM promotions ORDER BY start_date DESC"
+        "SELECT promo_id, title, description, discount_percent, code, min_total, start_date, end_date, image_url FROM promotions ORDER BY start_date DESC"
       );
       return rows.map((row) =>
         toPromotion({
           ...row,
-          code: "",
-          min_total: 0,
           is_hidden: 0,
         })
       );

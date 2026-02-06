@@ -23,8 +23,8 @@
         <section class="section">
           <div class="section-head">
             <div>
-              <h2>Events &amp; Student Deals</h2>
-              <p>Check out our gaming tournaments, movie nights, and special student discounts.</p>
+              <h2>Events &amp; Promotions</h2>
+              <p>Check out our gaming tournaments, movie nights, and limited-time promotions.</p>
             </div>
           </div>
 
@@ -71,17 +71,24 @@
                         <% } else { %>
                           <span class="event-pill">Free</span>
                         <% } %>
-                        <% if (event.capacity && Number(event.capacity) > 0) { %>
-                          <span class="event-pill">Spots left: <%= Number(event.spotsLeft ?? event.capacity).toFixed(0) %></span>
+                        <% const capacity = Number(event.capacity || 0); %>
+                        <% const spotsLeft = capacity > 0 ? Number(event.spotsLeft ?? capacity) : null; %>
+                        <% const isFull = typeof spotsLeft === "number" && Number.isFinite(spotsLeft) && spotsLeft <= 0; %>
+                        <% if (capacity > 0) { %>
+                          <% if (isFull) { %>
+                            <span class="event-pill full">Full</span>
+                          <% } else { %>
+                            <span class="event-pill">Spots left: <%= Number(spotsLeft).toFixed(0) %></span>
+                          <% } %>
                         <% } %>
                       </div>
 
                       <form class="event-signup" data-event-signup data-event-id="<%= event.id %>">
                         <label>
                           <span>Pax</span>
-                          <input name="pax" type="number" min="1" step="1" value="1" />
+                          <input name="pax" type="number" min="1" step="1" value="1" <%= isFull ? "disabled" : "" %> />
                         </label>
-                        <button class="btn primary" type="submit">Sign up</button>
+                        <button class="btn primary" type="submit" <%= isFull ? "disabled" : "" %>><%= isFull ? "Full" : "Sign up" %></button>
                       </form>
                     </div>
                   </article>
@@ -94,7 +101,7 @@
             <% if (!promotions || !promotions.length) { %>
               <div class="empty-state">
                 <h3>No promotions available.</h3>
-                <p>Add promotions in the database to show student deals.</p>
+                <p>Add promotions in the database to show deals.</p>
               </div>
             <% } else { %>
               <div class="promo-summary" data-cart-summary>

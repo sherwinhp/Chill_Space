@@ -1196,6 +1196,11 @@ body {
   font-weight: 700;
 }
 
+.event-pill.full {
+  background: #ffe9e9;
+  color: #a33;
+}
+
 .event-signup {
   display: flex;
   align-items: flex-end;
@@ -1218,6 +1223,19 @@ body {
   padding: 10px 12px;
   font-size: 14px;
   min-width: 120px;
+}
+
+.event-signup input:disabled {
+  background: #f2f3f7;
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.event-signup .btn:disabled {
+  transform: none;
+  box-shadow: none;
+  opacity: 0.8;
+  cursor: not-allowed;
 }
 
 .promo-summary {

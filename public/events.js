@@ -67,6 +67,11 @@ applyPromotions();
 
 async function signupEvent(form) {
   const eventId = form.dataset.eventId;
+  const submitBtn = form.querySelector("button[type='submit']");
+  if (submitBtn && submitBtn.disabled) {
+    if (window.showToast) window.showToast("Event is full.", "error");
+    return;
+  }
   const paxInput = form.querySelector("input[name='pax']");
   const pax = paxInput ? paxInput.value : "1";
 
