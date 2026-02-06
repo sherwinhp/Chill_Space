@@ -12,7 +12,7 @@
       <%- include("../partials/admin-header", { page: "admin-bookings" }) %>
 
       <main>
-        <section class="section admin-section">
+        <section class="section admin-section admin-bookings-page">
           <div class="section-head split">
             <div>
               <h2>Manage Bookings</h2>
@@ -45,8 +45,9 @@
                   action="/admin/bookings/<%= booking.id %>"
                   method="POST"
                   data-search-item="admin-bookings"
-                  data-search-text="<%= [booking.id, booking.roomName, booking.userName, booking.userEmail, booking.userContact, booking.adminStatus, booking.paymentStatus, booking.refundStatus, booking.refundReason, booking.refundMessage, new Date(booking.startTime).toLocaleString(), new Date(booking.endTime).toLocaleString()].filter(Boolean).join(' ') %>"
+                  data-search-text="<%= [booking.id, booking.roomName, booking.userName, booking.userEmail, booking.adminStatus, booking.paymentStatus, booking.refundStatus, booking.refundReason, booking.refundMessage, new Date(booking.startTime).toLocaleString(), new Date(booking.endTime).toLocaleString()].filter(Boolean).join(' ') %>"
                 >
+                  <% const maskedContact = booking.userContact ? String(booking.userContact).replace(/.(?=.{4})/g, "*") : "-"; %>
                   <div class="admin-booking-media">
                     <% if (booking.roomImage) { %>
                       <img src="<%= booking.roomImage %>" alt="<%= booking.roomName %>" />
@@ -85,7 +86,7 @@
                       </span>
                       <span>
                         <strong>User Contact:</strong>
-                        <%= booking.userContact || "-" %>
+                        <%= maskedContact %>
                       </span>
                     </div>
                     <div class="admin-booking-tags">
@@ -156,7 +157,7 @@
                         data-booking-room="<%= booking.roomName %>"
                         data-booking-user="<%= booking.userName %>"
                         data-booking-email="<%= booking.userEmail %>"
-                        data-booking-contact="<%= booking.userContact || '' %>"
+                        data-booking-contact="<%= maskedContact %>"
                         data-booking-start="<%= booking.startTime %>"
                         data-booking-end="<%= booking.endTime %>"
                         data-booking-pax="<%= booking.pax || 1 %>"

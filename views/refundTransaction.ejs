@@ -10,7 +10,7 @@
     <div class="page">
       <div class="glow"></div>
       <%- include("partials/header", {
-        page: "bookings",
+        page: "",
         roomsLink: "/",
         bookingsLink: "/bookings",
         menuLink: "/menu",
@@ -25,22 +25,54 @@
             <div class="refund-hero-text">
               <span class="eyebrow">Support</span>
               <h2>Refund Request</h2>
-              <p>Booking #<%= booking.id %> • <%= booking.roomName %></p>
+              <p>Order #<%= invoice.transaction_id %> - <%= new Date(invoice.created_at).toLocaleString() %></p>
             </div>
             <div class="refund-hero-actions">
-              <a class="btn ghost" href="/bookings">Back to bookings</a>
+              <a class="btn ghost" href="/invoice/<%= invoice.transaction_id %>">Back to invoice</a>
             </div>
           </div>
 
           <div class="refund-card">
             <div class="refund-layout">
               <div class="refund-panel refund-summary">
-                <h3>Booking summary</h3>
+                <h3>Order summary</h3>
                 <div class="meta refund-meta">
-                  <span><strong>Start:</strong> <%= new Date(booking.startTime).toLocaleString() %></span>
-                  <span><strong>End:</strong> <%= new Date(booking.endTime).toLocaleString() %></span>
-                  <span><strong>Total:</strong> $<%= Number(booking.totalPrice || 0).toFixed(2) %></span>
-                  <span><strong>Pax:</strong> <%= booking.pax || 1 %></span>
+                  <span><strong>Payment:</strong> <%= String(invoice.provider || "unknown").toUpperCase() %></span>
+                  <span><strong>Reference:</strong> <%= invoice.provider_order_id || "-" %></span>
+                  <span><strong>Total:</strong> $<%= Number(invoice.total_amount || 0).toFixed(2) %></span>
+                </div>
+                <div class="order-table refund-order">
+                  <div class="order-row order-head">
+                    <span>Product</span>
+                    <span>Qty</span>
+                    <span>Price</span>
+                    <span>Subtotal</span>
+                  </div>
+                  <div class="order-rows">
+                    <% invoice.items.forEach(function(item) { %>
+                      <div class="order-row">
+                        <div class="order-product">
+                          <strong><%= item.item_name %></strong>
+                          <% if (item.details || item.start_time) { %>
+                            <div class="order-meta">
+                              <% if (item.details) { %>
+                                <span><%= item.details %></span>
+                              <% } %>
+                              <% if (item.start_time && item.end_time) { %>
+                                <span>
+                                  <%= new Date(item.start_time).toLocaleString() %> -
+                                  <%= new Date(item.end_time).toLocaleString() %>
+                                </span>
+                              <% } %>
+                            </div>
+                          <% } %>
+                        </div>
+                        <span class="order-qty"><%= item.qty %></span>
+                        <span class="order-price">$<%= Number(item.price).toFixed(2) %></span>
+                        <span class="order-subtotal">$<%= Number(item.subtotal).toFixed(2) %></span>
+                      </div>
+                    <% }) %>
+                  </div>
                 </div>
                 <p class="muted">Please submit clear details so our team can review quickly.</p>
               </div>
@@ -78,7 +110,7 @@
                 <% } else { %>
                   <form
                     class="form refund-form-fields"
-                    action="/bookings/<%= booking.id %>/refund"
+                    action="/invoice/<%= invoice.transaction_id %>/refund"
                     method="POST"
                     enctype="multipart/form-data"
                   >
@@ -88,6 +120,11 @@
                         <option value="schedule_change">Schedule change</option>
                         <option value="booking_mistake">Booking made by mistake</option>
                         <option value="room_issue">Room or facility issue</option>
+                        <option value="food_issue">Food issue (quality/temperature)</option>
+                        <option value="beverage_issue">Beverage issue</option>
+                        <option value="theme_issue">Theme add-on issue</option>
+                        <option value="wrong_item">Wrong item delivered</option>
+                        <option value="delivery_issue">Late delivery</option>
                         <option value="other">Other</option>
                       </select>
                     </label>
@@ -102,15 +139,15 @@
                       ></textarea>
                     </label>
                     <label class="refund-optional" data-refund-amount>
-                      <span>Custom refund amount (optional)</span>
+                      <span>Custom refund amount</span>
                       <input
                         type="number"
                         name="requested_amount"
                         step="0.01"
                         min="0.01"
-                        max="<%= Number(booking.totalPrice || 0).toFixed(2) %>"
+                        max="<%= Number(invoice.total_amount || 0).toFixed(2) %>"
                       />
-                      <small>Available only when reason is "Other".</small>
+                      <small>Required only when reason is "Other".</small>
                     </label>
                     <label class="refund-upload">
                       <span>Upload image (optional)</span>
@@ -159,11 +196,16 @@
         }
       }
 
-      const bookingTotal = Number("<%= Number(booking.totalPrice || 0).toFixed(2) %>");
+      const orderTotal = Number("<%= Number(invoice.total_amount || 0).toFixed(2) %>");
       const refundRates = {
         schedule_change: 0.2,
         booking_mistake: 0.3,
         room_issue: 0.8,
+        food_issue: 0.5,
+        beverage_issue: 0.3,
+        theme_issue: 0.4,
+        wrong_item: 0.7,
+        delivery_issue: 0.2,
       };
 
       function setHint(text) {
@@ -171,26 +213,29 @@
         hintEl.textContent = text || "";
       }
 
+      const customReasons = new Set(["other"]);
+
       function toggleAmount() {
         if (!reasonSelect || !amountField) return;
-        const isOther = reasonSelect.value === "other";
-        amountField.style.display = isOther ? "block" : "none";
+        const isCustom = customReasons.has(reasonSelect.value);
+        amountField.style.display = isCustom ? "block" : "none";
         if (amountInput) {
-          amountInput.disabled = !isOther;
-          if (!isOther) {
+          amountInput.disabled = !isCustom;
+          amountInput.required = isCustom;
+          if (!isCustom) {
             amountInput.value = "";
           }
         }
         if (messageField) {
-          messageField.required = isOther;
+          messageField.required = isCustom;
         }
 
-        if (!isOther && refundRates[reasonSelect.value]) {
+        if (!isCustom && refundRates[reasonSelect.value]) {
           const pct = Math.round(refundRates[reasonSelect.value] * 100);
-          const amount = (bookingTotal * refundRates[reasonSelect.value]).toFixed(2);
+          const amount = (orderTotal * refundRates[reasonSelect.value]).toFixed(2);
           setHint(`Suggested refund for this reason: ${pct}% ($${amount}).`);
-        } else if (isOther) {
-          setHint("Custom refund amount available for 'Other'.");
+        } else if (isCustom) {
+          setHint("Custom refund amount required for 'Other'.");
         } else {
           setHint("");
         }
@@ -238,4 +283,3 @@
     </script>
   </body>
 </html>
-

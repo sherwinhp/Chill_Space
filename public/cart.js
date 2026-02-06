@@ -2,6 +2,7 @@ const cartItems = document.querySelector("[data-cart-items]");
 const cartTotal = document.querySelector("[data-cart-total]");
 const clearButton = document.querySelector("[data-clear-cart]");
 const checkoutButton = document.querySelector("[data-checkout]");
+const cartCount = document.querySelector("[data-cart-count]");
 
 let cachedItems = [];
 
@@ -35,6 +36,7 @@ function renderCart() {
     cartItems.innerHTML = '<p class="empty-note">No items yet.</p>';
     cartTotal.textContent = "$0.00";
     if (clearButton) clearButton.disabled = true;
+    if (cartCount) cartCount.textContent = "0 items";
     window.dispatchEvent(new Event("cart:updated"));
     return;
   }
@@ -97,18 +99,16 @@ function renderCart() {
           </div>`
         : `<div class="cart-qty">
             <strong>${qty}</strong>
-            <button type="button" data-action="inc" data-id="${item.id}">+</button>
-            <button class="cart-remove" type="button" data-action="remove" data-id="${item.id}" aria-label="Remove item">
-              <svg viewBox="0 0 24 24" role="img">
-                <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0v12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V7"></path>
-              </svg>
-            </button>
+            <button type="button" data-action="dec" data-id="${item.id}" aria-label="Decrease quantity">-</button>
+            <button type="button" data-action="inc" data-id="${item.id}" aria-label="Increase quantity">+</button>
           </div>`;
     row.innerHTML = `
-      <div>
-        <h4>${item.name}</h4>
+      <div class="cart-item-info">
+        <div class="cart-item-head">
+          <h4>${item.name}</h4>
+          <span class="cart-item-price">$${Number(item.price).toFixed(2)} ${label}</span>
+        </div>
         ${details}
-        <span>$${Number(item.price).toFixed(2)} ${label}</span>
       </div>
       ${controls}
     `;
@@ -118,13 +118,21 @@ function renderCart() {
   const total = items.reduce((sum, item) => sum + Number(item.price) * Number(item.qty || 1), 0);
   cartTotal.textContent = `$${total.toFixed(2)}`;
   if (clearButton) clearButton.disabled = false;
+  if (cartCount) {
+    const count = items.reduce((sum, item) => sum + Number(item.qty || 1), 0);
+    cartCount.textContent = `${count} ${count === 1 ? "item" : "items"}`;
+  }
   window.dispatchEvent(new Event("cart:updated"));
 }
 
 function updateQuantity(id, delta) {
   const item = cachedItems.find((entry) => entry.id === Number(id));
   if (!item || item.type === "room_booking") return;
-  const nextQty = Math.max(1, Number(item.qty || 1) + delta);
+  const nextQty = Number(item.qty || 1) + delta;
+  if (nextQty <= 0) {
+    removeItem(item.id);
+    return;
+  }
   fetch(`/cart/items/${item.id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -199,6 +207,7 @@ if (cartItems) {
     if (!button) return;
     const item = cachedItems.find((entry) => entry.id === Number(button.dataset.id));
     if (button.dataset.action === "inc") updateQuantity(button.dataset.id, 1);
+    if (button.dataset.action === "dec") updateQuantity(button.dataset.id, -1);
     if (button.dataset.action === "remove") removeItem(button.dataset.id);
     if (button.dataset.action === "edit" && item) editBooking(item);
   });

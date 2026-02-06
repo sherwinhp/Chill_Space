@@ -20,8 +20,8 @@
       }) %>
 
       <main>
-        <section class="section">
-          <div class="section-head split">
+        <section class="section menu-page">
+          <div class="section-head split menu-hero">
             <div>
               <h2>Food, Drinks &amp; Themes</h2>
               <p>Enhance your gaming experience with snacks and themes.</p>
@@ -37,7 +37,7 @@
             </div>
           </div>
 
-          <div class="menu-tabs">
+          <div class="menu-tabs menu-tabs--menu">
             <button class="menu-tab active" data-category="food">Food</button>
             <button class="menu-tab" data-category="drink">Beverages</button>
             <button class="menu-tab" data-category="addon">Room Themes</button>
@@ -51,8 +51,18 @@
           <% } else { %>
             <div class="menu-grid" data-menu-grid>
               <% menuItems.forEach(function(item) { %>
+                <% const categoryLabel = item.category === "food"
+                  ? "Food"
+                  : item.category === "drink"
+                    ? "Beverage"
+                    : "Theme"; %>
+                <% const availabilityClass = item.stockStatus === "low_stock"
+                  ? "low-stock"
+                  : item.stockStatus === "out_of_stock" || item.stockStatus === "unavailable"
+                    ? "unavailable"
+                    : "available"; %>
                 <article
-                  class="menu-card"
+                  class="menu-card <%= item.isOrderable ? "" : "is-unavailable" %>"
                   data-category="<%= item.category %>"
                   data-id="<%= item.id %>"
                   data-name="<%= item.name %>"
@@ -70,6 +80,7 @@
                       </div>
                     <% } %>
                     <div class="menu-info">
+                      <span class="menu-category"><%= categoryLabel %></span>
                       <h3><%= item.name %></h3>
                       <p><%= item.description %></p>
                     </div>
@@ -77,7 +88,9 @@
                   <div class="menu-actions">
                     <div class="menu-meta">
                       <span class="price">$<%= item.price.toFixed(2) %></span>
-                      <span class="availability"><%= item.isAvailable ? "Available" : "Unavailable" %></span>
+                      <span class="availability <%= availabilityClass %>">
+                        <%= item.stockLabel || (item.isAvailable ? "Available" : "Unavailable") %>
+                      </span>
                     </div>
                     <button
                       class="btn primary add-to-cart"
@@ -85,7 +98,7 @@
                       data-id="<%= item.id %>"
                       data-name="<%= item.name %>"
                       data-price="<%= item.price %>"
-                      <%= item.isAvailable ? "" : "disabled" %>
+                      <%= item.isOrderable ? "" : "disabled" %>
                     >
                       Add to Cart
                     </button>

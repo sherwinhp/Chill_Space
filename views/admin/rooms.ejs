@@ -12,33 +12,63 @@
       <%- include("../partials/admin-header", { page: "admin-rooms" }) %>
 
       <main>
-        <section class="section admin-section">
-          <div class="section-head admin-head">
-            <div>
+        <% const totalRooms = Array.isArray(rooms) ? rooms.length : 0; %>
+        <% const availableRooms = Array.isArray(rooms) ? rooms.filter((room) => room.isAvailable).length : 0; %>
+        <% const unavailableRooms = totalRooms - availableRooms; %>
+        <section class="section admin-section admin-rooms-page admin-vertical-cards">
+          <div class="admin-rooms-hero">
+            <div class="admin-rooms-hero-text">
+              <span class="admin-pill">Rooms</span>
               <h2>Manage Rooms</h2>
-              <p>Create, update, or remove rooms.</p>
+              <p>Keep your spaces updated, priced, and ready for every booking.</p>
             </div>
-            <div class="admin-head-actions">
-              <div class="search-field">
-                <input
-                  class="search-input"
-                  type="search"
-                  placeholder="Search rooms"
-                  aria-label="Search rooms"
-                  data-search-input="admin-rooms"
-                />
-              </div>
-              <a class="btn" href="/admin">Back to dashboard</a>
+            <div class="admin-rooms-hero-actions">
               <a class="btn primary" href="/admin/rooms/new">Create Room</a>
+              <a class="btn ghost" href="/admin">Back to dashboard</a>
             </div>
           </div>
 
-          <div class="admin-cards">
+          <div class="admin-rooms-toolbar">
+            <div class="admin-rooms-stats">
+              <div class="admin-rooms-stat">
+                <span>Total rooms</span>
+                <strong><%= totalRooms %></strong>
+              </div>
+              <div class="admin-rooms-stat">
+                <span>Available</span>
+                <strong><%= availableRooms %></strong>
+              </div>
+              <div class="admin-rooms-stat">
+                <span>Unavailable</span>
+                <strong><%= unavailableRooms %></strong>
+              </div>
+            </div>
+            <div class="search-field">
+              <input
+                class="search-input"
+                type="search"
+                placeholder="Search rooms"
+                aria-label="Search rooms"
+                data-search-input="admin-rooms"
+              />
+            </div>
+          </div>
+
+          <div class="admin-rooms-grid">
             <% rooms.forEach(function(room) { %>
-              <div
+              <% const featureList = Array.isArray(room.features)
+                ? room.features
+                : String(room.features || "")
+                    .split(",")
+                    .map((item) => item.trim())
+                    .filter(Boolean); %>
+              <% const featureSearch = featureList.join(" "); %>
+              <% const visibleFeatures = featureList.slice(0, 4); %>
+              <% const extraFeatures = Math.max(0, featureList.length - visibleFeatures.length); %>
+              <article
                 class="admin-room-card"
                 data-search-item="admin-rooms"
-                data-search-text="<%= [room.name, room.subtitle, room.description, room.capacity, room.normalHourlyRate, room.peakHourlyRate, room.isAvailable ? 'available' : 'unavailable', (room.features || []).join(' ')].filter(Boolean).join(' ') %>"
+                data-search-text="<%= [room.name, room.subtitle, room.description, room.capacity, room.normalHourlyRate, room.peakHourlyRate, room.isAvailable ? 'available' : 'unavailable', featureSearch].filter(Boolean).join(' ') %>"
               >
                 <div class="admin-room-media">
                   <% if (room.image) { %>
@@ -46,6 +76,9 @@
                   <% } else { %>
                     <div class="admin-room-placeholder">No Image</div>
                   <% } %>
+                  <span class="admin-room-status <%= room.isAvailable ? 'available' : 'unavailable' %>">
+                    <%= room.isAvailable ? "Available" : "Unavailable" %>
+                  </span>
                 </div>
                 <div class="admin-room-body">
                   <div class="admin-room-header">
@@ -53,19 +86,34 @@
                       <h3><%= room.name %></h3>
                       <p><%= room.subtitle || "Gaming Room" %></p>
                     </div>
-                    <div class="admin-room-price">
-                      <span>Normal $<%= Number(room.normalHourlyRate).toFixed(2) %></span>
-                      <small>Peak $<%= Number(room.peakHourlyRate).toFixed(2) %>/hour</small>
+                    <div class="admin-room-rates">
+                      <span class="admin-room-rate">Normal $<%= Number(room.normalHourlyRate).toFixed(2) %></span>
+                      <span class="admin-room-rate peak">Peak $<%= Number(room.peakHourlyRate).toFixed(2) %>/hr</span>
                     </div>
                   </div>
+
                   <p class="admin-room-desc"><%= room.description || "No description yet." %></p>
+
                   <div class="admin-room-meta">
-                    <span>Capacity: <strong><%= room.capacity %></strong></span>
-                    <span>Status: <strong><%= room.isAvailable ? "Available" : "Unavailable" %></strong></span>
+                    <span class="admin-room-chip">Capacity: <strong><%= room.capacity %></strong></span>
+                    <span class="admin-room-chip <%= room.isAvailable ? 'status-available' : 'status-unavailable' %>">
+                      Status: <strong><%= room.isAvailable ? "Available" : "Unavailable" %></strong>
+                    </span>
                   </div>
 
+                  <% if (visibleFeatures.length) { %>
+                    <div class="admin-room-features">
+                      <% visibleFeatures.forEach(function(feature) { %>
+                        <span class="admin-room-feature"><%= feature %></span>
+                      <% }) %>
+                      <% if (extraFeatures > 0) { %>
+                        <span class="admin-room-feature admin-room-feature--more">+<%= extraFeatures %></span>
+                      <% } %>
+                    </div>
+                  <% } %>
+
                   <details class="admin-room-details">
-                    <summary>View details & edit</summary>
+                    <summary class="admin-room-summary">Edit room</summary>
                     <form class="admin-room-edit" action="/admin/rooms/<%= room.id %>" method="POST" enctype="multipart/form-data">
                       <input name="name" value="<%= room.name %>" placeholder="Name" required />
                       <input name="subtitle" value="<%= room.subtitle %>" placeholder="Subtitle" />
@@ -73,7 +121,7 @@
                       <input name="normal_hourly_rate" type="number" step="0.01" value="<%= room.normalHourlyRate %>" placeholder="Normal Hourly Rate" required />
                       <input name="peak_hourly_rate" type="number" step="0.01" value="<%= room.peakHourlyRate %>" placeholder="Peak Hourly Rate" required />
                       <textarea name="description" rows="2" placeholder="Description"><%= room.description %></textarea>
-                      <textarea name="features" rows="2" placeholder="Features (comma separated)"><%= room.features ? room.features.join(", ") : "" %></textarea>
+                      <textarea name="features" rows="2" placeholder="Features (comma separated)"><%= featureList.join(", ") %></textarea>
                       <label class="admin-inline-check">
                         <input type="checkbox" name="is_available" value="1" <%= room.isAvailable ? "checked" : "" %> />
                         Available
@@ -87,7 +135,7 @@
                     </form>
                   </details>
                 </div>
-              </div>
+              </article>
             <% }) %>
           </div>
           <div class="empty-state search-empty is-hidden" data-search-empty="admin-rooms">
@@ -101,4 +149,3 @@
     </div>
   </body>
 </html>
-

@@ -1,5 +1,12 @@
 const crypto = require("crypto");
-const { findByEmail, createUser, findById, updateUser } = require("../models/usersModel");
+const {
+  findByEmail,
+  createUser,
+  findById,
+  updateUser,
+  verifyPassword,
+  isPasswordHashed,
+} = require("../models/usersModel");
 const {
   createPasswordReset,
   findValidPasswordResetByToken,
@@ -10,6 +17,7 @@ const { sendEmail } = require("../models/emailService");
 
 const twoFaChallenges = {};
 const TWO_FA_EXPIRY_MS = 5 * 60 * 1000;
+const TWO_FA_RESEND_COOLDOWN_MS = 60 * 1000;
 const SUPER_ADMIN_EMAIL = "admin@admin.com";
 
 function isSuperAdmin(user) {
@@ -115,8 +123,11 @@ async function register(req, res) {
 async function login(req, res) {
   const { email, password } = req.body;
   const user = await findByEmail(email);
-  if (!user || user.password !== password) {
+  if (!user || !verifyPassword(password, user.password)) {
     return res.status(401).json({ error: "Invalid email or password" });
+  }
+  if (user && user.password && !isPasswordHashed(user.password)) {
+    updateUser(user.id, { password }).catch(() => {});
   }
   if (!user.is_active) {
     return res.status(403).json({ error: "Account is deactivated." });
@@ -134,6 +145,7 @@ async function login(req, res) {
     userId: user.id,
     code,
     expiresAt: Date.now() + TWO_FA_EXPIRY_MS,
+    lastSentAt: Date.now(),
   };
   try {
     const emailContent = buildOtpEmail({ name: user.name, code });
@@ -152,6 +164,7 @@ async function login(req, res) {
     requires2fa: true,
     challengeId,
     message: "A verification code was sent to your email.",
+    resendAfterMs: TWO_FA_RESEND_COOLDOWN_MS,
   });
   if (req.setSession) {
     req.setSession(user);
@@ -182,6 +195,62 @@ async function verifyTwoFactor(req, res) {
     req.setSession(user);
   }
   res.json({ user: sanitize(user) });
+}
+
+async function resendTwoFactor(req, res) {
+  const { challengeId } = req.body || {};
+  if (!challengeId) {
+    return res.status(400).json({ error: "Missing challenge id." });
+  }
+
+  const challenge = twoFaChallenges[challengeId];
+  if (!challenge) {
+    return res.status(400).json({ error: "2FA challenge not found. Please log in again." });
+  }
+
+  if (challenge.expiresAt < Date.now()) {
+    delete twoFaChallenges[challengeId];
+    return res.status(400).json({ error: "2FA challenge expired. Please log in again." });
+  }
+
+  const now = Date.now();
+  if (challenge.lastSentAt && now - challenge.lastSentAt < TWO_FA_RESEND_COOLDOWN_MS) {
+    const retryAfterMs = TWO_FA_RESEND_COOLDOWN_MS - (now - challenge.lastSentAt);
+    return res
+      .status(429)
+      .json({ error: "Please wait before requesting another code.", retryAfterMs });
+  }
+
+  const user = await findById(challenge.userId);
+  if (!user || !user.is_active) {
+    delete twoFaChallenges[challengeId];
+    return res.status(401).json({ error: "Unable to resend code. Please log in again." });
+  }
+
+  const code = generateOtp();
+  challenge.code = code;
+  challenge.expiresAt = now + TWO_FA_EXPIRY_MS;
+  challenge.lastSentAt = now;
+
+  try {
+    const emailContent = buildOtpEmail({ name: user.name, code });
+    await sendEmail({
+      to: user.email,
+      subject: emailContent.subject,
+      text: emailContent.text,
+      html: emailContent.html,
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ error: "Unable to send verification code. Please try again." });
+  }
+
+  return res.json({
+    ok: true,
+    message: "A new verification code was sent to your email.",
+    resendAfterMs: TWO_FA_RESEND_COOLDOWN_MS,
+  });
 }
 
 async function me(req, res) {
@@ -299,6 +368,7 @@ module.exports = {
   register,
   login,
   verifyTwoFactor,
+  resendTwoFactor,
   forgotPassword,
   resetPassword,
   logout,

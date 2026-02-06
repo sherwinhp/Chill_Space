@@ -41,12 +41,18 @@ function buildAddonItem(item) {
   const discountedPrice = discountEligible
     ? Number((basePrice * (1 - ROOM_ADDON_DISCOUNT_RATE)).toFixed(2))
     : basePrice;
+  const isAvailable = Boolean(item.isAvailable);
+  const isOrderable = typeof item.isOrderable === "boolean" ? item.isOrderable : isAvailable;
   return {
     id: item.id,
     name: item.name,
     category: item.category,
     description: item.description || "",
-    isAvailable: Boolean(item.isAvailable),
+    isAvailable,
+    isOrderable,
+    stockStatus: item.stockStatus || (isOrderable ? "available" : "unavailable"),
+    stockLabel: item.stockLabel || (isOrderable ? "Available" : "Unavailable"),
+    stockQty: item.stockQty ?? null,
     imageUrl: normalizeImageUrl(item.image),
     basePrice,
     discountedPrice,
@@ -87,6 +93,8 @@ async function showRoom(req, res) {
   const foodAndDrinks = addons.filter(
     (item) => item.category === "food" || item.category === "drink"
   );
+  const foods = addons.filter((item) => item.category === "food");
+  const drinks = addons.filter((item) => item.category === "drink");
   const themes = addons.filter((item) => item.category === "addon");
   const avgRating = stats ? Number(stats.avg_rating || 0) : 0;
   const reviewCount = stats ? Number(stats.review_count || 0) : 0;
@@ -99,6 +107,8 @@ async function showRoom(req, res) {
     addons: {
       discountRate: ROOM_ADDON_DISCOUNT_RATE,
       foodAndDrinks,
+      foods,
+      drinks,
       themes,
     },
     rating: {

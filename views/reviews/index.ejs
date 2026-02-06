@@ -3,8 +3,8 @@
   <%- include("../partials/header", { page: "reviews" }) %>
 
   <main>
-    <section class="section">
-      <div class="section-head reviews-head">
+    <section class="section reviews-page">
+      <div class="section-head reviews-head reviews-hero">
         <div>
           <h2>User Reviews</h2>
           <p>Read feedback about our rooms, food, and service.</p>
@@ -30,6 +30,7 @@
       <% if (reviews && reviews.length > 0) { %>
         <div class="reviews-grid">
           <% reviews.forEach(r => { %>
+            <% const avgRating = ((Number(r.rating) + Number(r.ratingFood) + Number(r.ratingService)) / 3).toFixed(1); %>
             <article
               class="review-card"
               data-search-item="reviews"
@@ -85,7 +86,8 @@
                   <% } %>
                 </div>
                 <div class="review-date">
-                  <%= r.date %>
+                  <span><%= r.date %></span>
+                  <span class="review-score"><strong><%= avgRating %></strong><small>Avg</small></span>
                 </div>
             </div>
             <p><%= r.text %></p>

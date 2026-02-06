@@ -99,6 +99,7 @@ CREATE TABLE `menu_items` (
   `description` text,
   `image_url` varchar(255) DEFAULT NULL,
   `is_available` tinyint(1) DEFAULT '1',
+  `stock_qty` int DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`item_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=latin1;
@@ -110,7 +111,7 @@ CREATE TABLE `menu_items` (
 
 LOCK TABLES `menu_items` WRITE;
 /*!40000 ALTER TABLE `menu_items` DISABLE KEYS */;
-INSERT INTO `menu_items` VALUES (1,'Pizza Party Box','food',25.00,'2 large pizzas with assorted toppings','/images/Pizza Party Box.png',1,'2026-01-26 03:21:11'),(2,'Snack Attack Bundle','food',12.00,'Chips, popcorn, candy & pretzels','/images/Snack Attack Bundle.jpg',1,'2026-01-26 03:21:11'),(3,'Wings & Fries Combo','food',18.00,'Crispy wings with seasoned fries','/images/Wings & Fries Combo.jpg',1,'2026-01-26 03:21:11'),(4,'Nachos Supreme','food',15.00,'Loaded nachos with all the toppings','/images/Nachos Supreme.jpg',1,'2026-01-26 03:21:11'),(5,'Burger Basket','food',22.00,'4 burgers with fries','/images/Burger Basket.jpg',1,'2026-01-26 03:21:11'),(6,'Coke Float','drink',4.00,'Homemade coke topped off with vanilla ice cream','/uploads/1769496400417-2705251.png',1,'2026-01-27 06:46:40');
+INSERT INTO `menu_items` (`item_id`, `name`, `category`, `price`, `description`, `image_url`, `is_available`, `created_at`) VALUES (1,'Pizza Party Box','food',25.00,'2 large pizzas with assorted toppings','/images/Pizza Party Box.png',1,'2026-01-26 03:21:11'),(2,'Snack Attack Bundle','food',12.00,'Chips, popcorn, candy & pretzels','/images/Snack Attack Bundle.jpg',1,'2026-01-26 03:21:11'),(3,'Wings & Fries Combo','food',18.00,'Crispy wings with seasoned fries','/images/Wings & Fries Combo.jpg',1,'2026-01-26 03:21:11'),(4,'Nachos Supreme','food',15.00,'Loaded nachos with all the toppings','/images/Nachos Supreme.jpg',1,'2026-01-26 03:21:11'),(5,'Burger Basket','food',22.00,'4 burgers with fries','/images/Burger Basket.jpg',1,'2026-01-26 03:21:11'),(6,'Coke Float','drink',4.00,'Homemade coke topped off with vanilla ice cream','/uploads/1769496400417-2705251.png',1,'2026-01-27 06:46:40');
 /*!40000 ALTER TABLE `menu_items` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -503,7 +504,7 @@ CREATE TABLE `wallet_transactions` (
   `type` enum('topup','payment','refund','adjustment','reward') NOT NULL,
   `amount_cents` bigint NOT NULL,
   `status` enum('pending','completed','failed','cancelled') NOT NULL DEFAULT 'pending',
-  `provider` enum('paypal','wallet','system') NOT NULL,
+  `provider` enum('paypal','wallet','system','hitpay','nets','grabpay','stripe') NOT NULL,
   `provider_ref` varchar(255) DEFAULT NULL,
   `metadata` json DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -660,6 +661,60 @@ UNLOCK TABLES;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+--
+-- Compliance / audit extensions
+--
+ALTER TABLE users
+  ADD COLUMN kyc_status enum('unverified','pending','verified','rejected','blocked') DEFAULT 'unverified',
+  ADD COLUMN kyc_checked_at datetime DEFAULT NULL;
+
+CREATE TABLE IF NOT EXISTS watchlist (
+  watch_id int NOT NULL AUTO_INCREMENT,
+  name varchar(120) DEFAULT NULL,
+  email varchar(120) DEFAULT NULL,
+  contact_number varchar(40) DEFAULT NULL,
+  reason varchar(255) DEFAULT NULL,
+  created_at datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (watch_id),
+  UNIQUE KEY uq_watch_email (email),
+  KEY idx_watch_name (name),
+  KEY idx_watch_contact (contact_number)
+);
+
+CREATE TABLE IF NOT EXISTS compliance_flags (
+  flag_id int NOT NULL AUTO_INCREMENT,
+  user_id int DEFAULT NULL,
+  related_type enum('transaction','refund','account','payment') DEFAULT 'transaction',
+  related_id int DEFAULT NULL,
+  severity enum('low','medium','high') DEFAULT 'medium',
+  reason varchar(255) NOT NULL,
+  details text,
+  created_at datetime DEFAULT CURRENT_TIMESTAMP,
+  resolved_at datetime DEFAULT NULL,
+  resolved_by int DEFAULT NULL,
+  PRIMARY KEY (flag_id),
+  KEY idx_compliance_user (user_id),
+  KEY idx_compliance_related (related_type, related_id),
+  CONSTRAINT fk_compliance_user FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE SET NULL,
+  CONSTRAINT fk_compliance_resolved_by FOREIGN KEY (resolved_by) REFERENCES users (user_id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  log_id int NOT NULL AUTO_INCREMENT,
+  actor_id int DEFAULT NULL,
+  actor_role varchar(20) DEFAULT 'admin',
+  action varchar(80) NOT NULL,
+  target_type varchar(40) DEFAULT NULL,
+  target_id int DEFAULT NULL,
+  details text,
+  ip_address varchar(45) DEFAULT NULL,
+  created_at datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (log_id),
+  KEY idx_audit_actor (actor_id),
+  KEY idx_audit_target (target_type, target_id),
+  CONSTRAINT fk_audit_actor FOREIGN KEY (actor_id) REFERENCES users (user_id) ON DELETE SET NULL
+);
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- Dump completed on 2026-02-05 16:36:01

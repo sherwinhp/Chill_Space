@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Transaction Log</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("../partials/admin-header", { page: "admin-transactions" }) %>
+
+      <main>
+        <section class="section admin-section">
+          <div class="section-head split">
+            <div>
+              <h2>Transaction Log</h2>
+              <p>
+                All incoming payments and outgoing refunds with AI-style risk signals
+                (rule-based).
+              </p>
+            </div>
+            <div class="section-actions">
+              <div class="search-field">
+                <input
+                  class="search-input"
+                  type="search"
+                  placeholder="Search transactions"
+                  aria-label="Search transactions"
+                  data-search-input="admin-transactions"
+                />
+              </div>
+              <a class="btn ghost" href="/admin">Back to dashboard</a>
+            </div>
+          </div>
+
+          <div class="admin-metrics">
+            <div class="admin-metric-card">
+              <p>Incoming</p>
+              <strong><%= totals.incomingCount %> payments</strong>
+              <span>$<%= totals.incomingTotal.toFixed(2) %></span>
+            </div>
+            <div class="admin-metric-card">
+              <p>Outgoing</p>
+              <strong><%= totals.outgoingCount %> refunds</strong>
+              <span>-$<%= totals.outgoingTotal.toFixed(2) %></span>
+            </div>
+            <div class="admin-metric-card">
+              <p>Net</p>
+              <strong>
+                $<%= (totals.incomingTotal - totals.outgoingTotal).toFixed(2) %>
+              </strong>
+              <span>Incoming - outgoing</span>
+            </div>
+          </div>
+
+          <% if (!entries || !entries.length) { %>
+            <div class="empty-state">
+              <h3>No transactions yet.</h3>
+              <p>Incoming payments and refund requests will appear here.</p>
+            </div>
+          <% } else { %>
+            <div class="admin-table admin-log-table">
+              <div class="admin-table-row admin-header admin-log-row admin-log-head">
+                <span>Type</span>
+                <span>Date</span>
+                <span>User</span>
+                <span>Details</span>
+                <span>Amount</span>
+                <span>Provider</span>
+                <span>Risk</span>
+              </div>
+              <% entries.forEach(function(entry) { %>
+                <div
+                  class="admin-table-row admin-log-row"
+                  data-search-item="admin-transactions"
+                  data-search-text="<%= entry.searchText %>"
+                >
+                  <div class="log-cell">
+                    <span class="log-type <%= entry.type === 'IN' ? 'log-in' : 'log-out' %>">
+                      <%= entry.type === 'IN' ? 'IN' : 'OUT' %>
+                    </span>
+                  </div>
+                  <div class="log-cell log-date">
+                    <strong><%= entry.time ? new Date(entry.time).toLocaleDateString() : "-" %></strong>
+                    <small><%= entry.time ? new Date(entry.time).toLocaleTimeString() : "-" %></small>
+                  </div>
+                  <div class="log-cell log-user">
+                    <strong><%= entry.userName %></strong>
+                    <small><%= entry.userEmail %></small>
+                  </div>
+                  <div class="log-cell log-details">
+                    <strong><%= entry.description %></strong>
+                    <div class="log-details-row">
+                      <span class="status-pill">
+                        <%= entry.status %>
+                      </span>
+                      <% if (entry.type === "IN") { %>
+                        <span class="log-tag"><%= entry.itemCount %> items</span>
+                        <span class="log-tag"><%= entry.totalQty %> qty</span>
+                      <% } %>
+                    </div>
+                  </div>
+                  <div class="log-cell log-amount <%= entry.type === 'OUT' ? 'negative' : '' %>">
+                    <strong><%= entry.type === 'OUT' ? '-' : '' %>$<%= Number(entry.amount || 0).toFixed(2) %></strong>
+                    <small><%= entry.currency %></small>
+                  </div>
+                  <div class="log-cell log-provider">
+                    <strong><%= entry.provider %></strong>
+                    <small class="log-ref"><%= entry.reference || "-" %></small>
+                  </div>
+                  <div class="log-cell risk-cell">
+                    <span class="risk-pill risk-<%= entry.analysis.level.toLowerCase() %>">
+                      <%= entry.analysis.level %> <%= entry.analysis.score %>
+                    </span>
+                    <small><%= entry.analysis.reasons.join(", ") %></small>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+            <div class="empty-state search-empty is-hidden" data-search-empty="admin-transactions">
+              <h3>No transactions match your search.</h3>
+              <p>Try another keyword or clear the search.</p>
+            </div>
+          <% } %>
+        </section>
+      </main>
+
+      <%- include("../partials/footer") %>
+    </div>
+  </body>
+</html>

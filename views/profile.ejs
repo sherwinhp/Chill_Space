@@ -26,6 +26,9 @@
               <h2>Your Profile</h2>
               <p>Update your details to keep bookings and reviews accurate.</p>
             </div>
+            <div class="profile-head-actions">
+              <a class="btn ghost" href="/profile/password">Change password</a>
+            </div>
           </div>
 
           <% if (!user) { %>
@@ -35,53 +38,64 @@
               <a class="btn primary" href="/login">Login</a>
             </div>
           <% } else { %>
-            <form class="profile-form" action="/profile" method="POST" enctype="multipart/form-data">
-              <div class="profile-avatar-row">
-                <div class="profile-avatar">
-                  <% if (user.avatar_url) { %>
-                    <img src="<%= user.avatar_url %>" alt="<%= user.name %>" />
-                  <% } else { %>
-                    <span><%= user.name ? user.name.charAt(0).toUpperCase() : "U" %></span>
-                  <% } %>
+            <form class="profile-form profile-card" action="/profile" method="POST" enctype="multipart/form-data">
+              <div class="profile-layout">
+                <div class="profile-panel">
+                  <div class="profile-avatar">
+                    <% if (user.avatar_url) { %>
+                      <img src="<%= user.avatar_url %>" alt="<%= user.name %>" />
+                    <% } else { %>
+                      <span><%= user.name ? user.name.charAt(0).toUpperCase() : "U" %></span>
+                    <% } %>
+                  </div>
+                  <div class="profile-panel-info">
+                    <h3><%= user.name %></h3>
+                    <p><%= user.email %></p>
+                  </div>
+                  <label class="field file-field">
+                    <span>Profile picture</span>
+                    <input type="file" name="avatar" accept="image/*" />
+                  </label>
+                  <small class="profile-hint">PNG or JPG. Best size 400x400.</small>
                 </div>
-                <label class="field">
-                  <span>Profile Picture</span>
-                  <input type="file" name="avatar" accept="image/*" />
-                </label>
+
+                <div class="profile-fields">
+                  <input type="hidden" name="current_avatar_url" value="<%= user.avatar_url || '' %>" />
+                  <div class="profile-grid">
+                    <label class="field">
+                      <span>Name</span>
+                      <input type="text" name="name" value="<%= user.name %>" required />
+                    </label>
+                    <label class="field">
+                      <span>Email</span>
+                      <input type="email" name="email" value="<%= user.email %>" required />
+                    </label>
+                    <label class="field">
+                      <span>Contact Number</span>
+                      <input type="text" name="contact_number" value="<%= user.contact_number || '' %>" />
+                    </label>
+                    <label class="field span-2">
+                      <span>Address</span>
+                      <input type="text" name="address" value="<%= user.address || '' %>" />
+                    </label>
+                    <label class="field">
+                      <span>Birth Date</span>
+                      <input
+                        type="date"
+                        name="birth_date"
+                        value="<%= user.birth_date || '' %>"
+                      />
+                    </label>
+                  </div>
+
+                  <div class="profile-footer">
+                    <% if (message) { %>
+                      <p class="auth-status"><%= message %></p>
+                    <% } %>
+                    <button class="btn primary" type="submit">Save changes</button>
+                  </div>
+                </div>
               </div>
-              <input type="hidden" name="current_avatar_url" value="<%= user.avatar_url || '' %>" />
-              <label class="field">
-                <span>Name</span>
-                <input type="text" name="name" value="<%= user.name %>" required />
-              </label>
-              <label class="field">
-                <span>Email</span>
-                <input type="email" name="email" value="<%= user.email %>" required />
-              </label>
-              <label class="field">
-                <span>Password</span>
-                <input type="password" name="password" placeholder="Leave blank to keep current" />
-              </label>
-              <label class="field">
-                <span>Address</span>
-                <input type="text" name="address" value="<%= user.address || '' %>" />
-              </label>
-              <label class="field">
-                <span>Contact Number</span>
-                <input type="text" name="contact_number" value="<%= user.contact_number || '' %>" />
-              </label>
-              <label class="field">
-                <span>Birth Date (DD/MM/YYYY)</span>
-                <input
-                  type="date"
-                  name="birth_date"
-                  value="<%= user.birth_date ? new Date(user.birth_date).toISOString().slice(0, 10) : '' %>"
-                />
-              </label>
-              <% if (message) { %>
-                <p class="auth-status"><%= message %></p>
-              <% } %>
-              <button class="btn primary full" type="submit">Save changes</button>
             </form>
           <% } %>
         </section>

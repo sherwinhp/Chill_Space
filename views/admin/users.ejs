@@ -12,7 +12,7 @@
       <%- include("../partials/admin-header", { page: "admin-users" }) %>
 
       <main>
-        <section class="section admin-section">
+        <section class="section admin-section admin-vertical-cards">
           <div class="section-head split">
             <div>
               <h2>Manage Users</h2>
@@ -46,12 +46,14 @@
                 <p>Create your first user account.</p>
               </div>
             <% } else { %>
-              <% users.forEach(function(user) { %>
+                <% users.forEach(function(user) { %>
                 <% const status = user.is_active ? user.role : "inactive"; %>
+                <% const kycStatus = user.kyc_status || "unverified"; %>
+                <% const kycClass = kycStatus === "verified" ? "available" : (kycStatus === "blocked" || kycStatus === "rejected") ? "unavailable" : "secondary"; %>
                 <article
                   class="admin-menu-card"
                   data-admin-category="<%= status %>"
-                  data-search-text="<%= [user.name, user.email, user.role, user.id, user.is_active ? 'active' : 'inactive'].filter(Boolean).join(' ') %>"
+                  data-search-text="<%= [user.name, user.email, user.role, user.id, user.is_active ? 'active' : 'inactive', kycStatus].filter(Boolean).join(' ') %>"
                 >
                   <div class="admin-menu-media">
                     <% if (user.avatar_url) { %>
@@ -75,6 +77,7 @@
                       <span class="admin-menu-pill <%= user.is_active ? "available" : "unavailable" %>">
                         <%= user.is_active ? "Active" : "Inactive" %>
                       </span>
+                      <span class="admin-menu-pill <%= kycClass %>">KYC: <%= kycStatus %></span>
                     </div>
                     <details class="admin-menu-edit">
                       <summary class="btn">Edit user</summary>
@@ -90,6 +93,13 @@
                           <select name="is_active">
                             <option value="1" <%= user.is_active ? 'selected' : '' %>>Active</option>
                             <option value="0" <%= user.is_active ? '' : 'selected' %>>Deactivate</option>
+                          </select>
+                          <select name="kyc_status">
+                            <option value="unverified" <%= kycStatus === 'unverified' ? 'selected' : '' %>>KYC: Unverified</option>
+                            <option value="pending" <%= kycStatus === 'pending' ? 'selected' : '' %>>KYC: Pending</option>
+                            <option value="verified" <%= kycStatus === 'verified' ? 'selected' : '' %>>KYC: Verified</option>
+                            <option value="rejected" <%= kycStatus === 'rejected' ? 'selected' : '' %>>KYC: Rejected</option>
+                            <option value="blocked" <%= kycStatus === 'blocked' ? 'selected' : '' %>>KYC: Blocked</option>
                           </select>
                         </div>
                         <div class="admin-menu-edit-actions">

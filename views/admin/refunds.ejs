@@ -16,7 +16,7 @@
           <div class="section-head split">
             <div>
               <h2>Refund Requests</h2>
-              <p>Approve or deny booking refund requests.</p>
+              <p>Approve or deny order and booking refund requests.</p>
             </div>
             <div class="section-actions">
               <a class="btn" href="/admin">Back to dashboard</a>
@@ -31,23 +31,30 @@
           <% } else { %>
             <div class="admin-booking-grid">
               <% refunds.forEach(function(refund) { %>
+                <% const isBooking = !!refund.bookingId; %>
+                <% const refundTitle = isBooking ? `Booking #${refund.bookingId} - ${refund.booking.roomName}` : `Order #${refund.transaction ? refund.transaction.id : refund.transactionId}`; %>
+                <% const refundTotal = isBooking ? Number(refund.booking.totalPrice || 0) : Number(refund.transaction ? refund.transaction.totalAmount : (refund.requestedAmount || 0)); %>
                 <div class="admin-booking-card admin-refund-card">
                   <div class="admin-booking-body">
                     <div class="admin-booking-title">
                       <div>
-                        <h3>Booking #<%= refund.bookingId %> - <%= refund.booking.roomName %></h3>
+                        <h3><%= refundTitle %></h3>
                         <p><%= refund.user.name %> - <%= refund.user.email %></p>
                       </div>
                       <div class="admin-booking-price">
-                        <strong>$<%= Number(refund.booking.totalPrice || 0).toFixed(2) %></strong>
+                        <strong>$<%= refundTotal.toFixed(2) %></strong>
                         <span>Total</span>
                       </div>
                     </div>
 
                     <div class="refund-meta">
-                      <span><strong>Start:</strong> <%= new Date(refund.booking.startTime).toLocaleString() %></span>
-                      <span><strong>End:</strong> <%= new Date(refund.booking.endTime).toLocaleString() %></span>
-                      <span><strong>Requested:</strong> $<%= Number(refund.requestedAmount || refund.booking.totalPrice || 0).toFixed(2) %></span>
+                      <% if (isBooking) { %>
+                        <span><strong>Start:</strong> <%= new Date(refund.booking.startTime).toLocaleString() %></span>
+                        <span><strong>End:</strong> <%= new Date(refund.booking.endTime).toLocaleString() %></span>
+                      <% } else { %>
+                        <span><strong>Order date:</strong> <%= refund.transaction && refund.transaction.createdAt ? new Date(refund.transaction.createdAt).toLocaleString() : "-" %></span>
+                      <% } %>
+                      <span><strong>Requested:</strong> $<%= Number(refund.requestedAmount || refundTotal || 0).toFixed(2) %></span>
                       <span><strong>Payment:</strong> <%= refund.paymentProvider || refund.provider || "Unknown" %></span>
                       <span><strong>Reference:</strong> <%= refund.paymentProviderRef || refund.providerRef || "Not found" %></span>
                       <span><strong>Refund Ref:</strong> <%= refund.refundProviderRef || "Pending" %></span>
@@ -63,13 +70,13 @@
                         type="button"
                         data-refund-detail
                         data-refund-id="<%= refund.id %>"
-                        data-refund-booking-id="<%= refund.bookingId %>"
-                        data-refund-room="<%= refund.booking.roomName %>"
+                        data-refund-booking-id="<%= refund.bookingId || '' %>"
+                        data-refund-room="<%= refund.booking ? refund.booking.roomName : '' %>"
                         data-refund-user="<%= refund.user.name %>"
                         data-refund-email="<%= refund.user.email %>"
-                        data-refund-start="<%= refund.booking.startTime %>"
-                        data-refund-end="<%= refund.booking.endTime %>"
-                        data-refund-requested="<%= Number(refund.requestedAmount || refund.booking.totalPrice || 0).toFixed(2) %>"
+                        data-refund-start="<%= refund.booking ? refund.booking.startTime : '' %>"
+                        data-refund-end="<%= refund.booking ? refund.booking.endTime : '' %>"
+                        data-refund-requested="<%= Number(refund.requestedAmount || refundTotal || 0).toFixed(2) %>"
                         data-refund-approved="<%= refund.approvedAmount ? Number(refund.approvedAmount).toFixed(2) : '' %>"
                         data-refund-status="<%= refund.status %>"
                         data-refund-reason="<%= refund.reasonText || '' %>"
@@ -83,6 +90,9 @@
                         data-refund-created="<%= refund.createdAt || '' %>"
                         data-refund-approved-at="<%= refund.approvedAt || '' %>"
                         data-refund-denied-at="<%= refund.deniedAt || '' %>"
+                        data-refund-order-id="<%= refund.transaction ? refund.transaction.id : refund.transactionId || '' %>"
+                        data-refund-order-total="<%= refund.transaction ? Number(refund.transaction.totalAmount || 0).toFixed(2) : '' %>"
+                        data-refund-order-date="<%= refund.transaction ? refund.transaction.createdAt || '' : '' %>"
                       >
                         View details
                       </button>
@@ -103,7 +113,7 @@
 
                     <% if (refund.status === "pending" || refund.status === "failed") { %>
                       <form class="admin-actions refund-actions" action="/admin/refunds/<%= refund.id %>/approve" method="POST">
-                        <input type="number" name="approved_amount" step="0.01" min="0.01" max="<%= Number(refund.requestedAmount || refund.booking.totalPrice || 0).toFixed(2) %>" placeholder="Approve amount (optional)" />
+                        <input type="number" name="approved_amount" step="0.01" min="0.01" max="<%= Number(refund.requestedAmount || refundTotal || 0).toFixed(2) %>" placeholder="Approve amount (optional)" />
                         <input type="text" name="admin_note" placeholder="Admin note (optional)" />
                         <button class="btn" type="submit">Approve</button>
                       </form>
@@ -133,13 +143,18 @@
       </div>
       <div class="drawer-body">
         <div class="drawer-section">
-          <h4>Guest & Booking</h4>
+          <h4>Guest & Order</h4>
           <p><strong>Guest:</strong> <span data-refund-guest></span></p>
           <p><strong>Email:</strong> <span data-refund-email></span></p>
-          <p><strong>Booking:</strong> <span data-refund-booking></span></p>
-          <p><strong>Room:</strong> <span data-refund-room></span></p>
-          <p><strong>Start:</strong> <span data-refund-start></span></p>
-          <p><strong>End:</strong> <span data-refund-end></span></p>
+          <p><strong>Order:</strong> <span data-refund-order></span></p>
+          <p><strong>Order total:</strong> <span data-refund-order-total></span></p>
+          <p><strong>Order date:</strong> <span data-refund-order-date></span></p>
+          <div data-refund-booking-wrap>
+            <p><strong>Booking:</strong> <span data-refund-booking></span></p>
+            <p><strong>Room:</strong> <span data-refund-room></span></p>
+            <p><strong>Start:</strong> <span data-refund-start></span></p>
+            <p><strong>End:</strong> <span data-refund-end></span></p>
+          </div>
         </div>
         <div class="drawer-section">
           <h4>Refund Details</h4>
@@ -195,10 +210,26 @@
         drawer.querySelector("[data-refund-title]").textContent = `Refund #${data.refundId}`;
         drawer.querySelector("[data-refund-guest]").textContent = data.refundUser || "-";
         drawer.querySelector("[data-refund-email]").textContent = data.refundEmail || "-";
-        drawer.querySelector("[data-refund-booking]").textContent = `#${data.refundBookingId}`;
+        const bookingWrap = drawer.querySelector("[data-refund-booking-wrap]");
+        const hasBooking = data.refundBookingId && String(data.refundBookingId).trim();
+        drawer.querySelector("[data-refund-order]").textContent = data.refundOrderId
+          ? `#${data.refundOrderId}`
+          : "-";
+        drawer.querySelector("[data-refund-order-total]").textContent = data.refundOrderTotal
+          ? `$${Number(data.refundOrderTotal).toFixed(2)}`
+          : "-";
+        drawer.querySelector("[data-refund-order-date]").textContent = formatDateTime(
+          data.refundOrderDate
+        );
+        drawer.querySelector("[data-refund-booking]").textContent = hasBooking
+          ? `#${data.refundBookingId}`
+          : "-";
         drawer.querySelector("[data-refund-room]").textContent = data.refundRoom || "-";
         drawer.querySelector("[data-refund-start]").textContent = formatDateTime(data.refundStart);
         drawer.querySelector("[data-refund-end]").textContent = formatDateTime(data.refundEnd);
+        if (bookingWrap) {
+          bookingWrap.classList.toggle("is-hidden", !hasBooking);
+        }
         drawer.querySelector("[data-refund-status]").textContent = data.refundStatus || "-";
         drawer.querySelector("[data-refund-requested]").textContent = data.refundRequested || "-";
         drawer.querySelector("[data-refund-approved]").textContent = data.refundApproved
@@ -277,6 +308,9 @@
             refundCreated: trigger.dataset.refundCreated,
             refundApprovedAt: trigger.dataset.refundApprovedAt,
             refundDeniedAt: trigger.dataset.refundDeniedAt,
+            refundOrderId: trigger.dataset.refundOrderId,
+            refundOrderTotal: trigger.dataset.refundOrderTotal,
+            refundOrderDate: trigger.dataset.refundOrderDate,
           });
         });
       });

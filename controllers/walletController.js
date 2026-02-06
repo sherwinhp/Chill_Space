@@ -4,10 +4,12 @@ const { createNetsQr, getTxnStatus } = require("../services/netService");
 const {
   createGrabPayCheckoutSession,
   retrieveCheckoutSession,
+  createCardPaymentIntent,
   createCardPaymentIntentWithPaymentMethod,
   confirmCardPaymentIntent,
 } = require("../services/stripe");
 const { findById } = require("../models/usersModel");
+const { getTotalSpendCents } = require("../models/transactionsModel");
 const {
   listWalletTransactions,
   getWalletBalanceCents,
@@ -24,6 +26,18 @@ const {
 
 const MIN_TOPUP_CENTS = 100;
 const MAX_TOPUP_CENTS = 50000;
+const CASHBACK_RATE_BY_TIER = {
+  Bronze: 0.02,
+  Silver: 0.03,
+  Gold: 0.05,
+};
+
+function parseExpiryInput(expiry) {
+  if (!expiry || typeof expiry !== "string") return { expMonth: null, expYear: null };
+  const match = expiry.trim().match(/^(\d{1,2})\s*\/\s*(\d{2,4})$/);
+  if (!match) return { expMonth: null, expYear: null };
+  return { expMonth: match[1], expYear: match[2] };
+}
 
 function requireUser(req, res, options = {}) {
   if (req.session && req.session.userId) return req.session.userId;
@@ -67,14 +81,23 @@ async function renderWallet(req, res) {
   if (!userId) return;
   try {
     await syncWalletStateForUser(userId);
-    const transactions = await listWalletTransactions(userId, 20);
-    const availableCents = await getWalletBalanceCents(userId);
-    const pendingCents = await getWalletPendingBalanceCents(userId);
-    const user = await findById(userId);
+    const [transactions, availableCents, pendingCents, user, totalSpentCents] =
+      await Promise.all([
+        listWalletTransactions(userId, 20),
+        getWalletBalanceCents(userId),
+        getWalletPendingBalanceCents(userId),
+        findById(userId),
+        getTotalSpendCents(userId),
+      ]);
+    const tierName = user ? user.membership_tier : "Bronze";
+    const cashbackRate =
+      CASHBACK_RATE_BY_TIER[tierName] ?? CASHBACK_RATE_BY_TIER.Bronze;
     res.render("wallet", {
       walletBalance: Number(availableCents || 0),
       walletPending: Number(pendingCents || 0),
-      membershipTier: user ? user.membership_tier : "Bronze",
+      membershipTier: tierName,
+      cashbackRate,
+      totalSpentCents: Number(totalSpentCents || 0),
       transactions,
     });
   } catch (error) {
@@ -471,28 +494,63 @@ async function createStripeCardTopup(req, res) {
     return res.status(400).json({ error: "Top-up amount must be between $1.00 and $500.00." });
   }
 
-  const paymentMethodId = req.body?.payment_method_id;
-  if (!paymentMethodId) {
-    return res.status(400).json({ error: "Missing Stripe payment method." });
-  }
+  const body = req.body || {};
+  const paymentMethodId = body.payment_method_id;
+  const billing = {
+    name: body.card_name || req.session?.name,
+    email: body.card_email || req.session?.email,
+    country: body.billing_country || null,
+    postalCode: body.postal_code || null,
+  };
+  const ipCountry = req.headers["cf-ipcountry"] || req.headers["x-country-code"] || null;
 
   let walletTransactionId = null;
   try {
     walletTransactionId = await createPendingTopup(userId, amountCents, "stripe", {
       source: "wallet_topup",
     });
-    const result = await createCardPaymentIntentWithPaymentMethod({
-      amount: amountCents / 100,
-      currency: "sgd",
-      paymentMethodId,
-      userId,
-      description: "Wallet top-up",
-      metadata: {
-        wallet_topup: "1",
-        wallet_transaction_id: String(walletTransactionId),
-      },
-      returnUrl: `${buildBaseUrl(req)}/wallet?topup=stripe_return`,
-    });
+    let result;
+    if (paymentMethodId) {
+      result = await createCardPaymentIntentWithPaymentMethod({
+        amount: amountCents / 100,
+        currency: "sgd",
+        paymentMethodId,
+        billing,
+        userId,
+        description: "Wallet top-up",
+        metadata: {
+          wallet_topup: "1",
+          wallet_transaction_id: String(walletTransactionId),
+        },
+        ipCountry,
+        returnUrl: `${buildBaseUrl(req)}/wallet?topup=stripe_return`,
+      });
+    } else {
+      const parsedExpiry = parseExpiryInput(body.card_expiry || "");
+      const card = {
+        number: body.card_number,
+        expMonth: body.card_exp_month ?? parsedExpiry.expMonth,
+        expYear: body.card_exp_year ?? parsedExpiry.expYear,
+        cvc: body.cvc || body.card_cvc || body.card_cvv,
+      };
+      if (!card.number || !card.expMonth || !card.expYear || !card.cvc) {
+        return res.status(400).json({ error: "Missing card details." });
+      }
+      result = await createCardPaymentIntent({
+        amount: amountCents / 100,
+        currency: "sgd",
+        card,
+        billing,
+        description: "Wallet top-up",
+        metadata: {
+          wallet_topup: "1",
+          wallet_transaction_id: String(walletTransactionId),
+        },
+        userId,
+        ipCountry,
+        returnUrl: `${buildBaseUrl(req)}/wallet?topup=stripe_return`,
+      });
+    }
 
     await bindProviderRef(walletTransactionId, userId, result.paymentIntentId, {
       source: "wallet_topup",

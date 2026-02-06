@@ -1,6 +1,7 @@
 const db = require("../db");
 const { listPromotions, createPromotion, updatePromotion, deletePromotion } = require("../models/promotionsDbModel");
 const { addCartItem, listCartItems, migrateSessionCartToUser } = require("../models/cartModel");
+const { logAdminAction } = require("../services/auditService");
 
 function getOwner(req) {
   const userId = req.session ? req.session.userId : null;
@@ -263,39 +264,97 @@ async function adminCreateForm(req, res) {
 }
 
 async function adminCreate(req, res) {
+  const validation = validatePromotionPayload(req.body);
+  if (!validation.ok) {
+    return res.status(400).send(validation.errors.join(" "));
+  }
   const imageUrl = req.file ? `/uploads/${req.file.filename}` : req.body.image_url;
   await createPromotion({
-    title: req.body.title,
-    description: req.body.description,
-    code: req.body.code,
-    discount_percent: Number(req.body.discount_percent),
-    min_total: Number(req.body.min_total),
-    start_date: req.body.start_date,
-    end_date: req.body.end_date,
+    title: validation.payload.title,
+    description: validation.payload.description,
+    code: validation.payload.code,
+    discount_percent: validation.payload.discount_percent,
+    min_total: validation.payload.min_total,
+    start_date: validation.payload.start_date,
+    end_date: validation.payload.end_date,
     image_url: imageUrl,
-    is_hidden: String(req.body.is_hidden || "0") === "1",
+    is_hidden: validation.payload.is_hidden,
   });
+  await logAdminAction(req, "promotion.create", "promotion", null, req.body.code || req.body.title || null);
   res.redirect("/admin/promotions");
 }
 
+function parseDateInput(value) {
+  if (!value) return null;
+  const dateValue = new Date(value);
+  if (Number.isNaN(dateValue.getTime())) return null;
+  return value;
+}
+
+function validatePromotionPayload(body = {}) {
+  const errors = [];
+  const title = String(body.title || "").trim();
+  if (!title) errors.push("Title is required.");
+  const code = normalizeCode(body.code || "");
+  const discountPercent = Number(body.discount_percent);
+  if (!Number.isFinite(discountPercent) || discountPercent <= 0 || discountPercent > 100) {
+    errors.push("Discount percent must be between 1 and 100.");
+  }
+  const minTotalRaw = body.min_total;
+  const minTotal = minTotalRaw === "" || minTotalRaw === null ? 0 : Number(minTotalRaw);
+  if (!Number.isFinite(minTotal) || minTotal < 0) {
+    errors.push("Minimum total must be 0 or greater.");
+  }
+  const startDate = parseDateInput(body.start_date);
+  const endDate = parseDateInput(body.end_date);
+  if (!startDate || !endDate) {
+    errors.push("Start and end dates are required.");
+  } else if (new Date(endDate) < new Date(startDate)) {
+    errors.push("End date must be on or after start date.");
+  }
+  const description = String(body.description || "").trim();
+  const isHidden = String(body.is_hidden || "0") === "1";
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    payload: {
+      title,
+      code: code || null,
+      discount_percent: discountPercent,
+      min_total: minTotal,
+      start_date: startDate,
+      end_date: endDate,
+      description,
+      is_hidden: isHidden,
+    },
+  };
+}
+
 async function adminEdit(req, res) {
+  const validation = validatePromotionPayload(req.body);
+  if (!validation.ok) {
+    return res.status(400).send(validation.errors.join(" "));
+  }
   const imageUrl = req.file ? `/uploads/${req.file.filename}` : req.body.current_image_url;
   await updatePromotion(req.params.id, {
-    title: req.body.title,
-    description: req.body.description,
-    code: req.body.code,
-    discount_percent: Number(req.body.discount_percent),
-    min_total: Number(req.body.min_total),
-    start_date: req.body.start_date,
-    end_date: req.body.end_date,
+    title: validation.payload.title,
+    description: validation.payload.description,
+    code: validation.payload.code,
+    discount_percent: validation.payload.discount_percent,
+    min_total: validation.payload.min_total,
+    start_date: validation.payload.start_date,
+    end_date: validation.payload.end_date,
     image_url: imageUrl,
-    is_hidden: String(req.body.is_hidden || "0") === "1",
+    is_hidden: validation.payload.is_hidden,
   });
+  await logAdminAction(req, "promotion.update", "promotion", Number(req.params.id), req.body.code || req.body.title || null);
   res.redirect("/admin/promotions");
 }
 
 async function adminDelete(req, res) {
   await deletePromotion(req.params.id);
+  await logAdminAction(req, "promotion.delete", "promotion", Number(req.params.id), null);
   res.redirect("/admin/promotions");
 }
 

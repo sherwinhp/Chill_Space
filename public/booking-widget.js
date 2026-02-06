@@ -16,6 +16,11 @@ const slotsEl = document.querySelector("[data-booking-slots]");
 const summaryEl = document.querySelector("[data-booking-summary]");
 const statusEl = document.querySelector("[data-booking-status]");
 const addButton = document.querySelector("[data-booking-add]");
+const packageRoot = document.querySelector("[data-addon-package]");
+const addonTabs = packageRoot ? packageRoot.querySelectorAll("[data-addon-tab]") : [];
+const addonPanels = packageRoot ? packageRoot.querySelectorAll("[data-addon-panel]") : [];
+const addonCards = packageRoot ? packageRoot.querySelectorAll("[data-addon-select-card]") : [];
+const addonQuantities = new Map();
 
 const state = {
   roomId: null,
@@ -34,6 +39,91 @@ const state = {
 
 function dispatchCartUpdate() {
   window.dispatchEvent(new Event("cart:updated"));
+}
+
+function showAddonPanel(key) {
+  if (!addonPanels.length) return;
+  addonPanels.forEach((panel) => {
+    const isTarget = panel.dataset.addonPanel === key;
+    panel.classList.toggle("is-hidden", !isTarget);
+  });
+  addonTabs.forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.addonTab === key);
+  });
+}
+
+function getAddonQty(id) {
+  return addonQuantities.get(id) || 0;
+}
+
+function setAddonQty(id, qty) {
+  if (!Number.isFinite(qty) || qty <= 0) {
+    addonQuantities.delete(id);
+    return 0;
+  }
+  addonQuantities.set(id, qty);
+  return qty;
+}
+
+function updateAddonCard(card) {
+  if (!card) return;
+  const id = Number(card.dataset.addonId || 0);
+  if (!id) return;
+  const available = card.dataset.addonAvailable !== "0";
+  const qty = getAddonQty(id);
+  const valueEl = card.querySelector("[data-qty-value]");
+  const decBtn = card.querySelector('[data-qty-action="dec"]');
+  const incBtn = card.querySelector('[data-qty-action="inc"]');
+  if (valueEl) valueEl.textContent = String(qty);
+  if (decBtn) decBtn.disabled = !available || qty <= 0;
+  if (incBtn) incBtn.disabled = !available;
+  card.classList.toggle("is-selected", qty > 0);
+  card.classList.toggle("is-disabled", !available);
+}
+
+function updateAllAddonCards() {
+  if (!addonCards.length) return;
+  addonCards.forEach((card) => updateAddonCard(card));
+}
+
+function getSelectedAddons() {
+  const items = [];
+  addonQuantities.forEach((qty, id) => {
+    if (qty > 0) items.push({ id, qty });
+  });
+  return items;
+}
+
+function addAddonItem(itemId, qty) {
+  return fetch("/cart/items", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      item_type: "menu",
+      item_id: itemId,
+      qty: qty || 1,
+      room_addon: true,
+      room_id: state.roomId,
+    }),
+  })
+    .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
+    .then(({ ok, body }) => {
+      if (!ok) throw new Error(body.error || "Unable to add add-on.");
+      return body;
+    });
+}
+
+function applySelectedAddons(items) {
+  if (!Array.isArray(items) || !items.length) {
+    return Promise.resolve({ added: 0, failed: [] });
+  }
+  return Promise.allSettled(items.map((item) => addAddonItem(item.id, item.qty))).then(
+    (results) => {
+      const failed = results.filter((result) => result.status === "rejected");
+      const added = results.length - failed.length;
+      return { added, failed };
+    }
+  );
 }
 
 function toDateOnly(value) {
@@ -331,6 +421,7 @@ async function loadAvailability() {
 
 function bookSlot() {
   if (!state.selectedSlot || !state.selectedDate) return;
+  const selectedAddons = getSelectedAddons();
   const startTime = state.selectedSlot.start;
   const slotCount = state.selectedRange ? state.selectedRange.end - state.selectedRange.start + 1 : 1;
   const endTime = new Date(startTime.getTime() + slotCount * SLOT_MINUTES * 60000);
@@ -372,10 +463,23 @@ function bookSlot() {
       });
       renderCalendar(toDateOnly(new Date()), addMonths(toDateOnly(new Date()), MONTHS_AHEAD));
       if (state.selectedDate) renderSlots(state.selectedDate);
+      return applySelectedAddons(selectedAddons);
+    })
+    .then((result) => {
       dispatchCartUpdate();
-      statusEl.textContent = "Added to cart.";
+      if (result && result.failed && result.failed.length) {
+        if (statusEl) statusEl.textContent = "Booking added. Some add-ons could not be added.";
+        if (window.showToast) {
+          window.showToast("Booking added, but some add-ons failed.", "warning");
+        }
+        return;
+      }
+      if (statusEl) statusEl.textContent = "Added to cart.";
       if (window.showToast) {
         window.showToast("Booking added to cart.", "success");
+        if (result && result.added) {
+          window.showToast("Package add-ons added.", "success");
+        }
       }
     })
     .catch((err) => {
@@ -403,6 +507,34 @@ if (addButton) {
 }
 
 initWidget();
+
+if (addonTabs.length) {
+  addonTabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      showAddonPanel(tab.dataset.addonTab);
+    });
+  });
+  showAddonPanel(addonTabs[0].dataset.addonTab);
+}
+
+if (packageRoot) {
+  packageRoot.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-qty-action]");
+    if (!btn) return;
+    const card = btn.closest("[data-addon-select-card]");
+    if (!card) return;
+    const available = card.dataset.addonAvailable !== "0";
+    if (!available) return;
+    const id = Number(card.dataset.addonId || 0);
+    if (!id) return;
+    const current = getAddonQty(id);
+    const delta = btn.dataset.qtyAction === "inc" ? 1 : -1;
+    const next = Math.max(0, current + delta);
+    setAddonQty(id, next);
+    updateAddonCard(card);
+  });
+  updateAllAddonCards();
+}
 
 function applyPrefillSelection() {
   if (!state.prefill || !state.prefill.start || !state.prefill.end) return;

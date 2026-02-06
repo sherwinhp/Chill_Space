@@ -24,11 +24,15 @@
       <main>
         <section class="section payment-page">
           <div class="payment-hero">
-            <div>
+            <div class="payment-hero-text">
+              <span class="eyebrow">Checkout</span>
               <h2>Choose your payment method</h2>
               <p>Complete payment to finalize your order.</p>
             </div>
-            <a class="btn ghost" href="/cart">Back to cart</a>
+            <div class="payment-hero-actions">
+              <span class="hero-pill">Secure checkout</span>
+              <a class="btn ghost" href="/cart">Back to cart</a>
+            </div>
           </div>
 
           <div class="payment-layout">
@@ -41,31 +45,44 @@
                 data-stripe-publishable-key="<%= process.env.STRIPE_PUBLISHABLE_KEY || '' %>"
               >
                 <div class="payment-block">
-                  <h3>Payment options</h3>
-                  <label class="payment-pill nets">
-                    <input type="radio" name="paymentType" value="nets" />
-                    <span class="pill-text">NETS QR</span>
-                    <span class="pill-indicator"></span>
-                  </label>
-                  <label class="payment-pill paynow">
-                    <input type="radio" name="paymentType" value="paynow" />
-                    <span class="pill-text">PayNow</span>
-                    <span class="pill-indicator"></span>
-                  </label>
-                  <label class="payment-pill grabpay">
-                    <input type="radio" name="paymentType" value="grabpay" />
-                    <span class="pill-text">GrabPay</span>
-                    <span class="pill-indicator"></span>
-                  </label>
-                  <label class="payment-pill wallet">
-                    <input type="radio" name="paymentType" value="wallet" />
-                    <span class="pill-text">Pay with Wallet (Balance: $<%= (Number(walletBalance || 0) / 100).toFixed(2) %>)</span>
-                    <span class="pill-indicator"></span>
-                  </label>
+                  <div class="payment-block-head">
+                    <div>
+                      <h3>Payment options</h3>
+                      <p>Select one method below. PayPal is also available.</p>
+                    </div>
+                    <span class="payment-badge">Instant</span>
+                  </div>
+                  <div class="payment-methods">
+                    <label class="payment-pill nets">
+                      <input type="radio" name="paymentType" value="nets" />
+                      <span class="pill-text">NETS QR</span>
+                      <span class="pill-indicator"></span>
+                    </label>
+                    <label class="payment-pill paynow">
+                      <input type="radio" name="paymentType" value="paynow" />
+                      <span class="pill-text">PayNow</span>
+                      <span class="pill-indicator"></span>
+                    </label>
+                    <label class="payment-pill grabpay">
+                      <input type="radio" name="paymentType" value="grabpay" />
+                      <span class="pill-text">GrabPay</span>
+                      <span class="pill-indicator"></span>
+                    </label>
+                    <label class="payment-pill wallet">
+                      <input type="radio" name="paymentType" value="wallet" />
+                      <span class="pill-text">Pay with Wallet (Balance: $<%= (Number(walletBalance || 0) / 100).toFixed(2) %>)</span>
+                      <span class="pill-indicator"></span>
+                    </label>
+                  </div>
                 </div>
 
-                <div class="payment-block">
-                  <h4>PayPal</h4>
+                <div class="payment-block payment-block-paypal">
+                  <div class="payment-block-head">
+                    <div>
+                      <h4>PayPal</h4>
+                      <p>Pay quickly with your PayPal balance or linked bank.</p>
+                    </div>
+                  </div>
                   <div id="paypal-button-container" class="paypal-button-container"></div>
                 </div>
 
@@ -82,17 +99,17 @@
                   </div>
                   <div class="field">
                     <span>Card number</span>
-                    <div class="stripe-input" id="card-number-element"></div>
+                    <div id="card-number-element" class="stripe-input"></div>
                     <small class="field-hint card-brand" data-card-brand></small>
                   </div>
                   <div class="field-group">
                     <label class="field">
                       <span>Expiry (MM/YY)</span>
-                      <div class="stripe-input" id="card-expiry-element"></div>
+                      <div id="card-expiry-element" class="stripe-input"></div>
                     </label>
                     <label class="field">
                       <span>CVV</span>
-                      <div class="stripe-input" id="card-cvc-element"></div>
+                      <div id="card-cvc-element" class="stripe-input"></div>
                     </label>
                     <label class="field">
                       <span>Billing country</span>
@@ -112,7 +129,7 @@
             </div>
 
             <div class="payment-column">
-              <div class="summary-card">
+              <div class="summary-card checkout-summary">
                 <h3>Order summary</h3>
                 <div class="summary-row">
                   <span>Items</span>
@@ -137,7 +154,7 @@
                 </div>
               </div>
 
-              <div class="order-table">
+              <div class="order-table checkout-order">
                 <div class="order-row order-head">
                   <span>Product</span>
                   <span>Qty</span>

@@ -21,19 +21,34 @@
 
       <main>
         <section class="section">
-          <div class="section-head split">
-            <div>
+          <div class="booking-hero">
+            <div class="booking-hero-text">
+              <span class="eyebrow">My Account</span>
               <h2>Your Bookings</h2>
               <p>Track the rooms you booked and the status of each request.</p>
             </div>
-            <div class="search-field">
-              <input
-                class="search-input"
-                type="search"
-                placeholder="Search bookings"
-                aria-label="Search bookings"
-                data-search-input="bookings"
-              />
+            <div class="booking-hero-actions">
+              <% if (isLoggedIn) { %>
+                <div class="search-field">
+                  <input
+                    class="search-input"
+                    type="search"
+                    placeholder="Search bookings"
+                    aria-label="Search bookings"
+                    data-search-input="bookings"
+                  />
+                </div>
+                <div class="booking-stats">
+                  <div class="booking-stat">
+                    <span>Upcoming</span>
+                    <strong><%= bookings ? bookings.length : 0 %></strong>
+                  </div>
+                  <div class="booking-stat">
+                    <span>History</span>
+                    <strong><%= pastBookings ? pastBookings.length : 0 %></strong>
+                  </div>
+                </div>
+              <% } %>
             </div>
           </div>
 
@@ -89,7 +104,7 @@
                             <% } %>
                           </div>
                         </div>
-                        <div class="meta">
+                        <div class="meta booking-meta">
                           <span>
                             <strong>Start:</strong>
                             <%= new Date(booking.startTime).toLocaleString() %>
@@ -103,7 +118,7 @@
                             <%= booking.pax || 1 %>
                           </span>
                         </div>
-                        <div class="status-row">
+                        <div class="status-row booking-status">
                           <span class="status-pill">Request: <%= booking.adminStatus %></span>
                           <span class="status-pill secondary">Payment: <%= booking.paymentStatus %></span>
                           <% if (booking.refundStatus) { %>
@@ -164,7 +179,7 @@
                             <% } %>
                           </div>
                         </div>
-                        <div class="meta">
+                        <div class="meta booking-meta">
                           <span>
                             <strong>Start:</strong>
                             <%= new Date(booking.startTime).toLocaleString() %>
@@ -178,7 +193,7 @@
                             <%= booking.pax || 1 %>
                           </span>
                         </div>
-                        <div class="status-row">
+                        <div class="status-row booking-status">
                           <span class="status-pill">Request: <%= booking.adminStatus %></span>
                           <span class="status-pill secondary">Payment: <%= booking.paymentStatus %></span>
                           <% if (booking.refundStatus) { %>

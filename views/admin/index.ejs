@@ -12,38 +12,47 @@
       <%- include("../partials/admin-header", { page: "admin" }) %>
 
       <main>
-        <section class="section">
-          <div class="section-head">
-            <div>
+        <section class="section admin-dashboard">
+          <div class="admin-hero">
+            <div class="admin-hero-text">
+              <span class="admin-pill">Operations Snapshot</span>
               <h2>Admin Dashboard</h2>
-              <p>Manage rooms, bookings, menu items, events, promotions, reviews, and users.</p>
+              <p>Monitor revenue, keep bookings on track, and stay ahead of events.</p>
+            </div>
+            <div class="admin-hero-actions">
+              <a class="btn primary" href="/admin/bookings">Manage bookings</a>
+              <a class="btn ghost" href="/admin/menu">Update menu</a>
             </div>
           </div>
 
-          <div class="admin-metrics">
-            <div class="admin-metric-card">
+          <div class="admin-stats">
+            <article class="admin-stat admin-stat--revenue">
               <span>Total Revenue</span>
               <strong>$<%= Number(salesSummary.total_revenue || 0).toFixed(2) %></strong>
-            </div>
-            <div class="admin-metric-card">
+              <small>Lifetime sales</small>
+            </article>
+            <article class="admin-stat admin-stat--orders">
               <span>Orders</span>
               <strong><%= salesSummary.total_orders || 0 %></strong>
-            </div>
-            <div class="admin-metric-card">
+              <small>All completed payments</small>
+            </article>
+            <article class="admin-stat admin-stat--today">
               <span>Today</span>
               <strong>$<%= Number(salesSummary.revenue_today || 0).toFixed(2) %></strong>
-            </div>
-            <div class="admin-metric-card">
+              <small>Revenue in the last 24h</small>
+            </article>
+            <article class="admin-stat admin-stat--week">
               <span>Last 7 Days</span>
               <strong>$<%= Number(salesSummary.revenue_7d || 0).toFixed(2) %></strong>
-            </div>
+              <small>Weekly momentum</small>
+            </article>
           </div>
 
-          <div class="admin-dashboard-grid">
-            <div class="admin-dashboard-card">
-              <div class="section-head compact split">
+          <div class="admin-panels">
+            <div class="admin-panel">
+              <div class="admin-panel-head">
                 <div>
-                  <h3>Upcoming Bookings</h3>
+                  <h3>Upcoming bookings</h3>
                   <p>Next confirmed slots on the calendar.</p>
                 </div>
                 <a class="btn ghost" href="/admin/bookings">View all</a>
@@ -54,16 +63,20 @@
                   <p>Bookings will appear here when created.</p>
                 </div>
               <% } else { %>
-                <div class="admin-list">
+                <div class="admin-activity-list">
                   <% upcomingBookings.forEach(function(booking) { %>
-                    <div class="admin-list-row">
-                      <div>
-                        <strong><%= booking.roomName %></strong>
-                        <span><%= booking.userName %> · <%= booking.userEmail %></span>
+                    <% const bookingStart = new Date(booking.startTime); %>
+                    <div class="admin-activity">
+                      <div class="admin-activity-time">
+                        <span class="admin-activity-day"><%= bookingStart.toLocaleDateString("en-SG", { month: "short", day: "numeric" }) %></span>
+                        <span class="admin-activity-hour"><%= bookingStart.toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" }) %></span>
                       </div>
-                      <div class="admin-list-meta">
-                        <span><%= new Date(booking.startTime).toLocaleString() %></span>
-                        <span class="admin-status">Payment: <%= booking.paymentStatus %></span>
+                      <div class="admin-activity-info">
+                        <strong><%= booking.roomName %></strong>
+                        <span><%= booking.userName %> &middot; <%= booking.userEmail %></span>
+                      </div>
+                      <div class="admin-activity-meta">
+                        <span class="admin-chip">Payment: <%= booking.paymentStatus %></span>
                       </div>
                     </div>
                   <% }) %>
@@ -71,10 +84,10 @@
               <% } %>
             </div>
 
-            <div class="admin-dashboard-card">
-              <div class="section-head compact split">
+            <div class="admin-panel">
+              <div class="admin-panel-head">
                 <div>
-                  <h3>Upcoming Events</h3>
+                  <h3>Upcoming events</h3>
                   <p>Major events you should prepare for.</p>
                 </div>
                 <a class="btn ghost" href="/admin/events">Manage</a>
@@ -85,16 +98,21 @@
                   <p>Create events to keep the calendar full.</p>
                 </div>
               <% } else { %>
-                <div class="admin-list">
+                <div class="admin-activity-list">
                   <% upcomingEvents.forEach(function(event) { %>
-                    <div class="admin-list-row">
-                      <div>
+                    <% const eventStart = new Date(event.startDate); %>
+                    <% const eventEnd = new Date(event.endDate); %>
+                    <div class="admin-activity">
+                      <div class="admin-activity-time">
+                        <span class="admin-activity-day"><%= eventStart.toLocaleDateString("en-SG", { month: "short", day: "numeric" }) %></span>
+                        <span class="admin-activity-hour"><%= eventEnd.toLocaleDateString("en-SG", { month: "short", day: "numeric" }) %></span>
+                      </div>
+                      <div class="admin-activity-info">
                         <strong><%= event.title %></strong>
                         <span><%= event.description || "No description" %></span>
                       </div>
-                      <div class="admin-list-meta">
-                        <span><%= new Date(event.startDate).toLocaleDateString() %></span>
-                        <span><%= new Date(event.endDate).toLocaleDateString() %></span>
+                      <div class="admin-activity-meta">
+                        <span class="admin-chip admin-chip--neutral">Event</span>
                       </div>
                     </div>
                   <% }) %>
@@ -102,17 +120,6 @@
               <% } %>
             </div>
           </div>
-
-          <nav class="admin-nav" aria-label="Admin sections">
-            <a class="admin-nav-link" href="/admin/rooms">Rooms</a>
-            <a class="admin-nav-link" href="/admin/bookings">Bookings</a>
-            <a class="admin-nav-link" href="/admin/menu">Menu</a>
-            <a class="admin-nav-link" href="/admin/events">Events</a>
-            <a class="admin-nav-link" href="/admin/promotions">Promotions</a>
-            <a class="admin-nav-link" href="/admin/reviews">Reviews</a>
-            <a class="admin-nav-link" href="/admin/users">Users</a>
-            <a class="admin-nav-link" href="/admin/purchases">Purchases</a>
-          </nav>
         </section>
       </main>
 

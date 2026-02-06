@@ -3,10 +3,11 @@ require("dotenv").config();
 const NETS_API_KEY = process.env.NETS_API_KEY || process.env.API_KEY;
 const NETS_PROJECT_ID = process.env.NETS_PROJECT_ID || process.env.PROJECT_ID;
 
-// Use the same sandbox txn_id as NETSDemo (do not randomize).
+// Default to static txn_id only for sandbox unless overridden.
 const SANDBOX_TXN_ID =
   process.env.NETS_TXN_ID ||
   "sandbox_nets|m|8ff8e5b6-d43e-4786-8ac5-7accf8c5bd9b";
+const NETS_TXN_ID_MODE = (process.env.NETS_TXN_ID_MODE || "").toLowerCase();
 
 const NETS_QR_CREATE_URL =
   process.env.NETS_QR_CREATE_URL ||
@@ -36,6 +37,15 @@ function buildHeaders() {
     "Content-Type": "application/json",
   };
   return headers;
+}
+
+function buildTxnId() {
+  const mode = NETS_TXN_ID_MODE || "random";
+  if (mode === "static") {
+    return SANDBOX_TXN_ID;
+  }
+  const rand = Math.random().toString(16).slice(2, 10);
+  return `nets_${Date.now()}_${rand}`;
 }
 
 async function parseNetsResponse(response, fallbackMessage) {
@@ -70,7 +80,7 @@ async function createNetsQr(cartTotal) {
     method: "POST",
     headers: buildHeaders(),
     body: JSON.stringify({
-      txn_id: SANDBOX_TXN_ID, // ✅ FIXED (do not randomize)
+      txn_id: buildTxnId(),
       amt_in_dollars: Number(amount.toFixed(2)),
       notify_mobile: 0,
     }),

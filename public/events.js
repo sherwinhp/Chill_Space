@@ -2,22 +2,21 @@ const eventTabs = document.querySelectorAll(".event-tab");
 const eventPanels = document.querySelectorAll(".event-panel");
 const signupForms = document.querySelectorAll("[data-event-signup]");
 
-const CART_KEY = "chill_cart";
-
-function getCartTotal() {
+async function getCartTotal() {
   try {
-    const raw = localStorage.getItem(CART_KEY);
-    if (!raw) return 0;
-    const items = JSON.parse(raw);
-    if (!Array.isArray(items)) return 0;
-    return items.reduce((sum, item) => sum + Number(item.price) * Number(item.qty), 0);
+    const response = await fetch("/cart/items");
+    const data = await response.json();
+    const items = Array.isArray(data.items) ? data.items : [];
+    return items.reduce(
+      (sum, item) => sum + Number(item.price) * Number(item.qty || 1),
+      0
+    );
   } catch (_) {
     return 0;
   }
 }
 
-function applyPromotions() {
-  const total = getCartTotal();
+function applyPromotions(total) {
   const totalEl = document.querySelector("[data-cart-total]");
   const discountEl = document.querySelector("[data-cart-discount]");
   const promoCards = document.querySelectorAll(".promo-card");
@@ -52,6 +51,11 @@ function applyPromotions() {
   }
 }
 
+async function refreshPromotions() {
+  const total = await getCartTotal();
+  applyPromotions(total);
+}
+
 eventTabs.forEach((tab) => {
   tab.addEventListener("click", () => {
     eventTabs.forEach((btn) => btn.classList.remove("active"));
@@ -63,7 +67,8 @@ eventTabs.forEach((tab) => {
   });
 });
 
-applyPromotions();
+refreshPromotions();
+window.addEventListener("cart:updated", refreshPromotions);
 
 async function signupEvent(form) {
   const eventId = form.dataset.eventId;

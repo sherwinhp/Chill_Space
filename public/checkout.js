@@ -14,22 +14,39 @@ const cardNameInput = document.querySelector("[data-card-name]");
 const cardEmailInput = document.querySelector("[data-card-email]");
 const cardCountryInput = document.querySelector("[data-card-country]");
 const cardPostalInput = document.querySelector("[data-card-postal]");
-const cardNumberMount = document.querySelector("#card-number-element");
-const cardExpiryMount = document.querySelector("#card-expiry-element");
-const cardCvcMount = document.querySelector("#card-cvc-element");
+const cardNumberInput = document.querySelector("[data-card-number]");
+const cardExpiryInput = document.querySelector("[data-card-expiry]");
+const cardCvcInput = document.querySelector("[data-card-cvc]");
 const stripePublishableKey = paymentCard ? paymentCard.dataset.stripePublishableKey : "";
 const stripe = stripePublishableKey && window.Stripe ? window.Stripe(stripePublishableKey) : null;
-const stripeElements = stripe ? stripe.elements() : null;
-let stripeCardNumberElement = null;
-let stripeCardExpiryElement = null;
-let stripeCardCvcElement = null;
-const stripeCardState = {
-  numberComplete: false,
-  expiryComplete: false,
-  cvcComplete: false,
-  error: null,
-  brand: "unknown",
+const stripeElementStyle = {
+  base: {
+    color: "#111827",
+    fontFamily: '"Space Grotesk", "Segoe UI", sans-serif',
+    fontSize: "14px",
+    "::placeholder": { color: "#9aa1b1" },
+  },
+  invalid: {
+    color: "#b42318",
+  },
 };
+const stripeElements = stripe ? stripe.elements({ appearance: { theme: "stripe" } }) : null;
+const cardNumberMount = document.getElementById("card-number-element");
+const cardExpiryMount = document.getElementById("card-expiry-element");
+const cardCvcMount = document.getElementById("card-cvc-element");
+const cardNumberElement =
+  stripeElements && cardNumberMount
+    ? stripeElements.create("cardNumber", { style: stripeElementStyle })
+    : null;
+const cardExpiryElement =
+  stripeElements && cardExpiryMount
+    ? stripeElements.create("cardExpiry", { style: stripeElementStyle })
+    : null;
+const cardCvcElement =
+  stripeElements && cardCvcMount
+    ? stripeElements.create("cardCvc", { style: stripeElementStyle })
+    : null;
+let cardInputError = null;
 const netsModal = document.querySelector("[data-nets-modal]");
 const netsStatusEl = netsModal ? netsModal.querySelector("[data-nets-status]") : null;
 const netsQrImgEl = netsModal ? netsModal.querySelector("[data-nets-qr]") : null;
@@ -52,46 +69,6 @@ let netsTxnRetrievalRef = null;
 let netsCompleting = false;
 let netsCreatingQr = false;
 
-if (stripeElements && cardNumberMount && cardExpiryMount && cardCvcMount) {
-  const baseStyle = {
-    base: {
-      color: "#1f2430",
-      fontSize: "14px",
-      fontFamily: "Space Grotesk, sans-serif",
-      "::placeholder": {
-        color: "#a0a4b0",
-      },
-    },
-  };
-
-  stripeCardNumberElement = stripeElements.create("cardNumber", { style: baseStyle });
-  stripeCardExpiryElement = stripeElements.create("cardExpiry", { style: baseStyle });
-  stripeCardCvcElement = stripeElements.create("cardCvc", { style: baseStyle });
-
-  stripeCardNumberElement.mount(cardNumberMount);
-  stripeCardExpiryElement.mount(cardExpiryMount);
-  stripeCardCvcElement.mount(cardCvcMount);
-
-  stripeCardNumberElement.on("change", (event) => {
-    stripeCardState.numberComplete = event.complete;
-    stripeCardState.error = event.error || null;
-    stripeCardState.brand = event.brand || "unknown";
-    updateCardBrand();
-  });
-
-  stripeCardExpiryElement.on("change", (event) => {
-    stripeCardState.expiryComplete = event.complete;
-    stripeCardState.error = event.error || stripeCardState.error;
-    updateCardBrand();
-  });
-
-  stripeCardCvcElement.on("change", (event) => {
-    stripeCardState.cvcComplete = event.complete;
-    stripeCardState.error = event.error || stripeCardState.error;
-    updateCardBrand();
-  });
-}
-
 function toggleStripeCardForm() {
   if (!stripeCardForm) return;
   if (!stripeCardOption) {
@@ -101,6 +78,36 @@ function toggleStripeCardForm() {
   const selected = document.querySelector("input[name='paymentType']:checked");
   const isCard = selected && selected.value === "stripe_card";
   stripeCardForm.classList.toggle("is-hidden", !isCard);
+}
+
+function setCardBrandMessage(message, isError = false) {
+  if (!cardBrandEl) return;
+  cardBrandEl.textContent = message || "";
+  cardBrandEl.classList.toggle("is-invalid", Boolean(isError && message));
+}
+
+if (cardNumberElement && cardNumberMount) {
+  cardNumberElement.mount(cardNumberMount);
+}
+if (cardExpiryElement && cardExpiryMount) {
+  cardExpiryElement.mount(cardExpiryMount);
+}
+if (cardCvcElement && cardCvcMount) {
+  cardCvcElement.mount(cardCvcMount);
+}
+
+if (cardNumberElement) {
+  cardNumberElement.on("change", (event) => {
+    if (event.error) {
+      setCardBrandMessage(event.error.message, true);
+      return;
+    }
+    if (event.brand && event.brand !== "unknown") {
+      setCardBrandMessage(`${event.brand.toUpperCase()} detected`);
+      return;
+    }
+    setCardBrandMessage("");
+  });
 }
 
 async function readJsonOrText(response) {
@@ -588,6 +595,29 @@ if (paymentCard) {
   }
 }
 
+if (cardNumberInput) {
+  cardNumberInput.addEventListener("input", (event) => {
+    const formatted = formatCardNumber(event.target.value);
+    event.target.value = formatted;
+    setCardInputError(null);
+    updateCardBrand();
+  });
+}
+
+if (cardExpiryInput) {
+  cardExpiryInput.addEventListener("input", (event) => {
+    event.target.value = formatExpiryInput(event.target.value);
+    setCardInputError(null);
+  });
+}
+
+if (cardCvcInput) {
+  cardCvcInput.addEventListener("input", (event) => {
+    event.target.value = formatCvcInput(event.target.value);
+    setCardInputError(null);
+  });
+}
+
 function renderPaypalButtons(total) {
   if (!paypalContainer || paypalButtonsRendered) return;
   if (!window.paypal) return;
@@ -717,9 +747,8 @@ if (confirmPaymentButton) {
         if (!stripe) {
           throw new Error("Stripe is not configured on this page.");
         }
-        const validation = validateCardForm();
-        if (!validation.ok) {
-          throw new Error(validation.message || "Invalid card details.");
+        if (!cardNumberElement) {
+          throw new Error("Card input is not ready. Please refresh the page.");
         }
         const billingName = cardNameInput ? cardNameInput.value : "";
         const billingEmail = cardEmailInput ? cardEmailInput.value : "";
@@ -727,10 +756,9 @@ if (confirmPaymentButton) {
           cardCountryInput ? cardCountryInput.value : ""
         );
         const billingPostal = cardPostalInput ? cardPostalInput.value : "";
-
         const paymentMethodResult = await stripe.createPaymentMethod({
           type: "card",
-          card: stripeCardNumberElement,
+          card: cardNumberElement,
           billing_details: {
             name: billingName || undefined,
             email: billingEmail || undefined,
@@ -740,13 +768,17 @@ if (confirmPaymentButton) {
             },
           },
         });
-
-        if (paymentMethodResult.error) {
-          throw new Error(paymentMethodResult.error.message || "Unable to create card payment.");
+        if (paymentMethodResult.error || !paymentMethodResult.paymentMethod) {
+          throw new Error(
+            paymentMethodResult.error?.message || "Card details are incomplete."
+          );
         }
-
         const payload = {
           payment_method_id: paymentMethodResult.paymentMethod.id,
+          card_name: billingName,
+          card_email: billingEmail,
+          billing_country: billingCountry,
+          postal_code: billingPostal,
         };
         setConfirmBusy(true, "Processing card...");
         const response = await fetch("/payments/stripe/card/pay", {
@@ -869,15 +901,41 @@ function detectCardBrand(number) {
   return "unknown";
 }
 
+function formatExpiryInput(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+function parseExpiryValue(value) {
+  if (!value) return { month: null, year: null };
+  const digits = String(value).replace(/\s/g, "");
+  const match = digits.match(/^(\d{1,2})\/?(\d{2,4})$/);
+  if (!match) return { month: null, year: null };
+  return { month: match[1], year: match[2] };
+}
+
+function formatCvcInput(value) {
+  return String(value || "")
+    .replace(/\D/g, "")
+    .slice(0, 4);
+}
+
+function setCardInputError(message) {
+  cardInputError = message || null;
+  updateCardBrand();
+}
+
 function updateCardBrand() {
   if (!cardBrandEl) return;
-  if (stripeCardState.error) {
-    cardBrandEl.textContent = stripeCardState.error.message || "Card details invalid";
+  if (cardInputError) {
+    cardBrandEl.textContent = cardInputError;
     cardBrandEl.classList.add("is-invalid");
     return;
   }
-  if (stripeCardState.brand && stripeCardState.brand !== "unknown") {
-    cardBrandEl.textContent = `${stripeCardState.brand.toUpperCase()} detected`;
+  const brand = detectCardBrand(cardNumberInput ? cardNumberInput.value : "");
+  if (brand && brand !== "unknown") {
+    cardBrandEl.textContent = `${brand.toUpperCase()} detected`;
     cardBrandEl.classList.remove("is-invalid");
     return;
   }
@@ -886,20 +944,73 @@ function updateCardBrand() {
 }
 
 function validateCardForm() {
-  if (!stripe || !stripeCardNumberElement || !stripeCardExpiryElement || !stripeCardCvcElement) {
-    return { ok: false, message: "Stripe card form is not ready." };
+  if (!cardNumberInput || !cardExpiryInput || !cardCvcInput) {
+    return { ok: false, message: "Card form is not ready." };
   }
-  if (stripeCardState.error) {
-    return { ok: false, message: stripeCardState.error.message || "Card details invalid." };
+
+  const number = normalizeCardNumber(cardNumberInput.value);
+  if (!number) {
+    setCardInputError("Card number is required.");
+    return { ok: false, message: "Card number is required." };
   }
-  if (
-    !stripeCardState.numberComplete ||
-    !stripeCardState.expiryComplete ||
-    !stripeCardState.cvcComplete
-  ) {
-    return { ok: false, message: "Please complete your card details." };
+
+  const brand = detectCardBrand(number);
+  const lengthByBrand = {
+    visa: [13, 16, 19],
+    mastercard: [16],
+    amex: [15],
+    discover: [16, 19],
+  };
+  if (!["visa", "mastercard", "amex", "discover"].includes(brand)) {
+    setCardInputError("Unsupported card brand.");
+    return { ok: false, message: "Unsupported card brand." };
   }
-  return { ok: true };
+  if (!lengthByBrand[brand].includes(number.length)) {
+    setCardInputError("Card number length is invalid.");
+    return { ok: false, message: "Card number length is invalid." };
+  }
+  if (!luhnCheck(number)) {
+    setCardInputError("Card number failed validation.");
+    return { ok: false, message: "Card number failed validation." };
+  }
+
+  const expiryInput = cardExpiryInput.value || "";
+  const { month, year } = parseExpiryValue(expiryInput);
+  const monthNum = Number(month);
+  let yearNum = Number(year);
+  if (!Number.isFinite(monthNum) || monthNum < 1 || monthNum > 12) {
+    setCardInputError("Expiry month is invalid.");
+    return { ok: false, message: "Expiry month is invalid." };
+  }
+  if (!Number.isFinite(yearNum)) {
+    setCardInputError("Expiry year is invalid.");
+    return { ok: false, message: "Expiry year is invalid." };
+  }
+  if (yearNum < 100) {
+    yearNum += 2000;
+  }
+  const expiryDate = new Date(yearNum, monthNum, 0, 23, 59, 59, 999);
+  if (expiryDate < new Date()) {
+    setCardInputError("Card has expired.");
+    return { ok: false, message: "Card has expired." };
+  }
+
+  const cvc = formatCvcInput(cardCvcInput.value);
+  const expectedCvcLength = brand === "amex" ? 4 : 3;
+  if (cvc.length !== expectedCvcLength) {
+    setCardInputError("CVV length is invalid.");
+    return { ok: false, message: "CVV length is invalid." };
+  }
+
+  setCardInputError(null);
+  return {
+    ok: true,
+    number,
+    brand,
+    expMonth: monthNum,
+    expYear: yearNum,
+    cvc,
+  };
 }
 
 function normalizeCountryInput(value) {

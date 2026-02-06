@@ -3,21 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Invoice | Cozy Place Gaming Rooms</title>
+    <title>Admin Invoice</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <div class="page">
       <div class="glow"></div>
-      <%- include("partials/header", {
-        page: "",
-        roomsLink: "/",
-        bookingsLink: "/bookings",
-        menuLink: "/menu",
-        reviewsLink: "/reviews",
-        eventsLink: "/events",
-        profileLink: "/profile"
-      }) %>
+      <%- include("../partials/admin-header", { page: "admin-invoices" }) %>
 
       <main>
         <section class="section invoice-page">
@@ -25,11 +17,11 @@
             <div class="invoice-hero-text">
               <span class="eyebrow">Receipt</span>
               <h2>Invoice</h2>
-              <p>Thank you for your payment. Keep this receipt for your records.</p>
+              <p>Admin view of invoice details.</p>
             </div>
             <div class="invoice-hero-actions">
-              <a class="btn ghost" href="/purchases">Purchase history</a>
-              <button class="btn ghost" type="button" onclick="window.print()">Print invoice</button>
+              <a class="btn ghost" href="/admin/invoices">Back to invoices</a>
+              <button class="btn ghost" type="button" onclick="window.print()">Print</button>
             </div>
           </div>
 
@@ -66,9 +58,6 @@
               <div class="invoice-total">
                 <span>Total paid</span>
                 <strong>$<%= Number(invoice.total_amount).toFixed(2) %></strong>
-                <% if (Number(invoiceCashbackCents || 0) > 0) { %>
-                  <small>Cashback earned: +$<%= (Number(invoiceCashbackCents) / 100).toFixed(2) %></small>
-                <% } %>
               </div>
             </div>
 
@@ -107,27 +96,15 @@
             </div>
 
             <div class="invoice-actions">
-              <% const reviewRoom = (invoice.items || []).find((item) => item.room_id); %>
-              <% if (reviewRoom) { %>
-                <a class="btn ghost" href="/reviews/add?roomId=<%= reviewRoom.room_id %>">Write a review</a>
-              <% } %>
-              <% if (transactionRefund) { %>
-                <a class="btn ghost" href="/invoice/<%= invoice.transaction_id %>/refund">
-                  View refund request
-                </a>
-              <% } else { %>
-                <a class="btn danger" href="/invoice/<%= invoice.transaction_id %>/refund">
-                  Request refund
-                </a>
-              <% } %>
-              <a class="btn ghost" href="/bookings">View bookings</a>
-              <a class="btn primary" href="/menu">Continue browsing</a>
+              <a class="btn ghost" href="/admin/refunds">View refunds</a>
+              <a class="btn ghost" href="/admin/purchases">View purchases</a>
+              <a class="btn primary" href="/admin/transactions">Transaction log</a>
             </div>
           </div>
         </section>
       </main>
 
-      <%- include("partials/footer") %>
+      <%- include("../partials/footer") %>
     </div>
   </body>
 </html>

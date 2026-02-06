@@ -5,6 +5,26 @@ const menuSearchInput = document.querySelector('[data-search-input="menu"]');
 const normalizeCategory = (value) => (value || "").toString().trim().toLowerCase();
 const normalizeQuery = (value) => (value || "").toString().trim().toLowerCase();
 
+function updateCartBadgeFromItems(items) {
+  const list = Array.isArray(items) ? items : [];
+  const count = list.reduce((sum, item) => sum + Number(item.qty || 1), 0);
+  document.querySelectorAll("[data-cart-count]").forEach((el) => {
+    el.textContent = String(count);
+    el.style.display = count > 0 ? "grid" : "none";
+  });
+}
+
+async function refreshCartBadge() {
+  try {
+    const res = await fetch("/cart/items");
+    if (!res.ok) return;
+    const data = await res.json();
+    updateCartBadgeFromItems(data.items);
+  } catch (error) {
+    // ignore
+  }
+}
+
 function getActiveCategory() {
   const activeTab = document.querySelector(".menu-tab.active");
   if (activeTab && activeTab.dataset.category) {
@@ -24,7 +44,9 @@ function applyMenuFilter() {
   menuGrid.querySelectorAll(".menu-card").forEach((card) => {
     const cardCategory = normalizeCategory(card.dataset.category);
     const cardText = normalizeQuery(card.dataset.searchText || card.textContent);
-    const isMatch = cardCategory === category && (!query || cardText.includes(query));
+    const matchesQuery = !query || cardText.includes(query);
+    const matchesCategory = query ? true : cardCategory === category;
+    const isMatch = matchesCategory && matchesQuery;
     card.hidden = !isMatch;
     if (isMatch) visibleCount += 1;
   });
@@ -70,6 +92,7 @@ async function addToCart(payload) {
       return;
     }
 
+    updateCartBadgeFromItems(data.items);
     window.dispatchEvent(new Event("cart:updated"));
     if (window.showToast) {
       window.showToast("Added to cart.", "success");
@@ -115,3 +138,5 @@ if (menuSearchInput) {
 }
 
 window.dispatchEvent(new Event("cart:updated"));
+refreshCartBadge();
+window.addEventListener("cart:updated", refreshCartBadge);

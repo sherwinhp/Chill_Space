@@ -70,6 +70,11 @@ function requireAuth(req, res, next) {
 
 function requireAdmin(req, res, next) {
   if (!req.session || req.session.role !== "admin") {
+    const acceptsHtml = req.headers.accept && req.headers.accept.includes("text/html");
+    if (acceptsHtml) {
+      const target = encodeURIComponent(req.originalUrl || "/admin");
+      return res.redirect(`/login?redirect=${target}&reason=admin`);
+    }
     return res.status(403).json({ error: "Admins only" });
   }
   next();

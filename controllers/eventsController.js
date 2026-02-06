@@ -1,6 +1,7 @@
 const { listEvents, createEvent, updateEvent, deleteEvent, getEventById } = require("../models/eventsDbModel");
 const { addCartItem, listCartItems, migrateSessionCartToUser } = require("../models/cartModel");
 const db = require("../db");
+const { logAdminAction } = require("../services/auditService");
 
 function getOwner(req) {
   const userId = req.session ? req.session.userId : null;
@@ -140,37 +141,92 @@ async function adminCreateForm(req, res) {
 
 async function adminCreate(req, res) {
   if (!ensureAdmin(req, res)) return;
+  const validation = validateEventPayload(req.body);
+  if (!validation.ok) {
+    return res.status(400).send(validation.errors.join(" "));
+  }
   const imageUrl = req.file ? `/uploads/${req.file.filename}` : req.body.image_url;
   await createEvent({
-    title: req.body.title,
-    description: req.body.description,
-    event_date: req.body.event_date,
-    end_date: req.body.end_date || req.body.event_date,
+    title: validation.payload.title,
+    description: validation.payload.description,
+    event_date: validation.payload.event_date,
+    end_date: validation.payload.end_date,
     image_url: imageUrl,
-    capacity: req.body.capacity,
-    entry_fee: req.body.entry_fee,
+    capacity: validation.payload.capacity,
+    entry_fee: validation.payload.entry_fee,
   });
+  await logAdminAction(req, "event.create", "event", null, req.body.title || null);
   res.redirect("/admin/events");
+}
+
+function parseDateInput(value) {
+  if (!value) return null;
+  const dateValue = new Date(value);
+  if (Number.isNaN(dateValue.getTime())) return null;
+  return value;
+}
+
+function validateEventPayload(body = {}) {
+  const errors = [];
+  const title = String(body.title || "").trim();
+  if (!title) errors.push("Title is required.");
+  const eventDate = parseDateInput(body.event_date);
+  if (!eventDate) errors.push("Event date is required.");
+  const endDate = parseDateInput(body.end_date || body.event_date);
+  if (!endDate) errors.push("End date is required.");
+  if (eventDate && endDate && new Date(endDate) < new Date(eventDate)) {
+    errors.push("End date must be on or after start date.");
+  }
+  const capacityRaw = body.capacity;
+  const capacity = capacityRaw === "" || capacityRaw === null ? null : Number(capacityRaw);
+  if (capacity !== null && (!Number.isFinite(capacity) || capacity < 0)) {
+    errors.push("Capacity must be a positive number.");
+  }
+  const entryFeeRaw = body.entry_fee;
+  const entryFee = entryFeeRaw === "" || entryFeeRaw === null ? 0 : Number(entryFeeRaw);
+  if (!Number.isFinite(entryFee) || entryFee < 0) {
+    errors.push("Entry fee must be 0 or greater.");
+  }
+  const description = String(body.description || "").trim();
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    payload: {
+      title,
+      description,
+      event_date: eventDate,
+      end_date: endDate,
+      capacity,
+      entry_fee: entryFee,
+    },
+  };
 }
 
 async function adminEdit(req, res) {
   if (!ensureAdmin(req, res)) return;
+  const validation = validateEventPayload(req.body);
+  if (!validation.ok) {
+    return res.status(400).send(validation.errors.join(" "));
+  }
   const imageUrl = req.file ? `/uploads/${req.file.filename}` : req.body.current_image_url;
   await updateEvent(req.params.id, {
-    title: req.body.title,
-    description: req.body.description,
-    event_date: req.body.event_date,
-    end_date: req.body.end_date || req.body.event_date,
+    title: validation.payload.title,
+    description: validation.payload.description,
+    event_date: validation.payload.event_date,
+    end_date: validation.payload.end_date,
     image_url: imageUrl,
-    capacity: req.body.capacity,
-    entry_fee: req.body.entry_fee,
+    capacity: validation.payload.capacity,
+    entry_fee: validation.payload.entry_fee,
   });
+  await logAdminAction(req, "event.update", "event", Number(req.params.id), req.body.title || null);
   res.redirect("/admin/events");
 }
 
 async function adminDelete(req, res) {
   if (!ensureAdmin(req, res)) return;
   await deleteEvent(req.params.id);
+  await logAdminAction(req, "event.delete", "event", Number(req.params.id), null);
   res.redirect("/admin/events");
 }
 

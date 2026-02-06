@@ -29,17 +29,36 @@
           </div>
 
           <div class="cart-page">
-            <div class="cart-items" data-cart-items>
-              <p class="empty-note">No items yet.</p>
-            </div>
-            <div class="cart-total">
-              <span>Total</span>
-              <strong data-cart-total>$0.00</strong>
-            </div>
-            <div class="cart-actions">
-              <button class="btn ghost" type="button" data-clear-cart>Clear Cart</button>
-              <button class="btn primary" type="button" data-checkout>Checkout</button>
-            </div>
+            <section class="cart-main">
+              <div class="cart-main-head">
+                <div>
+                  <h3>Items in your cart</h3>
+                  <p>Adjust quantities or remove items before checkout.</p>
+                </div>
+                <span class="cart-count-badge" data-cart-count>0 items</span>
+              </div>
+              <div class="cart-items" data-cart-items>
+                <p class="empty-note">No items yet.</p>
+              </div>
+            </section>
+            <aside class="cart-summary">
+              <div class="cart-summary-card">
+                <h3>Order summary</h3>
+                <div class="cart-total">
+                  <span>Subtotal</span>
+                  <strong data-cart-total>$0.00</strong>
+                </div>
+                <p class="cart-summary-note">Taxes and fees are calculated at checkout.</p>
+                <div class="cart-actions">
+                  <button class="btn ghost full" type="button" data-clear-cart>Clear Cart</button>
+                  <button class="btn primary full" type="button" data-checkout>Checkout</button>
+                </div>
+              </div>
+              <div class="cart-summary-help">
+                <h4>Need help?</h4>
+                <p>Contact our support team if something looks off with your order.</p>
+              </div>
+            </aside>
           </div>
         </section>
       </main>

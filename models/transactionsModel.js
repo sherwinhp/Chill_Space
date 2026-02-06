@@ -89,6 +89,29 @@ async function createTransactionFromCart({
         ]
         );
 
+      if (item.type === "menu" && item.itemId) {
+        const [stockRows] = await connection.execute(
+          "SELECT stock_qty FROM menu_items WHERE item_id = ? FOR UPDATE",
+          [item.itemId]
+        );
+        if (stockRows && stockRows.length) {
+          const currentStock = stockRows[0].stock_qty;
+          if (currentStock !== null) {
+            const currentValue = Number(currentStock);
+            if (Number.isFinite(currentValue) && currentValue < qty) {
+              throw new Error(`Insufficient stock for ${item.name}`);
+            }
+            const nextStock = Number.isFinite(currentValue)
+              ? Math.max(0, currentValue - qty)
+              : currentStock;
+            await connection.execute(
+              "UPDATE menu_items SET stock_qty = ? WHERE item_id = ?",
+              [nextStock, item.itemId]
+            );
+          }
+        }
+      }
+
       if (item.type === "room_booking" && item.roomId && item.startTime && item.endTime) {
         await connection.execute(
           `
@@ -185,6 +208,61 @@ async function getTransactionById(transactionId, userId) {
       LIMIT 1
     `,
     [transactionId, userId]
+  );
+
+  if (!rows.length) return null;
+
+  const items = await db.query(
+    `
+      SELECT
+        transaction_item_id,
+        item_type,
+        item_id,
+        item_name,
+        price,
+        qty,
+        subtotal,
+        details,
+        room_id,
+        start_time,
+        end_time
+      FROM transaction_items
+      WHERE transaction_id = ?
+      ORDER BY transaction_item_id ASC
+    `,
+    [transactionId]
+  );
+
+  return { ...rows[0], items };
+}
+
+async function getTransactionByIdForAdmin(transactionId) {
+  const rows = await db.query(
+    `
+      SELECT
+        t.id AS transaction_id,
+        t.user_id,
+        t.amount AS total_amount,
+        t.currency,
+        CASE
+          WHEN t.orderId LIKE 'WALLET-%' THEN 'wallet'
+          WHEN t.orderId LIKE 'HITPAY-%' THEN 'paynow'
+          WHEN t.orderId LIKE 'NETS-%' THEN 'nets'
+          WHEN t.orderId LIKE 'STRIPE-CARD-%' THEN 'stripe_card'
+          WHEN t.orderId LIKE 'STRIPE-GRABPAY-%' THEN 'grabpay'
+          ELSE 'paypal'
+        END AS provider,
+        t.orderId AS provider_order_id,
+        t.status,
+        t.time AS created_at,
+        u.name AS user_name,
+        u.email AS user_email
+      FROM transactions t
+      JOIN users u ON t.user_id = u.user_id
+      WHERE t.id = ?
+      LIMIT 1
+    `,
+    [transactionId]
   );
 
   if (!rows.length) return null;
@@ -334,6 +412,83 @@ async function listAllTransactionsWithItems(limit = 50) {
   return { transactions, itemsByTransaction };
 }
 
+async function listTransactionsWithItemsByDateRange({ from, to, status } = {}) {
+  const params = [];
+  let where = "1=1";
+  if (from) {
+    where += " AND t.time >= ?";
+    params.push(from);
+  }
+  if (to) {
+    where += " AND t.time <= ?";
+    params.push(to);
+  }
+  if (status && status !== "all") {
+    where += " AND t.status = ?";
+    params.push(status);
+  }
+
+  const transactions = await db.query(
+    `
+      SELECT
+        t.id AS transaction_id,
+        t.amount AS total_amount,
+        t.currency,
+        CASE
+          WHEN t.orderId LIKE 'WALLET-%' THEN 'wallet'
+          WHEN t.orderId LIKE 'HITPAY-%' THEN 'paynow'
+          WHEN t.orderId LIKE 'NETS-%' THEN 'nets'
+          WHEN t.orderId LIKE 'STRIPE-CARD-%' THEN 'stripe_card'
+          WHEN t.orderId LIKE 'STRIPE-GRABPAY-%' THEN 'grabpay'
+          ELSE 'paypal'
+        END AS provider,
+        t.orderId AS provider_order_id,
+        t.status,
+        t.time AS created_at,
+        u.name AS user_name,
+        u.email AS user_email
+      FROM transactions t
+      LEFT JOIN users u ON t.user_id = u.user_id
+      WHERE ${where}
+      ORDER BY t.time DESC
+    `,
+    params
+  );
+
+  if (!transactions.length) return { transactions: [], itemsByTransaction: {} };
+
+  const transactionIds = transactions.map((row) => row.transaction_id);
+  const placeholders = transactionIds.map(() => "?").join(", ");
+  const items = await db.query(
+    `
+      SELECT
+        transaction_item_id,
+        transaction_id,
+        item_type,
+        item_name,
+        price,
+        qty,
+        subtotal,
+        details,
+        room_id,
+        start_time,
+        end_time
+      FROM transaction_items
+      WHERE transaction_id IN (${placeholders})
+      ORDER BY transaction_item_id ASC
+    `,
+    transactionIds
+  );
+
+  const itemsByTransaction = items.reduce((acc, item) => {
+    if (!acc[item.transaction_id]) acc[item.transaction_id] = [];
+    acc[item.transaction_id].push(item);
+    return acc;
+  }, {});
+
+  return { transactions, itemsByTransaction };
+}
+
 async function getSalesSummary() {
   const rows = await db.query(
     `
@@ -370,6 +525,70 @@ async function getMonthlySpendCents(userId, now = new Date()) {
   );
   const total = rows.length ? Number(rows[0].total || 0) : 0;
   return Math.round(total * 100);
+}
+
+async function getTotalSpendCents(userId) {
+  if (!userId) return 0;
+  const rows = await db.query(
+    `
+      SELECT COALESCE(SUM(amount), 0) AS total
+      FROM transactions
+      WHERE user_id = ?
+        AND status = 'COMPLETED'
+    `,
+    [userId]
+  );
+  const total = rows.length ? Number(rows[0].total || 0) : 0;
+  return Math.round(total * 100);
+}
+
+async function countRecentTransactionsForUser(userId, minutes = 60) {
+  if (!userId) return 0;
+  const windowMs = Number(minutes) * 60 * 1000;
+  const since = new Date(Date.now() - (Number.isFinite(windowMs) ? windowMs : 0))
+    .toISOString()
+    .slice(0, 19)
+    .replace("T", " ");
+  const rows = await db.query(
+    `
+      SELECT COUNT(*) AS cnt
+      FROM transactions
+      WHERE user_id = ?
+        AND time >= ?
+    `,
+    [userId, since]
+  );
+  return Number(rows?.[0]?.cnt || 0);
+}
+
+async function restockMenuItemsForTransaction(transactionId) {
+  if (!transactionId) return;
+  const items = await db.query(
+    `
+      SELECT item_id, qty
+      FROM transaction_items
+      WHERE transaction_id = ?
+        AND item_type = 'menu'
+        AND item_id IS NOT NULL
+    `,
+    [transactionId]
+  );
+  if (!items.length) return;
+  for (const item of items) {
+    const qty = Number(item.qty || 0);
+    if (!Number.isFinite(qty) || qty <= 0) continue;
+    await db.query(
+      `
+        UPDATE menu_items
+        SET stock_qty = CASE
+          WHEN stock_qty IS NULL THEN NULL
+          ELSE stock_qty + ?
+        END
+        WHERE item_id = ?
+      `,
+      [qty, item.item_id]
+    );
+  }
 }
 async function findTransactionByProviderOrderId(orderId, userId) {
   if (!orderId || !userId) return null;
@@ -492,10 +711,15 @@ async function listBookingItemsForTransaction(transactionId) {
 module.exports = {
   createTransactionFromCart,
   getTransactionById,
+  getTransactionByIdForAdmin,
   listTransactionsWithItems,
   listAllTransactionsWithItems,
+  listTransactionsWithItemsByDateRange,
   getSalesSummary,
   getMonthlySpendCents,
+  getTotalSpendCents,
+  countRecentTransactionsForUser,
+  restockMenuItemsForTransaction,
   findTransactionByProviderOrderId,
   findTransactionForBooking,
   listBookingItemsForTransaction,

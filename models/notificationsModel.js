@@ -40,6 +40,8 @@ async function listNotifications(userId, limit = 20) {
               WHEN t.orderId LIKE 'WALLET-%' THEN 'wallet'
               WHEN t.orderId LIKE 'HITPAY-%' THEN 'paynow'
               WHEN t.orderId LIKE 'NETS-%' THEN 'nets'
+              WHEN t.orderId LIKE 'STRIPE-CARD-%' THEN 'stripe_card'
+              WHEN t.orderId LIKE 'STRIPE-GRABPAY-%' THEN 'grabpay'
               ELSE 'paypal'
             END AS provider,
             t.orderId AS reference
@@ -84,6 +86,8 @@ async function listNotifications(userId, limit = 20) {
               WHEN t.orderId LIKE 'WALLET-%' THEN 'wallet'
               WHEN t.orderId LIKE 'HITPAY-%' THEN 'paynow'
               WHEN t.orderId LIKE 'NETS-%' THEN 'nets'
+              WHEN t.orderId LIKE 'STRIPE-CARD-%' THEN 'stripe_card'
+              WHEN t.orderId LIKE 'STRIPE-GRABPAY-%' THEN 'grabpay'
               ELSE 'paypal'
             END AS provider,
             t.orderId AS reference

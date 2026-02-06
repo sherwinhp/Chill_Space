@@ -21,12 +21,14 @@
 
       <main>
         <section class="section purchase-page">
-          <div class="section-head split">
-            <div>
+          <% const totalSpent = transactions.reduce((sum, tx) => sum + Number(tx.total_amount || 0), 0); %>
+          <div class="purchase-hero">
+            <div class="purchase-hero-text">
+              <span class="eyebrow">Orders</span>
               <h2>Purchase history</h2>
               <p>Your completed payments and itemized receipts.</p>
             </div>
-            <div class="section-head-actions">
+            <div class="purchase-hero-actions">
               <div class="search-field">
                 <input
                   class="search-input"
@@ -35,6 +37,16 @@
                   aria-label="Search purchases"
                   data-search-input="purchases"
                 />
+              </div>
+              <div class="purchase-stats">
+                <div class="purchase-stat">
+                  <span>Total orders</span>
+                  <strong><%= transactions.length %></strong>
+                </div>
+                <div class="purchase-stat">
+                  <span>Total spent</span>
+                  <strong>$<%= totalSpent.toFixed(2) %></strong>
+                </div>
               </div>
               <a class="btn ghost" href="/bookings">Back to bookings</a>
             </div>
@@ -99,14 +111,11 @@
                   </div>
 
                   <div class="purchase-actions">
+                    <span class="purchase-count"><%= items.length %> item<%= items.length === 1 ? "" : "s" %></span>
                     <a class="btn ghost" href="/invoice/<%= transaction.transaction_id %>">View invoice</a>
                   </div>
                 </div>
               <% }) %>
-            </div>
-            <div class="empty-state wide centered search-empty is-hidden" data-search-empty="purchases">
-              <h3>No purchases match your search.</h3>
-              <p>Try a different keyword or clear the search.</p>
             </div>
           <% } %>
         </section>

@@ -56,6 +56,19 @@
       font-size: 0.9rem;
       color: #be123c;
     }
+
+    .otp-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 0.25rem;
+    }
+
+    .otp-timer {
+      font-size: 0.85rem;
+      color: #6b7280;
+    }
   </style>
 </head>
 <body>
@@ -113,6 +126,10 @@
         <input id="mock-2fa-code" name="code" type="text" placeholder="6-digit code" maxlength="6" pattern="\d{6}" required />
         <button class="btn primary full" type="submit">Verify code</button>
       </form>
+      <div class="otp-actions">
+        <span id="mock-2fa-timer" class="otp-timer">Resend available in 60s</span>
+        <button id="mock-2fa-resend" class="btn ghost" type="button" disabled>Resend code</button>
+      </div>
       <p id="mock-2fa-status" class="modal-status"></p>
     </div>
   </div>
@@ -133,15 +150,50 @@
     const twoFaForm = document.getElementById('mock-2fa-form');
     const twoFaCode = document.getElementById('mock-2fa-code');
     const twoFaStatus = document.getElementById('mock-2fa-status');
+    const twoFaTimer = document.getElementById('mock-2fa-timer');
+    const twoFaResend = document.getElementById('mock-2fa-resend');
+    const twoFaVerifyBtn = twoFaForm.querySelector('button[type="submit"]');
     const params = new URLSearchParams(window.location.search);
     const redirectTo = params.get('redirect') || '/';
     let pendingChallengeId = null;
+    let resendInterval = null;
+    let resendReadyAt = 0;
+    let verifying = false;
 
-    function openTwoFaModal() {
+    function clearResendInterval() {
+      if (resendInterval) {
+        clearInterval(resendInterval);
+        resendInterval = null;
+      }
+    }
+
+    function startResendCooldown(durationMs) {
+      clearResendInterval();
+      const now = Date.now();
+      resendReadyAt = now + durationMs;
+      twoFaResend.disabled = true;
+      updateResendTimer();
+      resendInterval = setInterval(updateResendTimer, 1000);
+    }
+
+    function updateResendTimer() {
+      const remainingMs = resendReadyAt - Date.now();
+      if (remainingMs <= 0) {
+        clearResendInterval();
+        twoFaResend.disabled = false;
+        twoFaTimer.textContent = 'Didn\'t receive the code?';
+        return;
+      }
+      const remainingSec = Math.ceil(remainingMs / 1000);
+      twoFaTimer.textContent = `Resend available in ${remainingSec}s`;
+    }
+
+    function openTwoFaModal(cooldownMs = 60000) {
       twoFaModal.classList.add('active');
       twoFaStatus.textContent = '';
       twoFaCode.value = '';
       twoFaCode.focus();
+      startResendCooldown(cooldownMs);
     }
 
     function closeTwoFaModal() {
@@ -175,7 +227,7 @@
           pendingChallengeId = body.challengeId;
           statusEl.style.color = '#22242c';
           statusEl.textContent = body.message || 'Enter your verification code to continue.';
-          openTwoFaModal();
+          openTwoFaModal(body.resendAfterMs || 60000);
           return;
         }
         statusEl.style.color = 'green';
@@ -193,6 +245,9 @@
         twoFaStatus.textContent = 'Session expired. Please log in again.';
         return;
       }
+      if (verifying) return;
+      verifying = true;
+      twoFaVerifyBtn.disabled = true;
 
       try {
         const res = await fetch('/auth/verify-2fa', {
@@ -211,6 +266,37 @@
       } catch (err) {
         twoFaStatus.style.color = '#be123c';
         twoFaStatus.textContent = err.message;
+        verifying = false;
+        twoFaVerifyBtn.disabled = false;
+      }
+    });
+
+    twoFaResend.addEventListener('click', async () => {
+      if (!pendingChallengeId || twoFaResend.disabled) return;
+      twoFaResend.disabled = true;
+      twoFaStatus.style.color = '#22242c';
+      twoFaStatus.textContent = 'Sending a new code...';
+      try {
+        const res = await fetch('/auth/resend-2fa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ challengeId: pendingChallengeId }),
+        });
+        const body = await res.json();
+        if (!res.ok) {
+          const retryAfterMs = body.retryAfterMs || 60000;
+          twoFaStatus.style.color = '#be123c';
+          twoFaStatus.textContent = body.error || 'Unable to resend code.';
+          startResendCooldown(retryAfterMs);
+          return;
+        }
+        twoFaStatus.style.color = 'green';
+        twoFaStatus.textContent = body.message || 'A new code was sent.';
+        startResendCooldown(body.resendAfterMs || 60000);
+      } catch (err) {
+        twoFaStatus.style.color = '#be123c';
+        twoFaStatus.textContent = err.message;
+        startResendCooldown(60000);
       }
     });
   </script>

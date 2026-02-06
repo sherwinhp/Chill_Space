@@ -1,7 +1,8 @@
-const { findById, updateUser } = require("../models/usersModel");
+const { findById, updateUser, verifyPassword } = require("../models/usersModel");
 const { getTransactionById, listTransactionsWithItems } = require("../models/transactionsModel");
 const { calculateCashbackCents, getCashbackRateForUser } = require("../models/walletModel");
 const { listNotifications, markNotificationsRead } = require("../models/notificationsModel");
+const { findRefundByTransactionId } = require("../models/refundRequestsModel");
 
 async function renderProfile(req, res) {
   const userId = req.session && req.session.userId;
@@ -22,29 +23,23 @@ async function updateProfile(req, res) {
   const {
     name,
     email,
-    password,
     address,
     contact_number,
     current_avatar_url,
     birth_date,
   } = req.body;
   const avatarUrl = req.file ? `/uploads/${req.file.filename}` : current_avatar_url || "";
-  const normalizedBirthDate = birth_date
-    ? new Date(String(birth_date).trim())
-    : null;
+  const birthDateRaw = birth_date ? String(birth_date).trim() : "";
+  const normalizedBirthDate =
+    birthDateRaw && /^\d{4}-\d{2}-\d{2}$/.test(birthDateRaw) ? birthDateRaw : null;
   const updates = {
     name: name ? String(name).trim() : "",
     email: email ? String(email).trim() : "",
     address: address ? String(address).trim() : "",
     contact_number: contact_number ? String(contact_number).trim() : "",
     avatar_url: avatarUrl,
-    birth_date:
-      normalizedBirthDate && !Number.isNaN(normalizedBirthDate.getTime())
-        ? normalizedBirthDate.toISOString().slice(0, 10)
-        : null,
+    birth_date: normalizedBirthDate,
   };
-  if (password) updates.password = password;
-
   const updated = await updateUser(userId, updates);
   if (!updated) {
     return res.status(404).render("profile", { user: null, message: "User not found." });
@@ -54,6 +49,86 @@ async function updateProfile(req, res) {
   req.session.email = updated.email;
 
   res.render("profile", { user: updated, message: "Profile updated." });
+}
+
+function validatePassword(pw) {
+  if (!pw || pw.length < 8) {
+    return { ok: false, message: "Password must be at least 8 characters." };
+  }
+  if (!/[A-Z]/.test(pw)) {
+    return { ok: false, message: "Password must include at least one uppercase letter." };
+  }
+  if (!/[^\w\s]/.test(pw)) {
+    return { ok: false, message: "Password must include at least one special character." };
+  }
+  return { ok: true };
+}
+
+async function renderChangePassword(req, res) {
+  const userId = req.session && req.session.userId;
+  if (!userId) {
+    return res.redirect("/login?redirect=/profile/password&reason=profile");
+  }
+  return res.render("change-password", { message: "", messageType: "" });
+}
+
+async function updatePassword(req, res) {
+  const userId = req.session && req.session.userId;
+  if (!userId) {
+    return res.redirect("/login?redirect=/profile/password&reason=profile");
+  }
+
+  const { current_password, new_password, confirm_password } = req.body || {};
+  if (!current_password || !new_password || !confirm_password) {
+    return res.status(400).render("change-password", {
+      message: "All password fields are required.",
+      messageType: "error",
+    });
+  }
+
+  if (new_password !== confirm_password) {
+    return res.status(400).render("change-password", {
+      message: "New passwords do not match.",
+      messageType: "error",
+    });
+  }
+
+  if (current_password === new_password) {
+    return res.status(400).render("change-password", {
+      message: "New password must be different from the current password.",
+      messageType: "error",
+    });
+  }
+
+  const passwordCheck = validatePassword(new_password);
+  if (!passwordCheck.ok) {
+    return res.status(400).render("change-password", {
+      message: passwordCheck.message,
+      messageType: "error",
+    });
+  }
+
+  const user = await findById(userId);
+  if (!user) {
+    return res.status(404).render("change-password", {
+      message: "User not found.",
+      messageType: "error",
+    });
+  }
+
+  if (!verifyPassword(current_password, user.password)) {
+    return res.status(400).render("change-password", {
+      message: "Current password is incorrect.",
+      messageType: "error",
+    });
+  }
+
+  await updateUser(userId, { password: new_password });
+
+  return res.render("change-password", {
+    message: "Password updated successfully.",
+    messageType: "success",
+  });
 }
 
 async function renderInvoice(req, res) {
@@ -70,13 +145,16 @@ async function renderInvoice(req, res) {
   if (!invoice) {
     return res.status(404).send("Invoice not found.");
   }
-  const rate = await getCashbackRateForUser(req.session.userId);
+  const [rate, transactionRefund] = await Promise.all([
+    getCashbackRateForUser(req.session.userId),
+    findRefundByTransactionId(invoiceId),
+  ]);
   const invoiceCashbackCents = calculateCashbackCents(
     Math.round(Number(invoice.total_amount || 0) * 100),
     rate
   );
 
-  return res.render("invoice", { invoice, invoiceCashbackCents });
+  return res.render("invoice", { invoice, invoiceCashbackCents, transactionRefund });
 }
 
 async function renderPaymentProcessing(req, res) {
@@ -164,6 +242,8 @@ async function markAllRead(req, res) {
 module.exports = {
   renderProfile,
   updateProfile,
+  renderChangePassword,
+  updatePassword,
   renderInvoice,
   renderPaymentProcessing,
   renderPaymentSuccess,

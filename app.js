@@ -145,9 +145,17 @@ app.get("/checkout", (req, res) => {
 app.get("/payment-processing/:id", accountController.renderPaymentProcessing);
 app.get("/payment-success/:id", accountController.renderPaymentSuccess);
 app.get("/invoice/:id", accountController.renderInvoice);
+app.get("/invoice/:id/refund", refundController.renderTransactionRefundForm);
+app.post(
+  "/invoice/:id/refund",
+  uploadImage.single("refund_photo"),
+  refundController.submitTransactionRefundRequest
+);
 app.get("/purchases", accountController.renderPurchases);
 app.get("/profile", accountController.renderProfile);
 app.post("/profile", uploadImage.single("avatar"), accountController.updateProfile);
+app.get("/profile/password", accountController.renderChangePassword);
+app.post("/profile/password", accountController.updatePassword);
 app.get("/login", authController.renderLoginPage);
 app.get("/register", authController.renderRegisterPage);
 app.get("/forgot-password", authController.renderForgotPasswordPage);
@@ -155,6 +163,7 @@ app.get("/reset-password", authController.renderResetPasswordPage);
 app.get("/auth/me", authController.me);
 app.post("/auth/login", authController.login);
 app.post("/auth/verify-2fa", authController.verifyTwoFactor);
+app.post("/auth/resend-2fa", authController.resendTwoFactor);
 app.post("/auth/forgot-password", authController.forgotPassword);
 app.post("/auth/reset-password", authController.resetPassword);
 app.post("/auth/register", authController.register);
@@ -185,6 +194,8 @@ app.get("/admin/menu", adminController.renderMenu);
 app.get("/admin/menu/new", adminController.renderMenuCreate);
 app.post("/admin/menu", uploadImage.single("image"), adminController.addMenuItem);
 app.post("/admin/menu/:id", uploadImage.single("image"), adminController.editMenuItem);
+app.post("/admin/menu/:id/stock/increment", adminController.incrementMenuItemStock);
+app.post("/admin/menu/:id/stock/decrement", adminController.decrementMenuItemStock);
 app.post("/admin/menu/:id/delete", adminController.removeMenuItem);
 app.get("/admin/events", eventsController.adminList);
 app.get("/admin/events/new", eventsController.adminCreateForm);
@@ -210,6 +221,15 @@ app.post("/admin/users", adminController.addUser);
 app.post("/admin/users/:id", adminController.editUser);
 app.post("/admin/users/:id/delete", adminController.removeUser);
 app.get("/admin/purchases", adminController.renderPurchases);
+app.get("/admin/invoices", adminController.renderAdminInvoices);
+app.get("/admin/invoices/:id", adminController.renderAdminInvoice);
+app.get("/admin/transactions", adminController.renderTransactionLogs);
+app.get("/admin/reports", adminController.renderReports);
+app.get("/admin/reports.csv", adminController.exportReportsCsv);
+app.get("/admin/compliance", adminController.renderCompliance);
+app.post("/admin/compliance/watchlist", adminController.addWatchlist);
+app.post("/admin/compliance/watchlist/:id/delete", adminController.removeWatchlist);
+app.post("/admin/compliance/flags/:id/resolve", adminController.resolveCompliance);
 app.get("/api/refunds", requireAdmin, adminController.listRefundsApi);
 app.post("/api/refunds/:id/approve", requireAdmin, adminController.approveRefund);
 app.post("/api/refunds/:id/deny", requireAdmin, adminController.denyRefund);

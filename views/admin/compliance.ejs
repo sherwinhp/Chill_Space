@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Compliance</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("../partials/admin-header", { page: "admin-compliance" }) %>
+
+      <main>
+        <section class="section admin-section">
+          <div class="section-head split">
+            <div>
+              <h2>Compliance Center</h2>
+              <p>Monitor AML/KYC flags, manage watchlist entries, and review audit trails.</p>
+            </div>
+            <div class="section-actions">
+              <a class="btn ghost" href="/admin">Back to dashboard</a>
+            </div>
+          </div>
+
+          <div class="admin-metrics">
+            <div class="admin-metric-card">
+              <p>Open flags</p>
+              <strong><%= flags.filter((f) => !f.resolved_at).length %></strong>
+              <span>Needs review</span>
+            </div>
+            <div class="admin-metric-card">
+              <p>Resolved</p>
+              <strong><%= flags.filter((f) => f.resolved_at).length %></strong>
+              <span>Closed cases</span>
+            </div>
+            <div class="admin-metric-card">
+              <p>Watchlist</p>
+              <strong><%= watchlist.length %></strong>
+              <span>Active entries</span>
+            </div>
+            <div class="admin-metric-card">
+              <p>Audit logs</p>
+              <strong><%= auditLogs.length %></strong>
+              <span>Latest entries</span>
+            </div>
+          </div>
+
+          <div class="admin-panel" style="margin-bottom: 24px;">
+            <div class="admin-panel-head">
+              <div>
+                <h3>Risk flags</h3>
+                <p>AML/KYC signals detected during checkout or review.</p>
+              </div>
+              <div class="section-actions">
+                <form class="search-field" method="GET" action="/admin/compliance">
+                  <select class="search-input" name="status" aria-label="Filter flags">
+                    <option value="open" <%= (String(statusFilter || 'open') === 'open') ? 'selected' : '' %>>Open</option>
+                    <option value="resolved" <%= (String(statusFilter || '') === 'resolved') ? 'selected' : '' %>>Resolved</option>
+                    <option value="all" <%= (String(statusFilter || '') === 'all') ? 'selected' : '' %>>All</option>
+                  </select>
+                  <button class="btn ghost" type="submit">Filter</button>
+                </form>
+              </div>
+            </div>
+
+            <% if (!flags || !flags.length) { %>
+              <div class="empty-state">
+                <h3>No compliance flags.</h3>
+                <p>New flags will appear here for review.</p>
+              </div>
+            <% } else { %>
+              <div class="admin-table">
+                <div class="admin-table-row admin-header" style="grid-template-columns: 120px 1fr 160px 180px 120px;">
+                  <div>Severity</div>
+                  <div>Reason</div>
+                  <div>User</div>
+                  <div>Created</div>
+                  <div>Action</div>
+                </div>
+                <% flags.forEach(function(flag) { %>
+                  <div class="admin-table-row" style="grid-template-columns: 120px 1fr 160px 180px 120px;">
+                    <div>
+                      <span class="status-pill <%= flag.severity === 'high' ? 'danger' : flag.severity === 'medium' ? 'secondary' : '' %>">
+                        <%= flag.severity %>
+                      </span>
+                    </div>
+                    <div>
+                      <strong><%= flag.reason %></strong>
+                      <div class="mini-muted"><%= flag.details || '-' %></div>
+                    </div>
+                    <div>
+                      <strong><%= flag.user_name || 'Unknown' %></strong>
+                      <div class="mini-muted"><%= flag.user_email || '-' %></div>
+                      <div class="mini-muted">KYC: <%= flag.kyc_status || 'unverified' %></div>
+                    </div>
+                    <div><%= flag.created_at ? new Date(flag.created_at).toLocaleString() : '-' %></div>
+                    <div>
+                      <% if (flag.resolved_at) { %>
+                        <span class="status-pill">Resolved</span>
+                      <% } else { %>
+                        <form method="POST" action="/admin/compliance/flags/<%= flag.flag_id %>/resolve">
+                          <button class="btn ghost" type="submit">Resolve</button>
+                        </form>
+                      <% } %>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+          </div>
+
+          <div class="admin-panel" style="margin-bottom: 24px;">
+            <div class="admin-panel-head">
+              <div>
+                <h3>Watchlist</h3>
+                <p>Block or flag known high-risk identities.</p>
+              </div>
+            </div>
+            <form class="admin-form" action="/admin/compliance/watchlist" method="POST">
+              <div class="admin-grid-form">
+                <input name="name" type="text" placeholder="Name (optional)" />
+                <input name="email" type="email" placeholder="Email (optional)" />
+                <input name="contact_number" type="text" placeholder="Contact (optional)" />
+                <input name="reason" type="text" placeholder="Reason (optional)" />
+              </div>
+              <button class="btn primary admin-cta" type="submit">Add watchlist entry</button>
+            </form>
+
+            <% if (watchlist && watchlist.length) { %>
+              <div class="admin-table" style="margin-top: 16px;">
+                <div class="admin-table-row admin-header" style="grid-template-columns: 1fr 1fr 1fr 1fr 120px;">
+                  <div>Name</div>
+                  <div>Email</div>
+                  <div>Contact</div>
+                  <div>Reason</div>
+                  <div>Action</div>
+                </div>
+                <% watchlist.forEach(function(entry) { %>
+                  <div class="admin-table-row" style="grid-template-columns: 1fr 1fr 1fr 1fr 120px;">
+                    <div><%= entry.name || '-' %></div>
+                    <div><%= entry.email || '-' %></div>
+                    <div><%= entry.contact_number || '-' %></div>
+                    <div><%= entry.reason || '-' %></div>
+                    <div>
+                      <form method="POST" action="/admin/compliance/watchlist/<%= entry.watch_id %>/delete">
+                        <button class="btn danger" type="submit">Remove</button>
+                      </form>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } else { %>
+              <div class="empty-state">
+                <h3>No watchlist entries.</h3>
+                <p>Add one above to start screening.</p>
+              </div>
+            <% } %>
+          </div>
+
+          <div class="admin-panel">
+            <div class="admin-panel-head">
+              <div>
+                <h3>Audit log</h3>
+                <p>Latest admin actions for compliance and traceability.</p>
+              </div>
+            </div>
+            <% if (!auditLogs || !auditLogs.length) { %>
+              <div class="empty-state">
+                <h3>No audit entries.</h3>
+                <p>Admin activity will appear here.</p>
+              </div>
+            <% } else { %>
+              <div class="admin-table">
+                <div class="admin-table-row admin-header" style="grid-template-columns: 160px 1fr 200px 140px;">
+                  <div>Time</div>
+                  <div>Action</div>
+                  <div>Actor</div>
+                  <div>Target</div>
+                </div>
+                <% auditLogs.forEach(function(log) { %>
+                  <div class="admin-table-row" style="grid-template-columns: 160px 1fr 200px 140px;">
+                    <div><%= log.created_at ? new Date(log.created_at).toLocaleString() : '-' %></div>
+                    <div>
+                      <strong><%= log.action %></strong>
+                      <div class="mini-muted"><%= log.details || '-' %></div>
+                    </div>
+                    <div>
+                      <strong><%= log.actor_name || 'Admin' %></strong>
+                      <div class="mini-muted"><%= log.actor_email || '-' %></div>
+                    </div>
+                    <div>
+                      <span><%= log.target_type || '-' %></span>
+                      <div class="mini-muted"><%= log.target_id || '-' %></div>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+          </div>
+        </section>
+      </main>
+
+      <%- include("../partials/footer") %>
+    </div>
+  </body>
+</html>

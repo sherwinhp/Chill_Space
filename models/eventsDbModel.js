@@ -199,10 +199,30 @@ async function getEventById(id) {
   }
 }
 
+async function updateEventSignupStatus(eventId, userId, status) {
+  const safeEventId = Number(eventId);
+  const safeUserId = Number(userId);
+  const safeStatus = String(status || "").trim() || "paid";
+  if (!Number.isFinite(safeEventId) || !Number.isFinite(safeUserId)) return false;
+  try {
+    await db.query(
+      "UPDATE event_signups SET payment_status = ? WHERE event_id = ? AND user_id = ?",
+      [safeStatus, safeEventId, safeUserId]
+    );
+    return true;
+  } catch (error) {
+    if (error && (error.code === "ER_NO_SUCH_TABLE" || error.code === "ER_BAD_FIELD_ERROR")) {
+      return false;
+    }
+    throw error;
+  }
+}
+
 module.exports = {
   listEvents,
   createEvent,
   updateEvent,
   deleteEvent,
   getEventById,
+  updateEventSignupStatus,
 };

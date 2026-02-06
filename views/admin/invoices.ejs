@@ -3,50 +3,39 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Admin Purchases</title>
+    <title>Admin Invoices</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <div class="page">
       <div class="glow"></div>
-      <%- include("../partials/admin-header", { page: "admin-purchases" }) %>
+      <%- include("../partials/admin-header", { page: "admin-invoices" }) %>
 
       <main>
         <section class="section admin-section">
           <div class="section-head split">
             <div>
-              <h2>
-                <%= user ? `Purchase History - ${user.name}` : "Purchase History" %>
-              </h2>
-              <p>
-                <%= user ? `Orders for ${user.email}` : "All user transactions with itemized details." %>
-              </p>
+              <h2>Invoices</h2>
+              <p>All completed transactions with invoice details.</p>
             </div>
             <div class="section-actions">
               <div class="search-field">
                 <input
                   class="search-input"
                   type="search"
-                  placeholder="Search purchases"
-                  aria-label="Search purchases"
-                  data-search-input="admin-purchases"
+                  placeholder="Search invoices"
+                  aria-label="Search invoices"
+                  data-search-input="admin-invoices"
                 />
               </div>
-              <% if (user) { %>
-                <a class="btn ghost" href="/admin/users">Back to users</a>
-              <% } %>
               <a class="btn ghost" href="/admin">Back to dashboard</a>
             </div>
           </div>
 
           <% if (!transactions || !transactions.length) { %>
             <div class="empty-state">
-              <h3>No purchases yet.</h3>
-              <p>
-                <%= user
-                  ? "This user has no completed transactions yet."
-                  : "Transactions will appear here after payments are completed." %>
-              </p>
+              <h3>No invoices yet.</h3>
+              <p>Invoices will appear after payments complete.</p>
             </div>
           <% } else { %>
             <div class="purchase-grid">
@@ -54,7 +43,7 @@
                 <% const items = itemsByTransaction[transaction.transaction_id] || []; %>
                 <div
                   class="purchase-card"
-                  data-search-item="admin-purchases"
+                  data-search-item="admin-invoices"
                   data-search-text="<%= [transaction.transaction_id, transaction.status, transaction.provider, transaction.total_amount, transaction.user_name, transaction.user_email, new Date(transaction.created_at).toLocaleString(), items.map((item) => item.item_name).join(' '), items.map((item) => item.details).join(' ')].filter(Boolean).join(' ') %>"
                 >
                   <div class="purchase-head">
@@ -110,8 +99,8 @@
                 </div>
               <% }) %>
             </div>
-            <div class="empty-state search-empty is-hidden" data-search-empty="admin-purchases">
-              <h3>No purchases match your search.</h3>
+            <div class="empty-state search-empty is-hidden" data-search-empty="admin-invoices">
+              <h3>No invoices match your search.</h3>
               <p>Try another keyword or clear the search.</p>
             </div>
           <% } %>

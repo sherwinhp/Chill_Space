@@ -19,6 +19,7 @@ const {
 } = require("../services/hitpayService");
 const { upsertPaymentMethod } = require("../models/paymentMethodsModel");
 const {
+  createCardPaymentIntent,
   createCardPaymentIntentWithPaymentMethod,
   confirmCardPaymentIntent,
   createGrabPayCheckoutSession,
@@ -27,6 +28,8 @@ const {
   refundPaymentIntent,
 } = require("../services/stripe");
 const { sendEmail } = require("../models/emailService");
+const { runComplianceChecks } = require("../services/complianceService");
+const { getIp } = require("../services/auditService");
 
 function escapeHtml(value) {
   return String(value || "")
@@ -76,6 +79,47 @@ function isStripeRiskBlocked(risk) {
   const score = Number(risk.outcome?.risk_score);
   if (Number.isFinite(score) && score >= 70) return true;
   return false;
+}
+
+function calculateCartTotal(items) {
+  return (items || []).reduce((sum, item) => {
+    const price = Number(item.price);
+    const qty = Number(item.qty || 1);
+    if (!Number.isFinite(price) || !Number.isFinite(qty)) return sum;
+    return sum + price * qty;
+  }, 0);
+}
+
+function normalizeAmount(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return null;
+  return Number(amount.toFixed(2));
+}
+
+function amountsMatch(expected, actual, tolerance = 0.01) {
+  if (expected === null || actual === null) return false;
+  return Math.abs(expected - actual) <= tolerance;
+}
+
+async function enforceCompliance(req, totalAmount, context = "checkout") {
+  const userId = req.session ? req.session.userId : null;
+  const ipAddress = getIp(req);
+  const result = await runComplianceChecks({
+    userId,
+    amount: totalAmount,
+    currency: "SGD",
+    context,
+    relatedType: "payment",
+    relatedId: null,
+    ipAddress,
+  });
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: result.blockReason || "Payment requires compliance review.",
+    };
+  }
+  return { ok: true };
 }
 
 function extractEmail(value) {
@@ -378,6 +422,10 @@ async function createPaypalOrder(req, res) {
     if (!Number.isFinite(total) || total <= 0) {
       return res.status(400).json({ error: "Invalid cart total." });
     }
+    const compliance = await enforceCompliance(req, total, "paypal_create");
+    if (!compliance.ok) {
+      return res.status(403).json({ error: compliance.error });
+    }
 
     const baseUrl = `${req.protocol}://${req.get("host")}`;
     const order = await createOrder(total.toFixed(2), "SGD", {
@@ -412,6 +460,10 @@ async function createPaypalButtonOrder(req, res) {
     );
     if (!Number.isFinite(total) || total <= 0) {
       return res.status(400).json({ error: "Invalid cart total." });
+    }
+    const compliance = await enforceCompliance(req, total, "paypal_button_create");
+    if (!compliance.ok) {
+      return res.status(403).json({ error: compliance.error });
     }
 
     const order = await createOrder(total.toFixed(2), "SGD");
@@ -461,6 +513,27 @@ async function capturePaypalButtonOrder(req, res) {
       return res.status(400).json({
         error: "Cart is empty. Payment captured but no invoice was created.",
       });
+    }
+    const cartTotal = normalizeAmount(calculateCartTotal(items));
+    const captureUnit = Array.isArray(capture.purchase_units) ? capture.purchase_units[0] : null;
+    const captureAmountRaw =
+      captureUnit?.payments?.captures?.[0]?.amount?.value || captureUnit?.amount?.value;
+    const captureCurrency =
+      captureUnit?.payments?.captures?.[0]?.amount?.currency_code ||
+      captureUnit?.amount?.currency_code ||
+      "SGD";
+    const captureAmount = normalizeAmount(captureAmountRaw);
+    if (String(captureCurrency).toUpperCase() !== "SGD") {
+      return res.status(400).json({ error: "Unsupported currency." });
+    }
+    if (!amountsMatch(cartTotal, captureAmount)) {
+      return res.status(400).json({
+        error: "Payment amount mismatch. Please contact support.",
+      });
+    }
+    const compliance = await enforceCompliance(req, cartTotal, "paypal_capture");
+    if (!compliance.ok) {
+      return res.status(403).json({ error: compliance.error });
     }
     const payerId = capture.payer ? capture.payer.payer_id : "unknown";
     const payerEmail = capture.payer
@@ -517,6 +590,15 @@ async function payCheckoutWithWallet(req, res) {
       return res.status(400).json({ error: "Cart is empty." });
     }
 
+    const total = calculateCartTotal(items);
+    if (!Number.isFinite(total) || total <= 0) {
+      return res.status(400).json({ error: "Invalid cart total." });
+    }
+    const compliance = await enforceCompliance(req, total, "wallet_checkout");
+    if (!compliance.ok) {
+      return res.status(403).json({ error: compliance.error });
+    }
+
     const result = await payWithWallet({ userId, sessionId, items });
     issueTransactionCashbackIfEligible(result.transactionId).catch((error) => {
       console.error("Cashback reward issuance failed:", error.message);
@@ -559,6 +641,10 @@ async function createHitpayPayNowPayment(req, res) {
     if (!Number.isFinite(total) || total <= 0) {
       return res.status(400).json({ error: "Invalid cart total." });
     }
+    const compliance = await enforceCompliance(req, total, "hitpay_create");
+    if (!compliance.ok) {
+      return res.status(403).json({ error: compliance.error });
+    }
 
     const baseUrl = `${req.protocol}://${req.get("host")}`;
     const payment = await createPayNowPaymentRequest({
@@ -569,6 +655,14 @@ async function createHitpayPayNowPayment(req, res) {
       referenceNumber: `user-${userId}-${Date.now()}`,
       redirectUrl: `${baseUrl}/payments/hitpay/return`,
     });
+
+    if (req.session) {
+      req.session.hitpay = {
+        requestId: payment.id,
+        amount: total.toFixed(2),
+        createdAt: Date.now(),
+      };
+    }
 
     return res.json({
       id: payment.id,
@@ -605,6 +699,9 @@ async function handleHitpayReturn(req, res) {
         paymentRequest.payments.some(
           (payment) => String(payment.status || "").toLowerCase() === "succeeded"
         ));
+    if (paymentRequest.currency && String(paymentRequest.currency).toUpperCase() !== "SGD") {
+      return res.redirect("/checkout?hitpay=currency_mismatch");
+    }
 
     if (!paid) {
       return res.redirect("/checkout?hitpay=failed");
@@ -620,6 +717,25 @@ async function handleHitpayReturn(req, res) {
     const items = await listCartItems({ userId, sessionId });
     if (!items.length) {
       return res.redirect("/checkout?hitpay=empty_cart");
+    }
+
+    if (req.session?.hitpay?.requestId && req.session.hitpay.requestId !== requestId) {
+      return res.redirect("/checkout?hitpay=reference_mismatch");
+    }
+    const cartTotal = normalizeAmount(calculateCartTotal(items));
+    const paidAmount = normalizeAmount(paymentRequest.amount || paymentRequest.amount_requested);
+    if (req.session?.hitpay?.amount) {
+      const expected = normalizeAmount(req.session.hitpay.amount);
+      if (expected !== null && paidAmount !== null && !amountsMatch(expected, paidAmount)) {
+        return res.redirect("/checkout?hitpay=amount_mismatch");
+      }
+    }
+    if (cartTotal !== null && paidAmount !== null && !amountsMatch(cartTotal, paidAmount)) {
+      return res.redirect("/checkout?hitpay=amount_mismatch");
+    }
+    const compliance = await enforceCompliance(req, cartTotal, "hitpay_return");
+    if (!compliance.ok) {
+      return res.redirect("/checkout?hitpay=blocked");
     }
 
     const transaction = await createTransactionFromCart({
@@ -641,6 +757,10 @@ async function handleHitpayReturn(req, res) {
     sendInvoiceEmail(transaction.transactionId, userId).catch((error) => {
       console.error("Invoice email failed:", error.message);
     });
+
+    if (req.session && req.session.hitpay) {
+      delete req.session.hitpay;
+    }
 
     return res.redirect(`/payment-processing/${transaction.transactionId}`);
   } catch (error) {
@@ -702,27 +822,51 @@ async function payCheckoutWithStripeCard(req, res) {
     }
 
     const body = req.body || {};
+    const billing = {
+      name: body.card_name || req.session?.name,
+      email: body.card_email || req.session?.email,
+      country: body.billing_country || null,
+      postalCode: body.postal_code || null,
+    };
+    const ipCountry = req.headers["cf-ipcountry"] || req.headers["x-country-code"] || null;
     const paymentMethodId = body.payment_method_id;
-    if (!paymentMethodId) {
-      return res.status(400).json({ error: "Missing payment method." });
-    }
+    let result;
 
-    const result = await createCardPaymentIntentWithPaymentMethod({
-      amount: total.toFixed(2),
-      currency: "sgd",
-      paymentMethodId,
-      billing: {
-        name: body.card_name || req.session?.name,
-        email: body.card_email || req.session?.email,
-        country: body.billing_country || null,
-        postalCode: body.postal_code || null,
-      },
-      description: `Chill Space order for user ${userId}`,
-      metadata: { userId: String(userId), sessionId: String(sessionId || "") },
-      userId,
-      ipCountry: req.headers["cf-ipcountry"] || req.headers["x-country-code"] || null,
-      returnUrl: `${req.protocol}://${req.get("host")}/checkout`,
-    });
+    if (paymentMethodId) {
+      result = await createCardPaymentIntentWithPaymentMethod({
+        amount: total.toFixed(2),
+        currency: "sgd",
+        paymentMethodId,
+        billing,
+        description: `Chill Space order for user ${userId}`,
+        metadata: { userId: String(userId), sessionId: String(sessionId || "") },
+        userId,
+        ipCountry,
+        returnUrl: `${req.protocol}://${req.get("host")}/checkout`,
+      });
+    } else {
+      const parsedExpiry = parseExpiryInput(body.card_expiry || "");
+      const card = {
+        number: body.card_number,
+        expMonth: body.card_exp_month ?? parsedExpiry.expMonth,
+        expYear: body.card_exp_year ?? parsedExpiry.expYear,
+        cvc: body.cvc || body.card_cvc || body.card_cvv,
+      };
+      if (!card.number || !card.expMonth || !card.expYear || !card.cvc) {
+        return res.status(400).json({ error: "Missing card details." });
+      }
+      result = await createCardPaymentIntent({
+        amount: total.toFixed(2),
+        currency: "sgd",
+        card,
+        billing,
+        description: `Chill Space order for user ${userId}`,
+        metadata: { userId: String(userId), sessionId: String(sessionId || "") },
+        userId,
+        ipCountry,
+        returnUrl: `${req.protocol}://${req.get("host")}/checkout`,
+      });
+    }
 
     if (result.requiresAction) {
       return res.json({
@@ -833,6 +977,9 @@ async function confirmStripeCardPayment(req, res) {
     if (!intent || intent.status !== "succeeded") {
       return res.status(400).json({ error: "Stripe payment was not completed." });
     }
+    if (intent.currency && String(intent.currency).toLowerCase() !== "sgd") {
+      return res.status(400).json({ error: "Unsupported currency." });
+    }
 
     const risk = buildStripeRiskFromIntent(intent);
     if (isStripeRiskBlocked(risk)) {
@@ -935,7 +1082,57 @@ function buildStripeCancelUrl(req) {
 }
 
 function buildGrabPayLineItems(items) {
-  return items.map((item) => {
+  const safeItems = Array.isArray(items) ? items : [];
+  const promoItems = [];
+  const billableItems = [];
+  safeItems.forEach((item) => {
+    const price = Number(item.price);
+    const details = String(item.details || "");
+    const isPromo = details.startsWith("promo:") || price < 0;
+    if (isPromo) {
+      promoItems.push(item);
+      return;
+    }
+    billableItems.push(item);
+  });
+
+  const subtotalCents = billableItems.reduce((sum, item) => {
+    const unitCents = Math.round(Number(item.price) * 100);
+    const qty = Number(item.qty || 1);
+    if (!Number.isFinite(unitCents) || unitCents <= 0 || !Number.isFinite(qty) || qty <= 0) {
+      throw new Error("Invalid item price.");
+    }
+    return sum + unitCents * qty;
+  }, 0);
+
+  const discountCents = promoItems.reduce((sum, item) => {
+    const unitCents = Math.round(Number(item.price) * 100);
+    const qty = Number(item.qty || 1);
+    if (!Number.isFinite(unitCents) || !Number.isFinite(qty)) return sum;
+    return sum + Math.abs(unitCents * qty);
+  }, 0);
+
+  const totalCents = subtotalCents - discountCents;
+  if (!Number.isFinite(totalCents) || totalCents <= 0) {
+    throw new Error("Invalid item price.");
+  }
+
+  if (discountCents > 0) {
+    return [
+      {
+        price_data: {
+          currency: "sgd",
+          unit_amount: totalCents,
+          product_data: {
+            name: "Chill Space order",
+          },
+        },
+        quantity: 1,
+      },
+    ];
+  }
+
+  return billableItems.map((item) => {
     const unitAmount = Math.round(Number(item.price) * 100);
     if (!Number.isFinite(unitAmount) || unitAmount <= 0) {
       throw new Error("Invalid item price.");
@@ -986,18 +1183,37 @@ async function createStripeGrabPaySession(req, res) {
       return res.status(400).json({ error: "Cart is empty." });
     }
 
+    const total = calculateCartTotal(items);
+    if (!Number.isFinite(total) || total <= 0) {
+      return res.status(400).json({ error: "Invalid cart total." });
+    }
+    const compliance = await enforceCompliance(req, total, "grabpay_create");
+    if (!compliance.ok) {
+      return res.status(403).json({ error: compliance.error });
+    }
+
     const lineItems = buildGrabPayLineItems(items);
     const session = await createGrabPayCheckoutSession({
       lineItems,
       successUrl: buildStripeSuccessUrl(req),
       cancelUrl: buildStripeCancelUrl(req),
       customerEmail: req.session?.email,
-      metadata: { userId: String(userId), sessionId: String(sessionId || "") },
+      metadata: {
+        userId: String(userId),
+        sessionId: String(sessionId || ""),
+        amountCents: String(Math.round(total * 100)),
+      },
       idempotencyKey: buildIdempotencyKey({ userId, sessionId, items }),
     });
 
     if (!session || !session.url) {
       return res.status(500).json({ error: "Unable to start GrabPay payment." });
+    }
+    if (req.session) {
+      req.session.grabpay = {
+        amount: total.toFixed(2),
+        createdAt: Date.now(),
+      };
     }
     return res.json({ url: session.url });
   } catch (error) {
@@ -1037,6 +1253,31 @@ async function finalizeGrabPayCheckout({ session, userIdOverride, sessionIdOverr
   });
   if (!items.length) {
     return { ok: false, reason: "empty_cart" };
+  }
+
+  const cartTotal = normalizeAmount(calculateCartTotal(items));
+  const sessionAmount = normalizeAmount(Number(session.amount_total || 0) / 100);
+  if (!amountsMatch(cartTotal, sessionAmount)) {
+    return { ok: false, reason: "amount_mismatch" };
+  }
+  if (session.metadata?.amountCents) {
+    const metaAmount = normalizeAmount(Number(session.metadata.amountCents) / 100);
+    if (!amountsMatch(metaAmount, sessionAmount)) {
+      return { ok: false, reason: "amount_mismatch" };
+    }
+  }
+
+  const compliance = await runComplianceChecks({
+    userId,
+    amount: cartTotal,
+    currency: "SGD",
+    context: "grabpay_finalize",
+    relatedType: "payment",
+    relatedId: null,
+    ipAddress: null,
+  });
+  if (!compliance.ok) {
+    return { ok: false, reason: "compliance_blocked" };
   }
 
   const transaction = await createTransactionFromCart({
@@ -1091,7 +1332,13 @@ async function handleStripeSuccess(req, res) {
       sessionIdOverride: req.cartSid,
     });
     if (!result.ok) {
-      return res.redirect("/checkout?stripe=empty_cart");
+      const reason =
+        result.reason === "amount_mismatch"
+          ? "amount_mismatch"
+          : result.reason === "compliance_blocked"
+            ? "blocked"
+            : "empty_cart";
+      return res.redirect(`/checkout?stripe=${reason}`);
     }
     return res.redirect(`/payment-processing/${result.transactionId}`);
   } catch (error) {
@@ -1151,7 +1398,8 @@ module.exports = {
         return res.status(401).json({ error: "Login required." });
       }
 
-      const items = await listCartItems({ userId, sessionId });
+      const itemsRaw = await listCartItems({ userId, sessionId });
+      const items = Array.isArray(itemsRaw) ? itemsRaw : [];
       if (!items.length) {
         return res.status(400).json({ error: "Cart is empty." });
       }
@@ -1162,6 +1410,10 @@ module.exports = {
       );
       if (!Number.isFinite(total) || total <= 0) {
         return res.status(400).json({ error: "Invalid cart total." });
+      }
+      const compliance = await enforceCompliance(req, total, "nets_create");
+      if (!compliance.ok) {
+        return res.status(403).json({ error: compliance.error });
       }
 
       const { qrCodeUrl, txnRetrievalRef } = await createNetsQr(total);
@@ -1293,11 +1545,33 @@ module.exports = {
       });
       await Promise.all(expiredHolds.map((holdId) => releaseBookingHold(holdId)));
 
-      const items = await listCartItems({ userId, sessionId });
+      const itemsRaw = await listCartItems({ userId, sessionId });
+      const items = Array.isArray(itemsRaw) ? itemsRaw : [];
       if (!items.length) {
         return res.status(400).json({
           error: "Cart is empty. Payment verified but no invoice was created.",
         });
+      }
+
+      const cartTotal = normalizeAmount(calculateCartTotal(items));
+      let paidAmount = normalizeAmount(
+        status?.amt_in_dollars || status?.amount || status?.amtInDollars
+      );
+      if (paidAmount === null && status?.amt_in_cents) {
+        paidAmount = normalizeAmount(Number(status.amt_in_cents) / 100);
+      }
+      if (req.session?.nets?.total) {
+        const expected = normalizeAmount(req.session.nets.total);
+        if (expected !== null && paidAmount !== null && !amountsMatch(expected, paidAmount)) {
+          return res.status(400).json({ error: "Payment amount mismatch." });
+        }
+      }
+      if (cartTotal !== null && paidAmount !== null && !amountsMatch(cartTotal, paidAmount)) {
+        return res.status(400).json({ error: "Payment amount mismatch." });
+      }
+      const compliance = await enforceCompliance(req, cartTotal, "nets_complete");
+      if (!compliance.ok) {
+        return res.status(403).json({ error: compliance.error });
       }
 
       const transaction = await createTransactionFromCart({

@@ -9,26 +9,41 @@ if (walletRoot) {
   const topupTypeInputs = document.querySelectorAll("input[name='walletTopupType']");
   const stripePublishableKey = walletRoot.dataset.stripePublishableKey || "";
   const stripe = stripePublishableKey && window.Stripe ? window.Stripe(stripePublishableKey) : null;
-  const stripeElements = stripe ? stripe.elements() : null;
-  const stripeForm = document.querySelector("[data-wallet-stripe-form]");
+  const stripeElementStyle = {
+    base: {
+      color: "#111827",
+      fontFamily: '"Space Grotesk", "Segoe UI", sans-serif',
+      fontSize: "14px",
+      "::placeholder": { color: "#9aa1b1" },
+    },
+    invalid: { color: "#b42318" },
+  };
+  const stripeElements = stripe ? stripe.elements({ appearance: { theme: "stripe" } }) : null;
+  const cardNumberMount = document.getElementById("wallet-card-number-element");
+  const cardExpiryMount = document.getElementById("wallet-card-expiry-element");
+  const cardCvcMount = document.getElementById("wallet-card-cvc-element");
+  const cardNumberElement =
+    stripeElements && cardNumberMount
+      ? stripeElements.create("cardNumber", { style: stripeElementStyle })
+      : null;
+  const cardExpiryElement =
+    stripeElements && cardExpiryMount
+      ? stripeElements.create("cardExpiry", { style: stripeElementStyle })
+      : null;
+  const cardCvcElement =
+    stripeElements && cardCvcMount
+      ? stripeElements.create("cardCvc", { style: stripeElementStyle })
+      : null;
+  const cardForm = document.querySelector("[data-wallet-card-form]");
   const cardBrandEl = document.querySelector("[data-wallet-card-brand]");
   const cardNameInput = document.querySelector("[data-wallet-card-name]");
   const cardEmailInput = document.querySelector("[data-wallet-card-email]");
+  const cardNumberInput = document.querySelector("[data-wallet-card-number]");
+  const cardExpiryInput = document.querySelector("[data-wallet-card-expiry]");
+  const cardCvcInput = document.querySelector("[data-wallet-card-cvc]");
   const cardCountryInput = document.querySelector("[data-wallet-card-country]");
   const cardPostalInput = document.querySelector("[data-wallet-card-postal]");
-  const cardNumberMount = document.querySelector("#wallet-card-number");
-  const cardExpiryMount = document.querySelector("#wallet-card-expiry");
-  const cardCvcMount = document.querySelector("#wallet-card-cvc");
-  let stripeCardNumberElement = null;
-  let stripeCardExpiryElement = null;
-  let stripeCardCvcElement = null;
-  const stripeCardState = {
-    numberComplete: false,
-    expiryComplete: false,
-    cvcComplete: false,
-    error: null,
-    brand: "unknown",
-  };
+  let cardInputError = null;
   const netsModal = document.querySelector("[data-nets-modal]");
   const netsStatusEl = netsModal ? netsModal.querySelector("[data-nets-status]") : null;
   const netsQrImgEl = netsModal ? netsModal.querySelector("[data-nets-qr]") : null;
@@ -71,21 +86,126 @@ if (walletRoot) {
     return selected ? selected.value : null;
   }
 
-  function toggleStripeForm() {
-    if (!stripeForm) return;
-    const type = getSelectedTopupType();
-    stripeForm.classList.toggle("is-hidden", type !== "stripe_card");
+  function toggleCardForm() {
+    if (!cardForm) return;
+    cardForm.classList.remove("is-hidden");
+  }
+
+  function setCardBrandMessage(message, isError = false) {
+    if (!cardBrandEl) return;
+    cardBrandEl.textContent = message || "";
+    cardBrandEl.classList.toggle("is-invalid", Boolean(isError && message));
+  }
+
+  if (cardNumberElement && cardNumberMount) {
+    cardNumberElement.mount(cardNumberMount);
+  }
+  if (cardExpiryElement && cardExpiryMount) {
+    cardExpiryElement.mount(cardExpiryMount);
+  }
+  if (cardCvcElement && cardCvcMount) {
+    cardCvcElement.mount(cardCvcMount);
+  }
+
+  if (cardNumberElement) {
+    cardNumberElement.on("change", (event) => {
+      if (event.error) {
+        setCardBrandMessage(event.error.message, true);
+        return;
+      }
+      if (event.brand && event.brand !== "unknown") {
+        setCardBrandMessage(`${event.brand.toUpperCase()} detected`);
+        return;
+      }
+      setCardBrandMessage("");
+    });
+  }
+
+  function normalizeCardNumber(value) {
+    return String(value || "").replace(/\D/g, "");
+  }
+
+  function formatCardNumber(value) {
+    const digits = normalizeCardNumber(value).slice(0, 19);
+    const groups = [];
+    for (let i = 0; i < digits.length; i += 4) {
+      groups.push(digits.slice(i, i + 4));
+    }
+    return groups.join(" ");
+  }
+
+  function luhnCheck(number) {
+    const digits = normalizeCardNumber(number);
+    if (!digits) return false;
+    let sum = 0;
+    let shouldDouble = false;
+    for (let i = digits.length - 1; i >= 0; i -= 1) {
+      let digit = Number(digits[i]);
+      if (shouldDouble) {
+        digit *= 2;
+        if (digit > 9) digit -= 9;
+      }
+      sum += digit;
+      shouldDouble = !shouldDouble;
+    }
+    return sum % 10 === 0;
+  }
+
+  function detectCardBrand(number) {
+    const digits = normalizeCardNumber(number);
+    if (!digits) return "unknown";
+    if (/^4/.test(digits)) return "visa";
+    if (/^(34|37)/.test(digits)) return "amex";
+    if (/^5[1-5]/.test(digits)) return "mastercard";
+    const first4 = Number(digits.slice(0, 4));
+    if (Number.isFinite(first4) && first4 >= 2221 && first4 <= 2720) {
+      return "mastercard";
+    }
+    if (/^6011/.test(digits) || /^65/.test(digits)) return "discover";
+    const first3 = Number(digits.slice(0, 3));
+    if (Number.isFinite(first3) && first3 >= 644 && first3 <= 649) return "discover";
+    const first6 = Number(digits.slice(0, 6));
+    if (Number.isFinite(first6) && first6 >= 622126 && first6 <= 622925) {
+      return "discover";
+    }
+    return "unknown";
+  }
+
+  function formatExpiryInput(value) {
+    const digits = String(value || "").replace(/\D/g, "").slice(0, 4);
+    if (digits.length <= 2) return digits;
+    return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  }
+
+  function parseExpiryValue(value) {
+    if (!value) return { month: null, year: null };
+    const digits = String(value).replace(/\s/g, "");
+    const match = digits.match(/^(\d{1,2})\/?(\d{2,4})$/);
+    if (!match) return { month: null, year: null };
+    return { month: match[1], year: match[2] };
+  }
+
+  function formatCvcInput(value) {
+    return String(value || "")
+      .replace(/\D/g, "")
+      .slice(0, 4);
+  }
+
+  function setCardInputError(message) {
+    cardInputError = message || null;
+    updateCardBrand();
   }
 
   function updateCardBrand() {
     if (!cardBrandEl) return;
-    if (stripeCardState.error) {
-      cardBrandEl.textContent = stripeCardState.error.message || "Card details invalid";
+    if (cardInputError) {
+      cardBrandEl.textContent = cardInputError;
       cardBrandEl.classList.add("is-invalid");
       return;
     }
-    if (stripeCardState.brand && stripeCardState.brand !== "unknown") {
-      cardBrandEl.textContent = `${stripeCardState.brand.toUpperCase()} detected`;
+    const brand = detectCardBrand(cardNumberInput ? cardNumberInput.value : "");
+    if (brand && brand !== "unknown") {
+      cardBrandEl.textContent = `${brand.toUpperCase()} detected`;
       cardBrandEl.classList.remove("is-invalid");
       return;
     }
@@ -94,20 +214,73 @@ if (walletRoot) {
   }
 
   function validateCardForm() {
-    if (!stripe || !stripeCardNumberElement || !stripeCardExpiryElement || !stripeCardCvcElement) {
-      return { ok: false, message: "Stripe card form is not ready." };
+    if (!cardNumberInput || !cardExpiryInput || !cardCvcInput) {
+      return { ok: false, message: "Card form is not ready." };
     }
-    if (stripeCardState.error) {
-      return { ok: false, message: stripeCardState.error.message || "Card details invalid." };
+
+    const number = normalizeCardNumber(cardNumberInput.value);
+    if (!number) {
+      setCardInputError("Card number is required.");
+      return { ok: false, message: "Card number is required." };
     }
-    if (
-      !stripeCardState.numberComplete ||
-      !stripeCardState.expiryComplete ||
-      !stripeCardState.cvcComplete
-    ) {
-      return { ok: false, message: "Please complete your card details." };
+
+    const brand = detectCardBrand(number);
+    const lengthByBrand = {
+      visa: [13, 16, 19],
+      mastercard: [16],
+      amex: [15],
+      discover: [16, 19],
+    };
+    if (!["visa", "mastercard", "amex", "discover"].includes(brand)) {
+      setCardInputError("Unsupported card brand.");
+      return { ok: false, message: "Unsupported card brand." };
     }
-    return { ok: true };
+    if (!lengthByBrand[brand].includes(number.length)) {
+      setCardInputError("Card number length is invalid.");
+      return { ok: false, message: "Card number length is invalid." };
+    }
+    if (!luhnCheck(number)) {
+      setCardInputError("Card number failed validation.");
+      return { ok: false, message: "Card number failed validation." };
+    }
+
+    const expiryInput = cardExpiryInput.value || "";
+    const { month, year } = parseExpiryValue(expiryInput);
+    const monthNum = Number(month);
+    let yearNum = Number(year);
+    if (!Number.isFinite(monthNum) || monthNum < 1 || monthNum > 12) {
+      setCardInputError("Expiry month is invalid.");
+      return { ok: false, message: "Expiry month is invalid." };
+    }
+    if (!Number.isFinite(yearNum)) {
+      setCardInputError("Expiry year is invalid.");
+      return { ok: false, message: "Expiry year is invalid." };
+    }
+    if (yearNum < 100) {
+      yearNum += 2000;
+    }
+    const expiryDate = new Date(yearNum, monthNum, 0, 23, 59, 59, 999);
+    if (expiryDate < new Date()) {
+      setCardInputError("Card has expired.");
+      return { ok: false, message: "Card has expired." };
+    }
+
+    const cvc = formatCvcInput(cardCvcInput.value);
+    const expectedCvcLength = brand === "amex" ? 4 : 3;
+    if (cvc.length !== expectedCvcLength) {
+      setCardInputError("CVV length is invalid.");
+      return { ok: false, message: "CVV length is invalid." };
+    }
+
+    setCardInputError(null);
+    return {
+      ok: true,
+      number,
+      brand,
+      expMonth: monthNum,
+      expYear: yearNum,
+      cvc,
+    };
   }
 
   function normalizeCountryInput(value) {
@@ -368,45 +541,6 @@ if (walletRoot) {
     });
   });
 
-  if (stripeElements && cardNumberMount && cardExpiryMount && cardCvcMount) {
-    const baseStyle = {
-      base: {
-        color: "#1f2430",
-        fontSize: "14px",
-        fontFamily: "Space Grotesk, sans-serif",
-        "::placeholder": {
-          color: "#a0a4b0",
-        },
-      },
-    };
-    stripeCardNumberElement = stripeElements.create("cardNumber", { style: baseStyle });
-    stripeCardExpiryElement = stripeElements.create("cardExpiry", { style: baseStyle });
-    stripeCardCvcElement = stripeElements.create("cardCvc", { style: baseStyle });
-
-    stripeCardNumberElement.mount(cardNumberMount);
-    stripeCardExpiryElement.mount(cardExpiryMount);
-    stripeCardCvcElement.mount(cardCvcMount);
-
-    stripeCardNumberElement.on("change", (event) => {
-      stripeCardState.numberComplete = event.complete;
-      stripeCardState.error = event.error || null;
-      stripeCardState.brand = event.brand || "unknown";
-      updateCardBrand();
-    });
-
-    stripeCardExpiryElement.on("change", (event) => {
-      stripeCardState.expiryComplete = event.complete;
-      stripeCardState.error = event.error || stripeCardState.error;
-      updateCardBrand();
-    });
-
-    stripeCardCvcElement.on("change", (event) => {
-      stripeCardState.cvcComplete = event.complete;
-      stripeCardState.error = event.error || stripeCardState.error;
-      updateCardBrand();
-    });
-  }
-
   if (cardNameInput && walletRoot.dataset.userName) {
     cardNameInput.value = walletRoot.dataset.userName;
   }
@@ -414,11 +548,35 @@ if (walletRoot) {
     cardEmailInput.value = walletRoot.dataset.userEmail;
   }
 
+  if (cardNumberInput) {
+    cardNumberInput.addEventListener("input", (event) => {
+      event.target.value = formatCardNumber(event.target.value);
+      setCardInputError(null);
+      updateCardBrand();
+    });
+  }
+
+  if (cardExpiryInput) {
+    cardExpiryInput.addEventListener("input", (event) => {
+      event.target.value = formatExpiryInput(event.target.value);
+      setCardInputError(null);
+    });
+  }
+
+  if (cardCvcInput) {
+    cardCvcInput.addEventListener("input", (event) => {
+      event.target.value = formatCvcInput(event.target.value);
+      setCardInputError(null);
+    });
+  }
+
   if (topupTypeInputs && topupTypeInputs.length) {
     topupTypeInputs.forEach((input) => {
-      input.addEventListener("change", toggleStripeForm);
+      input.addEventListener("change", () => {
+        setStatus("");
+      });
     });
-    toggleStripeForm();
+    toggleCardForm();
   }
 
   if (netsCancelButtons && netsCancelButtons.length) {
@@ -430,6 +588,7 @@ if (walletRoot) {
   if (window.paypal) {
     window.paypal
       .Buttons({
+        fundingSource: window.paypal.FUNDING.PAYPAL,
         createOrder: async () => {
           setStatus("");
           const response = await fetch("/wallet/topup/paypal/create", {
@@ -474,15 +633,22 @@ if (walletRoot) {
 
   if (topupConfirmButton) {
     topupConfirmButton.addEventListener("click", async () => {
-      const type = getSelectedTopupType();
-      if (!type) {
-        setStatus("Select a top-up method.", "red");
-        return;
-      }
+      let type = getSelectedTopupType();
       const amountCents = parseTopupAmountCents();
       if (!amountCents || amountCents <= 0) {
         setStatus("Enter a valid top-up amount.", "red");
         return;
+      }
+
+      if (!type) {
+        const hasCardInput =
+          cardNumberInput && String(cardNumberInput.value || "").trim().length > 0;
+        if (hasCardInput) {
+          type = "stripe_card";
+        } else {
+          setStatus("Select a top-up method or enter card details.", "red");
+          return;
+        }
       }
 
       if (type === "paynow") {
@@ -529,11 +695,10 @@ if (walletRoot) {
       if (type === "stripe_card") {
         try {
           if (!stripe) {
-            throw new Error("Stripe is not configured on this page.");
+            throw new Error("Card payments are not available right now.");
           }
-          const validation = validateCardForm();
-          if (!validation.ok) {
-            throw new Error(validation.message || "Invalid card details.");
+          if (!cardNumberElement) {
+            throw new Error("Card input is not ready. Please refresh the page.");
           }
           const billingName = cardNameInput ? cardNameInput.value : "";
           const billingEmail = cardEmailInput ? cardEmailInput.value : "";
@@ -541,10 +706,9 @@ if (walletRoot) {
             cardCountryInput ? cardCountryInput.value : ""
           );
           const billingPostal = cardPostalInput ? cardPostalInput.value : "";
-
           const paymentMethodResult = await stripe.createPaymentMethod({
             type: "card",
-            card: stripeCardNumberElement,
+            card: cardNumberElement,
             billing_details: {
               name: billingName || undefined,
               email: billingEmail || undefined,
@@ -554,10 +718,9 @@ if (walletRoot) {
               },
             },
           });
-
-          if (paymentMethodResult.error) {
+          if (paymentMethodResult.error || !paymentMethodResult.paymentMethod) {
             throw new Error(
-              paymentMethodResult.error.message || "Unable to create card payment."
+              paymentMethodResult.error?.message || "Card details are incomplete."
             );
           }
 
@@ -565,13 +728,17 @@ if (walletRoot) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              payment_method_id: paymentMethodResult.paymentMethod.id,
               amount: (amountCents / 100).toFixed(2),
+              payment_method_id: paymentMethodResult.paymentMethod.id,
+              card_name: billingName,
+              card_email: billingEmail,
+              billing_country: billingCountry,
+              postal_code: billingPostal,
             }),
           });
           const body = await readJsonOrText(response);
           if (!response.ok) {
-            throw new Error(body.error || "Stripe top-up failed.");
+            throw new Error(body.error || "Card top-up failed.");
           }
           if (body.requiresAction && body.clientSecret) {
             const actionResult = await stripe.handleCardAction(body.clientSecret);
@@ -585,7 +752,7 @@ if (walletRoot) {
             });
             const confirmBody = await readJsonOrText(confirmResponse);
             if (!confirmResponse.ok || !confirmBody.success) {
-              throw new Error(confirmBody.error || "Stripe top-up failed.");
+              throw new Error(confirmBody.error || "Card top-up failed.");
             }
             setStatus("Top-up successful.", "green");
             if (balanceLabel && Number.isFinite(Number(confirmBody.balanceCents))) {
@@ -602,9 +769,9 @@ if (walletRoot) {
             window.setTimeout(() => window.location.reload(), 700);
             return;
           }
-          throw new Error(body.error || "Stripe top-up failed.");
+          throw new Error(body.error || "Card top-up failed.");
         } catch (error) {
-          setStatus(error.message || "Stripe top-up failed.", "red");
+          setStatus(error.message || "Card top-up failed.", "red");
         }
         return;
       }

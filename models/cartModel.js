@@ -117,6 +117,25 @@ async function incrementMenuItem({ userId, sessionId, itemId, qty, roomId = null
   return rows[0].cart_item_id;
 }
 
+async function getMenuCartQty({ userId, sessionId, itemId, roomId = null, details = "" }) {
+  const params = [itemId];
+  let where = "item_id = ? AND item_type = 'menu' AND room_id <=> ? AND details = ?";
+  params.push(roomId, details);
+  if (userId) {
+    where += " AND user_id = ?";
+    params.push(userId);
+  } else {
+    where += " AND session_id = ?";
+    params.push(sessionId);
+  }
+  const rows = await db.query(
+    `SELECT cart_item_id, qty FROM cart_items WHERE ${where} LIMIT 1`,
+    params
+  );
+  if (!rows.length) return { id: null, qty: 0 };
+  return { id: rows[0].cart_item_id, qty: Number(rows[0].qty || 0) };
+}
+
 async function updateCartItemQty(id, qty) {
   await db.query("UPDATE cart_items SET qty = ? WHERE cart_item_id = ?", [qty, id]);
 }
@@ -205,15 +224,32 @@ async function hasRoomBookingInCart({ userId, sessionId, roomId }) {
   return rows.length > 0;
 }
 
+async function removeRoomAddons({ userId, sessionId, roomId }) {
+  if (!roomId) return 0;
+  const params = [roomId];
+  let where = "item_type = 'menu' AND room_id = ? AND details LIKE 'Room add-on%'";
+  if (userId) {
+    where += " AND user_id = ?";
+    params.push(userId);
+  } else {
+    where += " AND session_id = ?";
+    params.push(sessionId);
+  }
+  const result = await db.query(`DELETE FROM cart_items WHERE ${where}`, params);
+  return result && result.affectedRows ? result.affectedRows : 0;
+}
+
 module.exports = {
   listCartItems,
   migrateSessionCartToUser,
   findBookingOverlap,
   addCartItem,
   incrementMenuItem,
+  getMenuCartQty,
   updateCartItemQty,
   deleteCartItem,
   clearCart,
   removeExpiredRoomBookings,
   hasRoomBookingInCart,
+  removeRoomAddons,
 };

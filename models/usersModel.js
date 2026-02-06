@@ -1,4 +1,54 @@
+const crypto = require("crypto");
 const db = require("../db");
+
+const HASH_PREFIX = "scrypt$";
+const SALT_BYTES = 16;
+const KEY_BYTES = 64;
+
+function isPasswordHashed(value) {
+  return typeof value === "string" && value.startsWith(HASH_PREFIX);
+}
+
+function hashPassword(password) {
+  if (!password) return "";
+  if (isPasswordHashed(password)) return password;
+  const salt = crypto.randomBytes(SALT_BYTES);
+  const key = crypto.scryptSync(String(password), salt, KEY_BYTES);
+  return `${HASH_PREFIX}${salt.toString("hex")}$${key.toString("hex")}`;
+}
+
+function verifyPassword(password, stored) {
+  if (!stored) return false;
+  if (!isPasswordHashed(stored)) {
+    return String(stored) === String(password);
+  }
+  const parts = String(stored).split("$");
+  if (parts.length !== 3) return false;
+  const saltHex = parts[1];
+  const keyHex = parts[2];
+  try {
+    const salt = Buffer.from(saltHex, "hex");
+    const key = Buffer.from(keyHex, "hex");
+    const derived = crypto.scryptSync(String(password), salt, key.length);
+    return crypto.timingSafeEqual(key, derived);
+  } catch (error) {
+    return false;
+  }
+}
+
+function formatDateOnly(value) {
+  if (!value) return null;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 function toUser(row) {
   return {
@@ -11,8 +61,10 @@ function toUser(row) {
     contact_number: row.contact_number,
     avatar_url: row.avatar_url,
     is_active: row.is_active !== undefined ? Boolean(row.is_active) : true,
-    birth_date: row.birth_date || null,
+    birth_date: formatDateOnly(row.birth_date),
     membership_tier: row.membership_tier || "Bronze",
+    kyc_status: row.kyc_status || "unverified",
+    kyc_checked_at: row.kyc_checked_at || null,
     created_at: row.created_at,
   };
 }
@@ -49,23 +101,27 @@ async function createUser({
   is_active = true,
   birth_date = null,
   membership_tier = "Bronze",
+  kyc_status = "unverified",
+  kyc_checked_at = null,
 }) {
   const existing = await findByEmail(email);
   if (existing) {
     throw new Error("Email already registered");
   }
   const result = await db.query(
-    "INSERT INTO users (name, email, password, role, address, contact_number, is_active, birth_date, membership_tier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO users (name, email, password, role, address, contact_number, is_active, birth_date, membership_tier, kyc_status, kyc_checked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [
       name,
       email,
-      password,
+      hashPassword(password),
       role,
       address || null,
       contact_number || null,
       is_active ? 1 : 0,
       birth_date || null,
       membership_tier || "Bronze",
+      kyc_status || "unverified",
+      kyc_checked_at || null,
     ]
   );
   return findById(result.insertId);
@@ -86,10 +142,20 @@ async function updateUser(id, updates) {
     "is_active",
     "birth_date",
     "membership_tier",
+    "kyc_status",
+    "kyc_checked_at",
   ];
 
   const isSuperAdmin =
     existing && String(existing.email || "").trim().toLowerCase() === "admin@admin.com";
+
+  if (Object.prototype.hasOwnProperty.call(updates, "password")) {
+    if (updates.password) {
+      updates.password = hashPassword(updates.password);
+    } else {
+      delete updates.password;
+    }
+  }
 
   allowed.forEach((key) => {
     if (!Object.prototype.hasOwnProperty.call(updates, key)) {
@@ -137,4 +203,6 @@ module.exports = {
   createUser,
   updateUser,
   deleteUser,
+  verifyPassword,
+  isPasswordHashed,
 };

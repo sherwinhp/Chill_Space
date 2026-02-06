@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Reports</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="glow"></div>
+      <%- include("../partials/admin-header", { page: "admin-reports" }) %>
+
+      <main>
+        <section class="section admin-section">
+          <div class="section-head split">
+            <div>
+              <h2>Sales Reports</h2>
+              <p>Generate filtered reports with revenue, refund, and item breakdowns.</p>
+            </div>
+            <div class="section-actions">
+              <a class="btn ghost" href="/admin">Back to dashboard</a>
+            </div>
+          </div>
+
+          <form class="admin-form" method="GET" action="/admin/reports">
+            <div class="admin-grid-form">
+              <label class="admin-menu-field">
+                <span>From</span>
+                <input type="date" name="from" value="<%= filters.from %>" />
+              </label>
+              <label class="admin-menu-field">
+                <span>To</span>
+                <input type="date" name="to" value="<%= filters.to %>" />
+              </label>
+              <label class="admin-menu-field">
+                <span>Status</span>
+                <select name="status">
+                  <option value="all" <%= filters.status === 'all' ? 'selected' : '' %>>All</option>
+                  <option value="COMPLETED" <%= filters.status === 'COMPLETED' ? 'selected' : '' %>>Completed</option>
+                  <option value="PENDING" <%= filters.status === 'PENDING' ? 'selected' : '' %>>Pending</option>
+                  <option value="CANCELLED" <%= filters.status === 'CANCELLED' ? 'selected' : '' %>>Cancelled</option>
+                  <option value="REFUNDED" <%= filters.status === 'REFUNDED' ? 'selected' : '' %>>Refunded</option>
+                </select>
+              </label>
+              <label class="admin-menu-field">
+                <span>Provider</span>
+                <select name="provider">
+                  <option value="all" <%= filters.provider === 'all' ? 'selected' : '' %>>All</option>
+                  <option value="paypal" <%= filters.provider === 'paypal' ? 'selected' : '' %>>PayPal</option>
+                  <option value="stripe_card" <%= filters.provider === 'stripe_card' ? 'selected' : '' %>>Stripe Card</option>
+                  <option value="grabpay" <%= filters.provider === 'grabpay' ? 'selected' : '' %>>GrabPay</option>
+                  <option value="nets" <%= filters.provider === 'nets' ? 'selected' : '' %>>NETS QR</option>
+                  <option value="paynow" <%= filters.provider === 'paynow' ? 'selected' : '' %>>PayNow</option>
+                  <option value="wallet" <%= filters.provider === 'wallet' ? 'selected' : '' %>>Wallet</option>
+                </select>
+              </label>
+            </div>
+            <div class="admin-menu-edit-actions">
+              <button class="btn" type="submit">Apply filters</button>
+              <a
+                class="btn ghost"
+                href="/admin/reports.csv?from=<%= encodeURIComponent(filters.from) %>&to=<%= encodeURIComponent(filters.to) %>&status=<%= encodeURIComponent(filters.status) %>&provider=<%= encodeURIComponent(filters.provider) %>"
+              >
+                Export CSV
+              </a>
+            </div>
+          </form>
+
+          <div class="admin-metrics">
+            <div class="admin-metric-card">
+              <p>Gross revenue</p>
+              <strong>$<%= totals.grossRevenue.toFixed(2) %></strong>
+              <span>Completed payments</span>
+            </div>
+            <div class="admin-metric-card">
+              <p>Refunds approved</p>
+              <strong>-$<%= totals.refundTotal.toFixed(2) %></strong>
+              <span>Within range</span>
+            </div>
+            <div class="admin-metric-card">
+              <p>Net revenue</p>
+              <strong>$<%= totals.netRevenue.toFixed(2) %></strong>
+              <span>After refunds</span>
+            </div>
+            <div class="admin-metric-card">
+              <p>Avg order</p>
+              <strong>$<%= totals.avgOrder.toFixed(2) %></strong>
+              <span><%= totals.orderCount %> completed orders</span>
+            </div>
+          </div>
+
+          <div class="admin-panel" style="margin-bottom: 24px;">
+            <div class="admin-panel-head">
+              <div>
+                <h3>Provider breakdown</h3>
+                <p>Revenue split by payment method.</p>
+              </div>
+            </div>
+            <% const providerKeys = Object.keys(providerStats || {}); %>
+            <% if (!providerKeys.length) { %>
+              <div class="empty-state">
+                <h3>No payments in this range.</h3>
+                <p>Adjust filters to see results.</p>
+              </div>
+            <% } else { %>
+              <div class="admin-table">
+                <div class="admin-table-row admin-header" style="grid-template-columns: 1fr 1fr 1fr;">
+                  <div>Provider</div>
+                  <div>Orders</div>
+                  <div>Revenue</div>
+                </div>
+                <% providerKeys.forEach(function(key) { %>
+                  <div class="admin-table-row" style="grid-template-columns: 1fr 1fr 1fr;">
+                    <div><%= key %></div>
+                    <div><%= providerStats[key].count %></div>
+                    <div>$<%= providerStats[key].revenue.toFixed(2) %></div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+          </div>
+
+          <div class="admin-panel" style="margin-bottom: 24px;">
+            <div class="admin-panel-head">
+              <div>
+                <h3>Top items</h3>
+                <p>Highest earning items in the selected range.</p>
+              </div>
+            </div>
+            <% if (!topItems || !topItems.length) { %>
+              <div class="empty-state">
+                <h3>No items sold.</h3>
+                <p>Transactions will populate this list.</p>
+              </div>
+            <% } else { %>
+              <div class="admin-table">
+                <div class="admin-table-row admin-header" style="grid-template-columns: 1fr 120px 160px;">
+                  <div>Item</div>
+                  <div>Qty</div>
+                  <div>Revenue</div>
+                </div>
+                <% topItems.forEach(function(item) { %>
+                  <div class="admin-table-row" style="grid-template-columns: 1fr 120px 160px;">
+                    <div><%= item.name %></div>
+                    <div><%= item.qty %></div>
+                    <div>$<%= item.revenue.toFixed(2) %></div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+          </div>
+
+          <div class="admin-panel" style="margin-bottom: 24px;">
+            <div class="admin-panel-head">
+              <div>
+                <h3>Transactions</h3>
+                <p>Detailed records for the selected period.</p>
+              </div>
+            </div>
+            <% if (!transactions || !transactions.length) { %>
+              <div class="empty-state">
+                <h3>No transactions.</h3>
+                <p>Adjust filters to view transactions.</p>
+              </div>
+            <% } else { %>
+              <div class="admin-table">
+                <div class="admin-table-row admin-header" style="grid-template-columns: 120px 1fr 160px 140px 140px;">
+                  <div>ID</div>
+                  <div>User</div>
+                  <div>Date</div>
+                  <div>Provider</div>
+                  <div>Total</div>
+                </div>
+                <% transactions.forEach(function(tx) { %>
+                  <div class="admin-table-row" style="grid-template-columns: 120px 1fr 160px 140px 140px;">
+                    <div>#<%= tx.transaction_id %></div>
+                    <div>
+                      <strong><%= tx.user_name || 'Unknown' %></strong>
+                      <div class="mini-muted"><%= tx.user_email || '-' %></div>
+                    </div>
+                    <div><%= tx.created_at ? new Date(tx.created_at).toLocaleString() : '-' %></div>
+                    <div><%= tx.provider || '-' %></div>
+                    <div>$<%= Number(tx.total_amount || 0).toFixed(2) %></div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+          </div>
+
+          <div class="admin-panel">
+            <div class="admin-panel-head">
+              <div>
+                <h3>Recent refunds</h3>
+                <p>Latest approved refunds within the range.</p>
+              </div>
+            </div>
+            <% if (!refunds || !refunds.length) { %>
+              <div class="empty-state">
+                <h3>No refunds.</h3>
+                <p>Approved refunds will appear here.</p>
+              </div>
+            <% } else { %>
+              <div class="admin-table">
+                <div class="admin-table-row admin-header" style="grid-template-columns: 120px 1fr 160px 140px;">
+                  <div>ID</div>
+                  <div>User</div>
+                  <div>Date</div>
+                  <div>Amount</div>
+                </div>
+                <% refunds.forEach(function(refund) { %>
+                  <div class="admin-table-row" style="grid-template-columns: 120px 1fr 160px 140px;">
+                    <div>#<%= refund.id %></div>
+                    <div>
+                      <strong><%= refund.user?.name || 'Unknown' %></strong>
+                      <div class="mini-muted"><%= refund.user?.email || '-' %></div>
+                    </div>
+                    <div><%= refund.approvedAt ? new Date(refund.approvedAt).toLocaleString() : '-' %></div>
+                    <div>$<%= Number(refund.approvedAmount || refund.requestedAmount || 0).toFixed(2) %></div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+          </div>
+        </section>
+      </main>
+
+      <%- include("../partials/footer") %>
+    </div>
+  </body>
+</html>

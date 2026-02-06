@@ -4,11 +4,13 @@ const {
   findBookingOverlap,
   addCartItem,
   incrementMenuItem,
+  getMenuCartQty,
   updateCartItemQty,
   deleteCartItem,
   clearCart,
   removeExpiredRoomBookings,
   hasRoomBookingInCart,
+  removeRoomAddons,
 } = require("../models/cartModel");
 const { releaseBookingHold } = require("../models/bookingsModel");
 const { findRoomById } = require("../models/roomsModel");
@@ -65,7 +67,10 @@ async function addItem(req, res) {
     if (!menuItem) {
       return res.status(404).json({ error: "Menu item not found." });
     }
-    if (!menuItem.isAvailable) {
+    if (!menuItem.isOrderable) {
+      if (menuItem.stockStatus === "out_of_stock") {
+        return res.status(400).json({ error: "Item is out of stock." });
+      }
       return res.status(400).json({ error: "Menu item is unavailable." });
     }
 
@@ -105,15 +110,30 @@ async function addItem(req, res) {
       return res.status(400).json({ error: "Invalid item price." });
     }
 
-    const existingId = await incrementMenuItem({
+    const existing = await getMenuCartQty({
       userId,
       sessionId,
       itemId: menuItemId,
-      qty: normalizedQty,
       roomId: roomIdValue,
       details: detailsValue,
     });
-    if (!existingId) {
+    const nextQty = Number(existing.qty || 0) + normalizedQty;
+    if (menuItem.stockQty !== null && nextQty > menuItem.stockQty) {
+      return res.status(400).json({
+        error: `Only ${menuItem.stockQty} left in stock.`,
+      });
+    }
+
+    if (existing.id) {
+      await incrementMenuItem({
+        userId,
+        sessionId,
+        itemId: menuItemId,
+        qty: normalizedQty,
+        roomId: roomIdValue,
+        details: detailsValue,
+      });
+    } else {
       await addCartItem({
         userId,
         sessionId,
@@ -234,6 +254,18 @@ async function updateItemQty(req, res) {
   if (targetItem && String(targetItem.details || "").startsWith("promo:")) {
     return res.status(400).json({ error: "Promo items cannot be edited." });
   }
+  if (targetItem && targetItem.type === "menu" && targetItem.itemId) {
+    const menuItem = await findMenuItemById(targetItem.itemId);
+    if (!menuItem) {
+      return res.status(404).json({ error: "Menu item not found." });
+    }
+    if (!menuItem.isOrderable) {
+      return res.status(400).json({ error: "Menu item is unavailable." });
+    }
+    if (menuItem.stockQty !== null && qty > menuItem.stockQty) {
+      return res.status(400).json({ error: `Only ${menuItem.stockQty} left in stock.` });
+    }
+  }
   await updateCartItemQty(id, qty);
   const items = await listCartItems({ userId, sessionId });
   res.json({ items });
@@ -242,11 +274,23 @@ async function updateItemQty(req, res) {
 async function removeItem(req, res) {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ error: "Invalid item." });
+  const { userId, sessionId } = getOwner(req);
+  const itemsBefore = await listCartItems({ userId, sessionId });
+  const targetItem = itemsBefore.find((entry) => entry.id === id);
   const holdId = await deleteCartItem(id);
   if (holdId) {
     await releaseBookingHold(holdId);
   }
-  const { userId, sessionId } = getOwner(req);
+  if (targetItem && targetItem.type === "room_booking" && targetItem.roomId) {
+    const stillHasBooking = await hasRoomBookingInCart({
+      userId,
+      sessionId,
+      roomId: targetItem.roomId,
+    });
+    if (!stillHasBooking) {
+      await removeRoomAddons({ userId, sessionId, roomId: targetItem.roomId });
+    }
+  }
   const items = await listCartItems({ userId, sessionId });
   res.json({ items });
 }

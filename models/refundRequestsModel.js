@@ -5,6 +5,7 @@ function mapRefund(row) {
   return {
     id: row.refund_id,
     bookingId: row.booking_id,
+    transactionId: row.transaction_id,
     userId: row.user_id,
     reasonText: row.reason_text,
     userMessage: row.user_message,
@@ -43,6 +44,19 @@ async function findRefundByBookingId(bookingId) {
   return rows.length ? mapRefund(rows[0]) : null;
 }
 
+async function findRefundByTransactionId(transactionId) {
+  const rows = await db.query(
+    `
+      SELECT *
+      FROM refund_requests
+      WHERE transaction_id = ?
+      LIMIT 1
+    `,
+    [transactionId]
+  );
+  return rows.length ? mapRefund(rows[0]) : null;
+}
+
 async function findRefundById(refundId) {
   const rows = await db.query(
     `
@@ -58,20 +72,25 @@ async function findRefundById(refundId) {
 
 async function createRefundRequest({
   bookingId,
+  transactionId,
   userId,
   reasonText,
   userMessage,
   requestedAmount,
   imageUrl,
 }) {
+  if (!bookingId && !transactionId) {
+    throw new Error("Missing refund source.");
+  }
   const result = await db.query(
     `
       INSERT INTO refund_requests
-        (booking_id, user_id, reason_text, user_message, image_url, requested_amount, status)
-      VALUES (?, ?, ?, ?, ?, ?, 'pending')
+        (booking_id, transaction_id, user_id, reason_text, user_message, image_url, requested_amount, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
     `,
     [
-      bookingId,
+      bookingId || null,
+      transactionId || null,
       userId,
       reasonText || null,
       userMessage || null,
@@ -88,6 +107,7 @@ async function listRefundRequests() {
       SELECT
         rr.refund_id,
         rr.booking_id,
+        rr.transaction_id,
         rr.user_id,
         rr.reason_text,
         rr.user_message,
@@ -118,21 +138,25 @@ async function listRefundRequests() {
         u.email AS user_email,
         au.name AS approved_by_name,
         du.name AS denied_by_name,
-        t.orderId AS payment_order_id,
-        t.currency AS payment_currency,
+        tx.id AS transaction_id_direct,
+        tx.amount AS transaction_total,
+        tx.time AS transaction_time,
+        COALESCE(tx.orderId, t.orderId) AS payment_order_id,
+        COALESCE(tx.currency, t.currency) AS payment_currency,
         CASE
-          WHEN t.orderId LIKE 'WALLET-%' THEN 'wallet'
-          WHEN t.orderId LIKE 'HITPAY-%' THEN 'paynow'
-          WHEN t.orderId LIKE 'NETS-%' THEN 'nets'
-          WHEN t.orderId LIKE 'STRIPE-CARD-%' THEN 'stripe_card'
-          WHEN t.orderId LIKE 'STRIPE-GRABPAY-%' THEN 'grabpay'
-          WHEN t.orderId IS NULL THEN NULL
+          WHEN COALESCE(tx.orderId, t.orderId) LIKE 'WALLET-%' THEN 'wallet'
+          WHEN COALESCE(tx.orderId, t.orderId) LIKE 'HITPAY-%' THEN 'paynow'
+          WHEN COALESCE(tx.orderId, t.orderId) LIKE 'NETS-%' THEN 'nets'
+          WHEN COALESCE(tx.orderId, t.orderId) LIKE 'STRIPE-CARD-%' THEN 'stripe_card'
+          WHEN COALESCE(tx.orderId, t.orderId) LIKE 'STRIPE-GRABPAY-%' THEN 'grabpay'
+          WHEN COALESCE(tx.orderId, t.orderId) IS NULL THEN NULL
           ELSE 'paypal'
         END AS payment_provider
       FROM refund_requests rr
-      JOIN bookings b ON b.booking_id = rr.booking_id
-      JOIN rooms r ON r.room_id = b.room_id
       JOIN users u ON u.user_id = rr.user_id
+      LEFT JOIN bookings b ON b.booking_id = rr.booking_id
+      LEFT JOIN rooms r ON r.room_id = b.room_id
+      LEFT JOIN transactions tx ON tx.id = rr.transaction_id
       LEFT JOIN transaction_items ti
         ON ti.item_type = 'room_booking'
        AND ti.room_id = b.room_id
@@ -147,22 +171,75 @@ async function listRefundRequests() {
 
   return rows.map((row) => ({
     ...mapRefund(row),
-    booking: {
-      id: row.booking_id,
-      roomName: row.room_name,
-      roomImage: row.room_image,
-      startTime: row.start_time,
-      endTime: row.end_time,
-      totalPrice: row.total_price,
-      paymentStatus: row.payment_status,
-      adminStatus: row.admin_status,
-    },
+    booking: row.booking_id
+      ? {
+          id: row.booking_id,
+          roomName: row.room_name,
+          roomImage: row.room_image,
+          startTime: row.start_time,
+          endTime: row.end_time,
+          totalPrice: row.total_price,
+          paymentStatus: row.payment_status,
+          adminStatus: row.admin_status,
+        }
+      : null,
+    transaction: row.transaction_id_direct
+      ? {
+          id: row.transaction_id_direct,
+          totalAmount: row.transaction_total,
+          createdAt: row.transaction_time,
+          provider: row.payment_provider,
+          providerOrderId: row.payment_order_id,
+          currency: row.payment_currency,
+        }
+      : null,
     user: {
       name: row.user_name,
       email: row.user_email,
     },
     approvedByName: row.approved_by_name,
     deniedByName: row.denied_by_name,
+  }));
+}
+
+async function listRefundRequestsByDateRange({ from, to } = {}) {
+  const params = [];
+  let where = "1=1";
+  if (from) {
+    where += " AND rr.created_at >= ?";
+    params.push(from);
+  }
+  if (to) {
+    where += " AND rr.created_at <= ?";
+    params.push(to);
+  }
+  const rows = await db.query(
+    `
+      SELECT
+        rr.refund_id,
+        rr.booking_id,
+        rr.transaction_id,
+        rr.user_id,
+        rr.requested_amount,
+        rr.approved_amount,
+        rr.status,
+        rr.created_at,
+        rr.approved_at,
+        rr.provider,
+        rr.provider_ref,
+        rr.refund_provider_ref,
+        u.name AS user_name,
+        u.email AS user_email
+      FROM refund_requests rr
+      LEFT JOIN users u ON u.user_id = rr.user_id
+      WHERE ${where}
+      ORDER BY rr.created_at DESC
+    `,
+    params
+  );
+  return rows.map((row) => ({
+    ...mapRefund(row),
+    user: { name: row.user_name, email: row.user_email },
   }));
 }
 
@@ -198,8 +275,10 @@ async function updateRefundRequest(refundId, updates = {}) {
 
 module.exports = {
   findRefundByBookingId,
+  findRefundByTransactionId,
   findRefundById,
   createRefundRequest,
   listRefundRequests,
+  listRefundRequestsByDateRange,
   updateRefundRequest,
 };

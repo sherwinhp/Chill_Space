@@ -1,5 +1,65 @@
 const db = require("../db");
 
+const LOW_STOCK_THRESHOLD = 5;
+
+function normalizeStockQty(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const qty = Number(value);
+  if (!Number.isFinite(qty)) return null;
+  return Math.max(0, Math.floor(qty));
+}
+
+function getStockInfo({ category, stockQty, isAvailable }) {
+  const trackStock = category === "food" || category === "drink";
+  if (!trackStock) {
+    const status = isAvailable ? "available" : "unavailable";
+    return {
+      qty: stockQty,
+      status,
+      label: isAvailable ? "Available" : "Unavailable",
+      isOrderable: isAvailable,
+    };
+  }
+  if (!isAvailable) {
+    return {
+      qty: stockQty,
+      status: "unavailable",
+      label: "Unavailable",
+      isOrderable: false,
+    };
+  }
+  if (stockQty == null) {
+    return {
+      qty: null,
+      status: "in_stock",
+      label: "In stock",
+      isOrderable: true,
+    };
+  }
+  if (stockQty <= 0) {
+    return {
+      qty: 0,
+      status: "out_of_stock",
+      label: "No stock",
+      isOrderable: false,
+    };
+  }
+  if (stockQty <= LOW_STOCK_THRESHOLD) {
+    return {
+      qty: stockQty,
+      status: "low_stock",
+      label: "Low in stock",
+      isOrderable: true,
+    };
+  }
+  return {
+    qty: stockQty,
+    status: "in_stock",
+    label: "In stock",
+    isOrderable: true,
+  };
+}
+
 function pick(row, keys, fallback = null) {
   for (const key of keys) {
     if (Object.prototype.hasOwnProperty.call(row, key) && row[key] != null) {
@@ -12,6 +72,9 @@ function pick(row, keys, fallback = null) {
 function toMenuItem(row) {
   const rawCategory = String(pick(row, ["category", "type"], "food")).toLowerCase();
   const category = ["food", "drink", "addon"].includes(rawCategory) ? rawCategory : "food";
+  const isAvailable = Boolean(pick(row, ["is_available", "available", "isAvailable"], 1));
+  const stockQty = normalizeStockQty(pick(row, ["stock_qty", "stock", "stockQty"], null));
+  const stockInfo = getStockInfo({ category, stockQty, isAvailable });
   return {
     id: Number(pick(row, ["item_id", "product_id", "id"], 0)),
     name: pick(row, ["name", "product_name", "title"], ""),
@@ -19,7 +82,11 @@ function toMenuItem(row) {
     description: pick(row, ["description", "product_description"], ""),
     price: Number(pick(row, ["price", "product_price"], 0)),
     image: pick(row, ["image_url", "image", "product_image"], ""),
-    isAvailable: Boolean(pick(row, ["is_available", "available", "isAvailable"], 1)),
+    isAvailable,
+    stockQty: stockInfo.qty,
+    stockStatus: stockInfo.status,
+    stockLabel: stockInfo.label,
+    isOrderable: stockInfo.isOrderable,
   };
 }
 
@@ -67,11 +134,20 @@ async function findMenuItemById(id) {
 }
 
 async function createMenuItem(payload) {
-  const { name, category, price, description, image_url, is_available } = payload;
+  const { name, category, price, description, image_url, is_available, stock_qty } = payload;
+  const normalizedStock = normalizeStockQty(stock_qty);
   const result = await db.query(
-    `INSERT INTO menu_items (name, category, price, description, image_url, is_available)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [name, category, price, description || "", image_url || "", is_available ? 1 : 0]
+    `INSERT INTO menu_items (name, category, price, description, image_url, is_available, stock_qty)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      name,
+      category,
+      price,
+      description || "",
+      image_url || "",
+      is_available ? 1 : 0,
+      normalizedStock,
+    ]
   );
   return result.insertId;
 }
@@ -79,11 +155,20 @@ async function createMenuItem(payload) {
 async function updateMenuItem(id, updates) {
   const fields = [];
   const params = [];
-  const allowed = ["name", "category", "price", "description", "image_url", "is_available"];
+  const allowed = [
+    "name",
+    "category",
+    "price",
+    "description",
+    "image_url",
+    "is_available",
+    "stock_qty",
+  ];
   allowed.forEach((key) => {
     if (Object.prototype.hasOwnProperty.call(updates, key)) {
+      const value = key === "stock_qty" ? normalizeStockQty(updates[key]) : updates[key];
       fields.push(`${key} = ?`);
-      params.push(updates[key]);
+      params.push(value);
     }
   });
   if (!fields.length) return true;

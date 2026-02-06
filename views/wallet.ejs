@@ -23,6 +23,8 @@
 
       <main>
         <section class="section purchase-page">
+          <% const tierName = membershipTier || "Bronze"; %>
+          <% const cashbackPercent = Math.round((Number(cashbackRate || 0) * 100) * 10) / 10; %>
           <div class="section-head split">
             <div>
               <h2>E-Wallet</h2>
@@ -33,19 +35,41 @@
 
           <div class="payment-layout">
             <div class="payment-column">
-              <div class="summary-card">
-                <div class="summary-row">
-                  <span>Membership Tier</span>
-                  <strong><%= membershipTier || "Bronze" %></strong>
+              <div class="summary-card wallet-summary-card">
+                <div class="wallet-summary-head">
+                  <div>
+                    <div class="wallet-eyebrow">Wallet overview</div>
+                    <div class="wallet-balance" id="wallet-balance-label">
+                      $<%= (Number(walletBalance || 0) / 100).toFixed(2) %>
+                    </div>
+                    <div class="wallet-balance-sub">Available balance</div>
+                    <div class="wallet-balance-note">
+                      Pending cashback: $<%= (Number(walletPending || 0) / 100).toFixed(2) %>
+                    </div>
+                  </div>
+                  <div class="wallet-tier-pill">
+                    <span>Membership</span>
+                    <strong><%= tierName %></strong>
+                    <small>Cashback <%= cashbackPercent.toFixed(1) %>%</small>
+                  </div>
                 </div>
-                <h3>Current balance</h3>
-                <div class="summary-row total">
-                  <span>Available</span>
-                  <strong id="wallet-balance-label">$<%= (Number(walletBalance || 0) / 100).toFixed(2) %></strong>
-                </div>
-                <div class="summary-row">
-                  <span>Pending Cashback</span>
-                  <strong>$<%= (Number(walletPending || 0) / 100).toFixed(2) %></strong>
+
+                <div class="wallet-metrics">
+                  <div class="wallet-metric">
+                    <span>Total spent</span>
+                    <strong>$<%= (Number(totalSpentCents || 0) / 100).toFixed(2) %></strong>
+                    <small>All time</small>
+                  </div>
+                  <div class="wallet-metric">
+                    <span>Pending cashback</span>
+                    <strong>$<%= (Number(walletPending || 0) / 100).toFixed(2) %></strong>
+                    <small>Releases soon</small>
+                  </div>
+                  <div class="wallet-metric">
+                    <span>Cashback rate</span>
+                    <strong><%= cashbackPercent.toFixed(1) %>%</strong>
+                    <small>Based on tier</small>
+                  </div>
                 </div>
               </div>
 
@@ -57,51 +81,58 @@
                 data-user-name="<%= session && session.name ? session.name : '' %>"
                 data-stripe-publishable-key="<%= process.env.STRIPE_PUBLISHABLE_KEY || '' %>"
               >
-                <div class="payment-block">
-                  <h3>Top up balance</h3>
-                  <div class="event-tabs">
-                    <button class="event-tab active" type="button" data-wallet-preset data-amount="5.00">$5</button>
-                    <button class="event-tab" type="button" data-wallet-preset data-amount="10.00">$10</button>
-                    <button class="event-tab" type="button" data-wallet-preset data-amount="20.00">$20</button>
+                <div class="payment-block wallet-topup-block">
+                  <div class="wallet-topup-head">
+                    <div>
+                      <h3>Top up balance</h3>
+                      <p class="wallet-topup-sub">Choose a quick amount or enter a custom value.</p>
+                    </div>
+                    <span class="wallet-topup-badge">Instant credit</span>
                   </div>
-                  <label>
-                    Custom amount (SGD)
-                    <input id="wallet-amount-input" type="number" min="1" max="500" step="0.01" value="5.00" />
+                  <div class="wallet-amount-grid">
+                    <button class="wallet-amount-pill active" type="button" data-wallet-preset data-amount="5.00">$5</button>
+                    <button class="wallet-amount-pill" type="button" data-wallet-preset data-amount="10.00">$10</button>
+                    <button class="wallet-amount-pill" type="button" data-wallet-preset data-amount="20.00">$20</button>
+                    <button class="wallet-amount-pill" type="button" data-wallet-preset data-amount="50.00">$50</button>
+                  </div>
+                  <label class="wallet-amount-input">
+                    <span>Custom amount (SGD)</span>
+                    <div class="wallet-amount-input-row">
+                      <span class="wallet-currency">SGD</span>
+                      <input id="wallet-amount-input" type="number" min="1" max="500" step="0.01" value="5.00" />
+                    </div>
                   </label>
                 </div>
 
-                <div class="payment-block">
+                <div class="payment-block wallet-paypal-block">
                   <h4>PayPal top-up</h4>
                   <div id="wallet-paypal-button"></div>
                   <p id="wallet-status" class="auth-status"></p>
                 </div>
 
-                <div class="payment-block">
+                <div class="payment-block wallet-methods">
                   <h4>Other top-up methods</h4>
-                  <label class="payment-pill nets">
-                    <input type="radio" name="walletTopupType" value="nets" />
-                    <span class="pill-text">NETS QR</span>
-                    <span class="pill-indicator"></span>
-                  </label>
-                  <label class="payment-pill paynow">
-                    <input type="radio" name="walletTopupType" value="paynow" />
-                    <span class="pill-text">PayNow</span>
-                    <span class="pill-indicator"></span>
-                  </label>
-                  <label class="payment-pill grabpay">
-                    <input type="radio" name="walletTopupType" value="grabpay" />
-                    <span class="pill-text">GrabPay</span>
-                    <span class="pill-indicator"></span>
-                  </label>
-                  <label class="payment-pill stripe">
-                    <input type="radio" name="walletTopupType" value="stripe_card" />
-                    <span class="pill-text">Card (Stripe)</span>
-                    <span class="pill-indicator"></span>
-                  </label>
+                  <div class="wallet-method-grid">
+                    <label class="payment-pill nets wallet-method">
+                      <input type="radio" name="walletTopupType" value="nets" />
+                      <span class="pill-text">NETS QR</span>
+                      <span class="pill-indicator"></span>
+                    </label>
+                    <label class="payment-pill paynow wallet-method">
+                      <input type="radio" name="walletTopupType" value="paynow" />
+                      <span class="pill-text">PayNow</span>
+                      <span class="pill-indicator"></span>
+                    </label>
+                    <label class="payment-pill grabpay wallet-method">
+                      <input type="radio" name="walletTopupType" value="grabpay" />
+                      <span class="pill-text">GrabPay</span>
+                      <span class="pill-indicator"></span>
+                    </label>
+                  </div>
                 </div>
 
-                <div class="payment-block stripe-card-form is-hidden" data-wallet-stripe-form>
-                  <h4>Card details</h4>
+                <div class="payment-block wallet-card-form" data-wallet-card-form>
+                  <h4>Pay with card</h4>
                   <p class="field-hint">Supported: Visa, Mastercard, American Express, Discover.</p>
                   <div class="field">
                     <span>Name on card</span>
@@ -113,17 +144,17 @@
                   </div>
                   <div class="field">
                     <span>Card number</span>
-                    <div class="stripe-input" id="wallet-card-number"></div>
+                    <div id="wallet-card-number-element" class="stripe-input"></div>
                     <small class="field-hint card-brand" data-wallet-card-brand></small>
                   </div>
                   <div class="field-group">
                     <label class="field">
                       <span>Expiry (MM/YY)</span>
-                      <div class="stripe-input" id="wallet-card-expiry"></div>
+                      <div id="wallet-card-expiry-element" class="stripe-input"></div>
                     </label>
                     <label class="field">
                       <span>CVV</span>
-                      <div class="stripe-input" id="wallet-card-cvc"></div>
+                      <div id="wallet-card-cvc-element" class="stripe-input"></div>
                     </label>
                     <label class="field">
                       <span>Billing country</span>
