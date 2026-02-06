@@ -1,3 +1,14 @@
+// I declare that this code was written by me. 
+// I will not copy or allow others to copy my code. 
+// I understand that copying code is considered as plagiarism.
+ 
+// Student Name: Aaron Ryan Tan Wei Rong
+
+// Student ID:24048424​
+
+//  Class: C372-002-E63C
+//  Date created: 06-02-2026
+
 // Lightweight booking store (in-memory) and DB-backed admin helpers.
 const db = require("../db");
 const { findRoomById } = require("./roomsModel");
@@ -15,7 +26,6 @@ const PAYMENT_STATUSES = [
 const ACTIVE_STATUSES = new Set(["pending", "approved"]);
 const NORMAL_RATE_PER_HOUR = 12;
 const PEAK_RATE_PER_HOUR = 15;
-const PEAK_SURCHARGE_RATE = 0.1;
 const WEEKDAY_PEAK_START_HOUR = 18;
 const WEEKDAY_PEAK_END_HOUR = 23;
 const WEEKEND_PEAK_START_HOUR = 13;
@@ -97,7 +107,7 @@ function resolveRates(pricing = {}) {
 function applyPeakSurcharge(rate) {
   const base = Number(rate);
   if (!Number.isFinite(base) || base <= 0) return 0;
-  return Number((base * (1 + PEAK_SURCHARGE_RATE)).toFixed(2));
+  return Number(base.toFixed(2));
 }
 
 function getHourlyRateByTime(value, pricing = {}) {
@@ -105,10 +115,7 @@ function getHourlyRateByTime(value, pricing = {}) {
   if (!isPeakHour(value)) {
     return rates.normalRate;
   }
-  const surchargedPeak = Number((rates.peakRate * (1 + PEAK_SURCHARGE_RATE)).toFixed(2));
-  return Number.isFinite(surchargedPeak) && surchargedPeak > 0
-    ? surchargedPeak
-    : rates.peakRate;
+  return rates.peakRate;
 }
 
 function getMaxAllowedDate(from = new Date()) {
@@ -123,9 +130,18 @@ function calculateBookingPrice(start, end, pricing = {}) {
   if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate <= startDate) {
     return 0;
   }
-  const hours = (endDate - startDate) / 3600000;
-  const hourlyRate = getHourlyRateByTime(startDate, pricing);
-  return Number((hours * hourlyRate).toFixed(2));
+  const rates = resolveRates(pricing);
+  let total = 0;
+  let cursor = new Date(startDate);
+  while (cursor < endDate) {
+    const nextHour = new Date(cursor.getTime() + 60 * 60000);
+    const segmentEnd = nextHour > endDate ? endDate : nextHour;
+    const hours = (segmentEnd - cursor) / 3600000;
+    const rate = isPeakHour(cursor) ? rates.peakRate : rates.normalRate;
+    total += hours * rate;
+    cursor = segmentEnd;
+  }
+  return Number(total.toFixed(2));
 }
 
 function createBooking(payload) {
@@ -152,15 +168,12 @@ function createBooking(payload) {
     throw new Error("This room is already booked for that time.");
   }
 
-  const totalMinutes =
-    toMinutes(payload.endTime) - toMinutes(payload.startTime) > 0
-      ? toMinutes(payload.endTime) - toMinutes(payload.startTime)
-      : 0;
-  const rateUsed = isPeakDateTime(payload.date, payload.startTime)
-    ? Number(room.peakHourlyRate)
-    : Number(room.normalHourlyRate);
-  const safeRate = Number.isFinite(rateUsed) ? rateUsed : 0;
-  const totalPrice = Number(((totalMinutes / 60) * safeRate).toFixed(2));
+  const startDate = parseDateTime(payload.date, payload.startTime);
+  const endDate = parseDateTime(payload.date, payload.endTime);
+  const totalPrice = calculateBookingPrice(startDate, endDate, {
+    normalRate: room.normalHourlyRate,
+    peakRate: room.peakHourlyRate,
+  });
 
   const booking = {
     id: nextId++,
@@ -300,6 +313,14 @@ function isPeakDateTime(dateValue, timeValue) {
   return isPeakHour(date);
 }
 
+function parseDateTime(dateValue, timeValue) {
+  if (!dateValue || typeof dateValue !== "string") return null;
+  const timePart = timeValue ? String(timeValue).trim() : "00:00:00";
+  const normalizedTime = timePart.length === 5 ? `${timePart}:00` : timePart;
+  const date = new Date(`${dateValue}T${normalizedTime}`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 module.exports = {
   listBookings,
   getBookingById,
@@ -317,7 +338,6 @@ module.exports = {
   updatePaymentStatus,
   NORMAL_RATE_PER_HOUR,
   PEAK_RATE_PER_HOUR,
-  PEAK_SURCHARGE_RATE,
   BOOKING_STATUSES,
   PAYMENT_STATUSES,
   MAX_BOOKING_MONTHS_AHEAD,

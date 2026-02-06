@@ -64,7 +64,7 @@
                       </div>
                       <div class="price room-price">
                         <strong>Normal: $<%= Number(room.normalHourlyRate || 0).toFixed(2) %>/hr</strong>
-                        <span> | Peak (+10%) (Weekdays 6pm-11pm, Weekends 1-4pm & 8-11pm): $<%= Number(room.peakHourlyRateDisplay || room.peakHourlyRate || 0).toFixed(2) %>/hr</span>
+                        <span> | Peak (Weekdays 6pm-11pm, Weekends 1-4pm & 8-11pm): $<%= Number(room.peakHourlyRateDisplay || room.peakHourlyRate || 0).toFixed(2) %>/hr</span>
                       </div>
                     </div>
                     <div class="meta">Capacity: <%= room.capacity %> people</div>
@@ -74,14 +74,13 @@
                           .split(",")
                           .map((item) => item.trim())
                           .filter(Boolean); %>
-                    <% const displayFeatures = featuresList.length
-                      ? featuresList
-                      : ["PC setup", "Headsets", "RGB lighting"]; %>
-                    <div class="features">
-                      <% displayFeatures.slice(0, 3).forEach(function(feature) { %>
-                        <span><%= feature %></span>
-                      <% }) %>
-                    </div>
+                    <% if (featuresList.length) { %>
+                      <div class="features">
+                        <% featuresList.slice(0, 3).forEach(function(feature) { %>
+                          <span><%= feature %></span>
+                        <% }) %>
+                      </div>
+                    <% } %>
                     <a class="btn primary full" href="/rooms/<%= room.id %>">Book Now</a>
                   </div>
                 </article>

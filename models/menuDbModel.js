@@ -1,3 +1,14 @@
+// I declare that this code was written by me. 
+// I will not copy or allow others to copy my code. 
+// I understand that copying code is considered as plagiarism.
+ 
+// Student Name: Aaron Ryan Tan Wei Rong
+
+// Student ID:24048424​
+
+//  Class: C372-002-E63C
+//  Date created: 06-02-2026
+
 const db = require("../db");
 
 const LOW_STOCK_THRESHOLD = 5;

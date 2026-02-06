@@ -1,5 +1,5 @@
-const OPEN_HOUR = 10;
-const CLOSE_HOUR = 22;
+const OPEN_HOUR = 11;
+const CLOSE_HOUR = 23;
 const SLOT_MINUTES = 60;
 const MONTHS_AHEAD = 3;
 const MIN_LEAD_HOURS = 2;
@@ -9,7 +9,6 @@ const WEEKEND_PEAK_START_HOUR = 13;
 const WEEKEND_PEAK_END_HOUR = 16;
 const WEEKEND_PEAK2_START_HOUR = 20;
 const WEEKEND_PEAK2_END_HOUR = 23;
-const PEAK_SURCHARGE_RATE = 0.1;
 
 const widget = document.querySelector("[data-booking-widget]");
 const calendarEl = document.querySelector("[data-booking-calendar]");
@@ -191,8 +190,33 @@ function isPeakTime(value) {
 
 function getRateForTime(value) {
   if (!isPeakTime(value)) return state.normalRate;
-  const surcharged = Number((state.peakRate * (1 + PEAK_SURCHARGE_RATE)).toFixed(2));
-  return Number.isFinite(surcharged) && surcharged > 0 ? surcharged : state.peakRate;
+  const peak = Number(state.peakRate);
+  return Number.isFinite(peak) && peak > 0 ? peak : state.normalRate;
+}
+
+function getPeakLabel() {
+  return "Peak (Weekdays 6pm-11pm, Weekends 1-4pm & 8-11pm)";
+}
+
+function computeRangePricing(startTime, slotCount) {
+  let total = 0;
+  let hasPeak = false;
+  let hasNormal = false;
+  for (let i = 0; i < slotCount; i += 1) {
+    const slotStart = new Date(startTime.getTime() + i * SLOT_MINUTES * 60000);
+    const rate = getRateForTime(slotStart);
+    total += rate;
+    if (isPeakTime(slotStart)) {
+      hasPeak = true;
+    } else {
+      hasNormal = true;
+    }
+  }
+  return {
+    total: Number(total.toFixed(2)),
+    hasPeak,
+    hasNormal,
+  };
 }
 
 function listDays(start, end) {
@@ -273,7 +297,8 @@ function renderCalendar(start, end) {
     grid.appendChild(header);
   });
 
-  const offset = (visibleStart.getDay() + 6) % 7;
+  const offsetBase = days.length ? days[0] : visibleStart;
+  const offset = (offsetBase.getDay() + 6) % 7;
   for (let i = 0; i < offset; i += 1) {
     const spacer = document.createElement("span");
     spacer.className = "calendar-spacer";
@@ -387,16 +412,20 @@ function updateSummary() {
   const startTime = state.selectedSlot.start;
   const slotCount = state.selectedRange ? state.selectedRange.end - state.selectedRange.start + 1 : 1;
   const endTime = new Date(startTime.getTime() + slotCount * SLOT_MINUTES * 60000);
-  const hourlyRate = getRateForTime(startTime);
-  const total = Number((slotCount * hourlyRate).toFixed(2));
-  const rateLabel = isPeakTime(startTime)
-    ? `Peak (+${Math.round(PEAK_SURCHARGE_RATE * 100)}%) (Weekdays 6pm-11pm, Weekends 1-4pm & 8-11pm)`
-    : "Normal";
+  const pricing = computeRangePricing(startTime, slotCount);
+  let rateText = "";
+  if (pricing.hasPeak && pricing.hasNormal) {
+    rateText = `Mixed (Normal $${state.normalRate.toFixed(2)}/hr, Peak $${state.peakRate.toFixed(2)}/hr)`;
+  } else if (pricing.hasPeak) {
+    rateText = `${getPeakLabel()} $${state.peakRate.toFixed(2)}/hr`;
+  } else {
+    rateText = `Normal $${state.normalRate.toFixed(2)}/hr`;
+  }
   summaryEl.textContent = `${state.roomName} - ${formatDate(state.selectedDate)} (${formatTime(
     startTime
-  )} to ${formatTime(endTime)}) - ${rateLabel} $${hourlyRate.toFixed(2)}/hr - Total $${total.toFixed(2)}`;
+  )} to ${formatTime(endTime)}) - ${rateText} - Total $${pricing.total.toFixed(2)}`;
   addButton.disabled = false;
-  addButton.dataset.total = total.toFixed(2);
+  addButton.dataset.total = pricing.total.toFixed(2);
 }
 
 async function loadAvailability() {
@@ -428,8 +457,8 @@ function bookSlot() {
   const startTime = state.selectedSlot.start;
   const slotCount = state.selectedRange ? state.selectedRange.end - state.selectedRange.start + 1 : 1;
   const endTime = new Date(startTime.getTime() + slotCount * SLOT_MINUTES * 60000);
-  const hourlyRate = getRateForTime(startTime);
-  const total = Number((slotCount * hourlyRate).toFixed(2));
+  const pricing = computeRangePricing(startTime, slotCount);
+  const total = pricing.total;
   fetch(`/rooms/${state.roomId}/hold`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
