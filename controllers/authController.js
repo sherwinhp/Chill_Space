@@ -168,6 +168,7 @@ async function login(req, res) {
       html: emailContent.html,
     });
   } catch (error) {
+    console.error("OTP email failed:", error && error.message ? error.message : error);
     return res
       .status(500)
       .json({ error: "Unable to send verification code. Please try again." });

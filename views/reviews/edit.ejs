@@ -10,22 +10,127 @@ Student ID: 24048278, 24045221, 24049188, 24048876, 24046565, 24048424
 Class: C372-002-E63C
 Date created: 06-02-2026
 -->
-<%- include("../partials/header", { page: "reviews" }) %>
+<div class="page">
+  <div class="glow"></div>
+  <%- include("../partials/header", { page: "reviews" }) %>
 
-<h2>Edit Review</h2>
+  <main>
+    <section class="section review-form-section">
+      <div class="section-head">
+        <div>
+          <h2>Edit Review</h2>
+          <p>Update your rating, comments, or photo.</p>
+        </div>
+      </div>
 
-<form action="/reviews/edit/<%= review.review_id %>" method="POST" enctype="multipart/form-data">
-    <label>Rating:</label>
-    <input type="number" name="rating" value="<%= review.rating %>" min="1" max="5" required>
+      <form action="/reviews/edit/<%= review.review_id %>" method="POST" class="review-form" enctype="multipart/form-data">
+        <div class="field-group">
+          <div class="field">
+            <span>Room Experience</span>
+            <div class="star-rating" data-rating-group>
+              <button type="button" data-value="1" aria-label="1 star">&#9733;</button>
+              <button type="button" data-value="2" aria-label="2 stars">&#9733;</button>
+              <button type="button" data-value="3" aria-label="3 stars">&#9733;</button>
+              <button type="button" data-value="4" aria-label="4 stars">&#9733;</button>
+              <button type="button" data-value="5" aria-label="5 stars">&#9733;</button>
+            </div>
+            <input
+              type="hidden"
+              name="ratingRoom"
+              data-rating-input
+              value="<%= review.rating %>"
+              required
+            />
+          </div>
 
-    <label>Comment:</label>
-    <textarea name="comment" required><%= review.comment %></textarea>
+          <div class="field">
+            <span>Food</span>
+            <div class="star-rating" data-rating-group>
+              <button type="button" data-value="1" aria-label="1 star">&#9733;</button>
+              <button type="button" data-value="2" aria-label="2 stars">&#9733;</button>
+              <button type="button" data-value="3" aria-label="3 stars">&#9733;</button>
+              <button type="button" data-value="4" aria-label="4 stars">&#9733;</button>
+              <button type="button" data-value="5" aria-label="5 stars">&#9733;</button>
+            </div>
+            <input
+              type="hidden"
+              name="ratingFood"
+              data-rating-input
+              value="<%= review.rating_food || review.rating %>"
+              required
+            />
+          </div>
 
-    <label>Photo (optional):</label>
-    <input type="file" name="photo" accept="image/*">
-    <input type="hidden" name="currentImageUrl" value="<%= review.image_url || '' %>">
+          <div class="field">
+            <span>Service</span>
+            <div class="star-rating" data-rating-group>
+              <button type="button" data-value="1" aria-label="1 star">&#9733;</button>
+              <button type="button" data-value="2" aria-label="2 stars">&#9733;</button>
+              <button type="button" data-value="3" aria-label="3 stars">&#9733;</button>
+              <button type="button" data-value="4" aria-label="4 stars">&#9733;</button>
+              <button type="button" data-value="5" aria-label="5 stars">&#9733;</button>
+            </div>
+            <input
+              type="hidden"
+              name="ratingService"
+              data-rating-input
+              value="<%= review.rating_service || review.rating %>"
+              required
+            />
+          </div>
+        </div>
 
-    <button type="submit">Save Changes</button>
-</form>
+        <label class="field">
+          <span>Your Review</span>
+          <textarea name="comment" rows="5" required><%= review.comment %></textarea>
+        </label>
 
-<%- include("../partials/footer") %>
+        <% if (review.image_url) { %>
+          <div class="field">
+            <span>Current Photo</span>
+            <div class="review-photo">
+              <img src="<%= review.image_url %>" alt="Current review photo" />
+            </div>
+          </div>
+        <% } %>
+
+        <label class="field">
+          <span>Photo (optional)</span>
+          <input type="file" name="photo" accept="image/*">
+          <small class="field-hint">PNG or JPG up to 3MB.</small>
+        </label>
+        <input type="hidden" name="currentImageUrl" value="<%= review.image_url || '' %>">
+
+        <div class="form-actions">
+          <button type="submit" class="btn primary full">Save Changes</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <%- include("../partials/footer") %>
+</div>
+
+<script>
+  const ratingGroups = document.querySelectorAll("[data-rating-group]");
+
+  ratingGroups.forEach((group) => {
+    const stars = group.querySelectorAll("button");
+    const input = group.parentElement.querySelector("[data-rating-input]");
+    const initial = Number(input ? input.value : 0);
+    stars.forEach((star) => {
+      const value = Number(star.getAttribute("data-value"));
+      if (value <= initial) {
+        star.classList.add("active");
+      }
+      star.addEventListener("click", () => {
+        const rating = Number(star.getAttribute("data-value"));
+        if (input) input.value = rating;
+        stars.forEach((s) => {
+          const v = Number(s.getAttribute("data-value"));
+          s.classList.toggle("active", v <= rating);
+        });
+      });
+    });
+  });
+</script>

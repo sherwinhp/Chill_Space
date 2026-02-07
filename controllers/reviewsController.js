@@ -69,7 +69,7 @@ async function getOwnedReview(req, res, id) {
     return null;
   }
 
-  const [rows] = await Reviews.getById(id);
+  const rows = await Reviews.getById(id);
   const review = rows && rows[0];
 
   if (!review) {
@@ -77,7 +77,7 @@ async function getOwnedReview(req, res, id) {
     return null;
   }
 
-  if (review.user_id !== req.session.userId) {
+  if (Number(review.user_id) !== Number(req.session.userId)) {
     res.status(403).send("You can only manage your own reviews.");
     return null;
   }
@@ -101,7 +101,9 @@ module.exports = {
   // Show all reviews
   index: async (req, res) => {
     try {
-      const rows = await Reviews.getVisible();  // 🔥 FIXED
+      const rows = req.session && req.session.userId
+        ? await Reviews.getVisibleOrOwned(req.session.userId)
+        : await Reviews.getVisible();  // FIXED
 
       res.render("reviews/index", {
         reviews: normalizeReviews(rows, { allowFallback: false }),
@@ -180,14 +182,25 @@ module.exports = {
       const id = req.params.id;
       const review = await getOwnedReview(req, res, id);
       if (!review) return;
-      const { rating, comment, currentImageUrl } = req.body;
+      const {
+        rating,
+        ratingRoom,
+        ratingFood,
+        ratingService,
+        comment,
+        currentImageUrl,
+      } = req.body;
       const imageUrl = req.file ? `/uploads/${req.file.filename}` : currentImageUrl || null;
+
+      const roomScore = Number(ratingRoom || rating);
+      const foodScore = Number(ratingFood || rating);
+      const serviceScore = Number(ratingService || rating);
 
       await Reviews.update(
         id,
-        Number(rating),
-        Number(rating),
-        Number(rating),
+        roomScore,
+        foodScore,
+        serviceScore,
         comment,
         imageUrl
       );
@@ -212,4 +225,5 @@ module.exports = {
     }
   }
 };
+
 

@@ -23,6 +23,9 @@ const EMAIL_PORT = Number(process.env.EMAIL_PORT || 0);
 const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_PASS;
 const EMAIL_FROM = process.env.EMAIL_FROM;
+const EMAIL_ALLOW_SELF_SIGNED = String(process.env.EMAIL_ALLOW_SELF_SIGNED || "")
+  .trim()
+  .toLowerCase() === "true";
 
 function isEmailConfigured() {
   return Boolean(EMAIL_HOST && EMAIL_PORT && EMAIL_USER && EMAIL_PASS && nodemailer);
@@ -47,6 +50,7 @@ function getTransporter() {
         user: EMAIL_USER,
         pass: EMAIL_PASS,
       },
+      tls: EMAIL_ALLOW_SELF_SIGNED ? { rejectUnauthorized: false } : undefined,
     });
   }
   return cachedTransporter;

@@ -114,7 +114,7 @@ Date created: 06-02-2026
                 <img src="<%= r.imageUrl %>" alt="Review photo from <%= r.name %>" />
               </div>
             <% } %>
-            <% if (session && session.userId && r.userId && session.userId === r.userId) { %>
+            <% if (session && session.userId && r.userId && Number(session.userId) === Number(r.userId)) { %>
               <div class="review-actions">
                 <a class="btn ghost" href="/reviews/edit/<%= r.id %>">Edit</a>
                 <a class="btn danger" href="/reviews/delete/<%= r.id %>" onclick="return confirm('Delete this review?')">Delete</a>
@@ -138,3 +138,4 @@ Date created: 06-02-2026
 
   <%- include("../partials/footer") %>
 </div>
+

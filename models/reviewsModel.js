@@ -67,6 +67,21 @@ const Reviews = {
     );
   },
 
+  getVisibleOrOwned: (userId) => {
+    return db.query(
+      `SELECT
+          r.*,
+          u.name AS user_name,
+          rm.name AS room_name
+       FROM reviews r
+       JOIN users u ON r.user_id = u.user_id
+       LEFT JOIN rooms rm ON r.room_id = rm.room_id
+       WHERE r.is_visible = 1 OR r.user_id = ?
+       ORDER BY r.created_at DESC`,
+      [userId]
+    );
+  },
+
   // Get single review
   getById: (id) => {
     return db.query("SELECT * FROM reviews WHERE review_id = ?", [id]);
