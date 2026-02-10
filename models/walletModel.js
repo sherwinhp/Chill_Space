@@ -513,11 +513,27 @@ async function getCashbackRateForUser(userId) {
   return tierInfo.rate;
 }
 
-function isSameMonthDay(dateValue, now) {
-  if (!dateValue) return false;
+function getMonthDayFromDateValue(dateValue) {
+  if (!dateValue) return null;
+  if (typeof dateValue === "string") {
+    const match = dateValue.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+      const month = Number(match[2]) - 1;
+      const day = Number(match[3]);
+      if (Number.isFinite(month) && month >= 0 && month <= 11 && day >= 1 && day <= 31) {
+        return { month, day };
+      }
+    }
+  }
   const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) return false;
-  return date.getUTCMonth() === now.getUTCMonth() && date.getUTCDate() === now.getUTCDate();
+  if (Number.isNaN(date.getTime())) return null;
+  return { month: date.getMonth(), day: date.getDate() };
+}
+
+function isSameMonthDay(dateValue, now) {
+  const monthDay = getMonthDayFromDateValue(dateValue);
+  if (!monthDay) return false;
+  return monthDay.month === now.getMonth() && monthDay.day === now.getDate();
 }
 
 async function grantAnnualBonusesIfEligible(userId, now = new Date()) {
@@ -556,7 +572,7 @@ async function grantAnnualBonusesIfEligible(userId, now = new Date()) {
         throw error;
       }
 
-      const providerRef = `bonus:${eventType}:${year}`;
+      const providerRef = `bonus:${eventType}:${year}:user:${userId}`;
       await connection.execute(
         `
           INSERT INTO wallet_transactions
